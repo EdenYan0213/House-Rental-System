@@ -1,0 +1,100 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+.pnpm-debug.log
+.pnp/
+.pnp.js
+
+# Build output
+dist/
+build/
+out/
+coverage/
+.nyc_output/
+coverage-final.json
+
+# Logs
+logs/
+*.log
+debug.log
+
+# Runtime environment files
+.env
+.env.local
+.env.*.local
+
+# Dependency directories
+bower_components/
+
+# Frontend / Vite
+/.vite/
+/.dist/
+
+# Maven / Java
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/
+
+# Java binary and archives
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+
+# IDEs and editors
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+/.history/
+
+# OS generated files
+.DS_Store
+._*
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+Icon?
+
+# Windows image file caches
+*.stackdump
+
+# Temp files
+*.tmp
+*.temp
+*.swp
+*.swo
+*.bak
+
+# Logs and runtime files
+*.pid
+*.seed
+
+# Coverage and test output
+.pytest_cache/
+.coverage
+.tox/
+nosetests.xml
+coverage.xml
+junit*.xml
+
+# Misc
+*.log.*
+*.log
+.idea/
+dist/
