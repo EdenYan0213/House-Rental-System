@@ -78,10 +78,11 @@
           </template>
         </el-table-column>
         <el-table-column prop="dueDate" label="到期日" width="120" />
-        <el-table-column label="操作" fixed="right" width="220">
+        <el-table-column label="操作" fixed="right" width="280">
           <template #default="{ row }">
             <div class="bill-actions">
               <el-button type="primary" link @click="viewDetail(row)">详情</el-button>
+              <el-button type="info" link @click="handleSendSms(row)">发短信</el-button>
               <el-button type="warning" link @click="openRegenerate(row)" v-if="canGenerate && !isBillFinal(row)">重新生成</el-button>
               <el-button type="success" link @click="openPayment(row)" v-if="canPay && !isBillFinal(row)">收款</el-button>
               <el-button type="danger" link @click="handleVoid(row)" v-if="canVoid && !isBillFinal(row)">作废</el-button>
@@ -141,7 +142,18 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getBills, generateBill, regenerateBill, voidBill, recordPayment, canGenerateBill, canRecordPayment, canVoidBill } from '@/api'
+import {
+  getBills,
+  generateBill,
+  regenerateBill,
+  voidBill,
+  recordPayment,
+  sendBillSms,
+  getFeeItems,
+  canGenerateBill,
+  canRecordPayment,
+  canVoidBill
+} from '@/api'
 import { showUndoToast } from '../utils/undo'
 
 const router = useRouter()
@@ -296,6 +308,36 @@ async function submitPayment() {
       paying.value = false
     }
   })
+}
+
+async function handleSendSms(row) {
+  try {
+    const res = await sendBillSms(row.id)
+    const data = res?.data || {}
+    const latestTitle = data.latestMessageTitle || '-'
+    const latestContent = data.latestMessageContent || '-'
+    const debugTag = data.isDebug ? '（模拟发送）' : ''
+    await ElMessageBox.alert(
+      `结果: ${data.message || '发送完成'}${debugTag}\n最新消息: ${latestTitle}\n${latestContent}`,
+      '账单短信发送结果',
+      {
+        confirmButtonText: '知道了',
+        type: 'success'
+      }
+    )
+  } catch (err) {
+    const data = err?.response?.data || {}
+    const latestTitle = data.latestMessageTitle || '-'
+    const latestContent = data.latestMessageContent || '-'
+    await ElMessageBox.alert(
+      `发送失败: ${data.failReason || data.message || err.message || '未知错误'}\n最新消息: ${latestTitle}\n${latestContent}`,
+      '账单短信发送结果',
+      {
+        confirmButtonText: '知道了',
+        type: 'error'
+      }
+    )
+  }
 }
 
 onMounted(() => {

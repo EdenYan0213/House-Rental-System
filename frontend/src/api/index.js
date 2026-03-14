@@ -32,7 +32,7 @@ api.interceptors.response.use(
 export const login = (data) => api.post('/auth/login', data)
 export const register = (data) => api.post('/auth/register', data)
 export const getCurrentUser = () => api.get('/auth/current')
-export const changePassword = (data) => api.post('/auth/changePassword', data)
+export const changePassword = (data) => api.put('/users/change-password', data)
 
 export const getBuildings = () => api.get('/buildings')
 export const getBuilding = (id) => api.get(`/buildings/${id}`)
@@ -176,6 +176,7 @@ export const regenerateBill = (id) => api.post(`/bills/regenerate/${id}`)
 export const regenerateBillByContract = (contractId) => api.post(`/bills/regenerate/contract/${contractId}`)
 export const voidBill = (id) => api.put(`/bills/${id}/void`)
 export const recordPayment = (id, data) => api.post(`/bills/${id}/payments`, data)
+export const sendBillSms = (id) => api.get(`/bills/${id}/send-sms`)
 
 export const getToken = () => localStorage.getItem(TOKEN_KEY)
 export const setToken = (token) => localStorage.setItem(TOKEN_KEY, token)
@@ -244,5 +245,20 @@ export const canExportBill = () => hasRole('ADMIN') || hasRole('SUPER_ADMIN')
 export const canRefundDeposit = () => hasRole('ADMIN') || hasRole('SUPER_ADMIN')
 
 export const canManageUsers = () => hasRole('SUPER_ADMIN')
+
+export const getBackupRecords = (params) => api.get('/backup/records', { params })
+export const getBackupRecord = (id) => api.get(`/backup/records/${id}`)
+export const createManualBackup = () => api.get('/backup/manual')
+export const deleteBackup = (id) => api.delete(`/backup/records/${id}`)
+export const downloadBackup = (id) => api.get(`/backup/download/${id}`, { responseType: 'blob' })
+export const restoreBackup = (id) => api.get(`/backup/restore/${id}`)
+export const getBackupConfig = () => api.get('/backup/config')
+export const updateBackupConfig = (data) => api.put('/backup/config', data)
+export const getBackupRestoreLogs = () => api.get('/backup/restore-logs')
+export const getMaintenanceStatus = () => api.get('/backup/maintenance-status')
+export const enableMaintenance = (reason) => api.post('/backup/maintenance/enable', { reason })
+export const disableMaintenance = () => api.post('/backup/maintenance/disable')
+
+export const canManageBackup = () => hasRole('SUPER_ADMIN')
 
 export default api

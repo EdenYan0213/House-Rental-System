@@ -4,22 +4,27 @@ import com.house.model.Bill;
 import com.house.model.BillDetail;
 import com.house.model.Contract;
 import com.house.model.PaymentRecord;
+import com.house.model.RemindLog;
+import com.house.model.SystemMessage;
 import com.house.repo.BillDetailRepository;
 import com.house.repo.ContractRepository;
 import com.house.repo.PaymentRecordRepository;
 import com.house.repo.BillRepository;
+import com.house.repo.SystemMessageRepository;
 import com.house.service.BillService;
 import com.house.repo.FeeItemRepository;
 import com.house.model.FeeItem;
 import com.house.service.ContractService;
 import com.house.service.PaymentService;
 import com.house.service.RoomService;
+import com.house.service.SmsService;
 import com.house.model.Room;
 import com.house.model.Building;
 import com.house.model.OperationSnapshot;
 import com.house.repo.BuildingRepository;
 import com.house.dto.PaymentRequest;
 import com.house.service.OperationSnapshotService;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -43,13 +48,16 @@ public class BillController {
   private final RoomService roomService;
   private final BuildingRepository buildingRepository;
   private final OperationSnapshotService operationSnapshotService;
+  private final SmsService smsService;
+  private final SystemMessageRepository systemMessageRepository;
 
   public BillController(BillService billService, BillRepository billRepository,
       BillDetailRepository billDetailRepository, PaymentRecordRepository paymentRecordRepository,
       ContractRepository contractRepository,
       PaymentService paymentService, FeeItemRepository feeItemRepository, RoomService roomService,
       BuildingRepository buildingRepository,
-      OperationSnapshotService operationSnapshotService) {
+      OperationSnapshotService operationSnapshotService, SmsService smsService,
+      SystemMessageRepository systemMessageRepository) {
     this.billService = billService;
     this.billRepository = billRepository;
     this.billDetailRepository = billDetailRepository;
@@ -60,6 +68,8 @@ public class BillController {
     this.roomService = roomService;
     this.buildingRepository = buildingRepository;
     this.operationSnapshotService = operationSnapshotService;
+    this.smsService = smsService;
+    this.systemMessageRepository = systemMessageRepository;
   }
 
   // 手动生成账单，参数 month 可选，格式 yyyy-MM；若不传，生成上月账单
@@ -304,5 +314,61 @@ public class BillController {
         "undoSnapshotId", snapshot.getId(),
         "undoExpireAt", snapshot.getExpiredAt(),
         "undoTip", "账单已作废，可在30分钟内撤销"));
+  }
+
+  @PostMapping("/{id}/send-sms")
+  @PreAuthorize("isAuthenticated()")
+  public ResponseEntity<?> sendBillSms(@PathVariable Long id) {
+    Optional<Bill> billOpt = billRepository.findById(id);
+    if (billOpt.isEmpty()) {
+      return ResponseEntity.notFound().build();
+    }
+
+    Bill bill = billOpt.get();
+    if (bill.getTenantPhone() == null || bill.getTenantPhone().isBlank()) {
+      return ResponseEntity.badRequest().body("该账单未绑定租户手机号，无法发送短信");
+    }
+
+    RemindLog log = new RemindLog();
+    log.setTenantName(bill.getTenantName());
+    log.setPhone(bill.getTenantPhone());
+    log.setRoomNumber(bill.getRoomNumber());
+    log.setOverdueDays(0);
+    log.setBillIds("[" + bill.getId() + "]");
+    log.setTotalAmount(bill.getTotalAmount());
+    log.setContent(buildBillSmsContent(bill));
+
+    RemindLog sendResult = smsService.sendSms(log);
+    SystemMessage latest = systemMessageRepository.findTopByOrderByCreatedAtDesc().orElse(null);
+
+    Map<String, Object> payload = new java.util.HashMap<>();
+    payload.put("success", "success".equalsIgnoreCase(sendResult.getStatus()));
+    payload.put("isDebug", sendResult.getIsDebug() != null && sendResult.getIsDebug() == 1);
+    payload.put("status", sendResult.getStatus());
+    payload.put("message", "success".equalsIgnoreCase(sendResult.getStatus()) ? "账单短信发送成功" : "账单短信发送失败");
+    payload.put("latestMessageTitle", latest == null ? "" : latest.getTitle());
+    payload.put("latestMessageContent", latest == null ? "" : latest.getContent());
+    payload.put("latestMessageTime",
+        latest == null || latest.getCreatedAt() == null ? "" : latest.getCreatedAt().toString());
+
+    if (!"success".equalsIgnoreCase(sendResult.getStatus())) {
+      payload.put("failReason", sendResult.getFailReason());
+      return ResponseEntity.badRequest().body(payload);
+    }
+
+    return ResponseEntity.ok(payload);
+  }
+
+  @GetMapping("/{id}/send-sms")
+  @PreAuthorize("isAuthenticated()")
+  public ResponseEntity<?> sendBillSmsByGet(@PathVariable Long id) {
+    return sendBillSms(id);
+  }
+
+  private String buildBillSmsContent(Bill bill) {
+    String billMonth = bill.getBillMonth() == null ? "当期" : bill.getBillMonth();
+    String room = bill.getRoomNumber() == null ? "-" : bill.getRoomNumber();
+    double amount = bill.getTotalAmount() == null ? 0.0 : bill.getTotalAmount();
+    return String.format("%s 房间%s账单待处理，金额%.2f元，请及时查看并缴费。", billMonth, room, amount);
   }
 }

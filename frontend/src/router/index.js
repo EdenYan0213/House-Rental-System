@@ -17,9 +17,11 @@ import Messages from '../pages/Messages.vue'
 import Blacklist from '../pages/Blacklist.vue'
 import Users from '../pages/Users.vue'
 import Logs from '../pages/Logs.vue'
+import Remind from '../pages/Remind.vue'
 import RepairOrders from '../pages/RepairOrders.vue'
 import RepairWorkers from '../pages/RepairWorkers.vue'
 import RoomAssets from '../pages/RoomAssets.vue'
+import Backup from '../pages/Backup.vue'
 import MobileRoom from '../pages/mobile/MobileRoom.vue'
 import MobileMeter from '../pages/mobile/MobileMeter.vue'
 import MobileRepair from '../pages/mobile/MobileRepair.vue'
@@ -46,9 +48,11 @@ const routes = [
   { path: '/messages', component: Messages },
   { path: '/users', component: Users },
   { path: '/logs', component: Logs },
+  { path: '/remind', component: Remind },
   { path: '/repairs/orders', component: RepairOrders },
   { path: '/repairs/workers', component: RepairWorkers },
   { path: '/buildings/:buildingId/rooms/:roomId/assets', component: RoomAssets },
+  { path: '/backup', component: Backup },
   { path: '/qr/room/:id', redirect: to => `/mobile/room/${to.params.id}` },
   { path: '/mobile/room/:id', component: MobileRoom },
   { path: '/mobile/meter/:roomId', component: MobileMeter },
@@ -76,7 +80,11 @@ router.beforeEach((to, from, next) => {
     next(`/mobile/room/${to.params.roomId}`)
   } else if (to.path === '/logs' && !['SUPER_ADMIN', 'ADMIN'].includes(user?.role?.toUpperCase())) {
     next('/dashboard')
+  } else if (to.path === '/remind' && !['SUPER_ADMIN', 'ADMIN'].includes(user?.role?.toUpperCase())) {
+    next('/dashboard')
   } else if (to.path.startsWith('/repairs') && !['SUPER_ADMIN', 'ADMIN'].includes(user?.role?.toUpperCase())) {
+    next('/dashboard')
+  } else if (to.path === '/backup' && !['SUPER_ADMIN', 'ADMIN'].includes(user?.role?.toUpperCase())) {
     next('/dashboard')
   } else {
     next()

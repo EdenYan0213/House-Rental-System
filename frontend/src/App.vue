@@ -55,6 +55,7 @@
           <el-menu-item index="/settings">个人设置</el-menu-item>
           <el-menu-item index="/users" v-if="canManageUsers">用户管理</el-menu-item>
           <el-menu-item index="/logs" v-if="canAccessLogs">操作日志</el-menu-item>
+          <el-menu-item index="/backup" v-if="canManageBackup">数据备份与恢复</el-menu-item>
         </el-sub-menu>
       </el-menu>
     </el-aside>
@@ -151,6 +152,7 @@ const canAccessMeterReadings = computed(() => hasRole('ADMIN') || hasRole('SUPER
 const canAccessLogs = computed(() => hasRole('ADMIN') || hasRole('SUPER_ADMIN'))
 const canAccessRepairs = computed(() => hasRole('ADMIN') || hasRole('SUPER_ADMIN'))
 const canAccessSettings = computed(() => true)
+const canManageBackup = computed(() => hasRole('ADMIN') || hasRole('SUPER_ADMIN'))
 
 const pageTitleMap = {
   '/dashboard': '仪表盘',
@@ -165,6 +167,7 @@ const pageTitleMap = {
   '/repairs/orders': '维修工单',
   '/repairs/workers': '维修管理',
   '/settings': '系统设置',
+  '/backup': '数据备份与恢复',
   '/users': '用户管理',
   '/logs': '操作日志'
 }

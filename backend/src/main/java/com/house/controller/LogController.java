@@ -24,7 +24,7 @@ public class LogController {
   }
 
   @GetMapping
-  @PreAuthorize("hasRole('SUPER_ADMIN')")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public Map<String, Object> list(
       @RequestParam(required = false) String operator,
       @RequestParam(required = false) String startDate,
@@ -41,7 +41,7 @@ public class LogController {
   }
 
   @GetMapping("/export")
-  @PreAuthorize("hasRole('SUPER_ADMIN')")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public ResponseEntity<byte[]> exportLogs(
       @RequestParam(required = false) String operator,
       @RequestParam(required = false) String startDate,

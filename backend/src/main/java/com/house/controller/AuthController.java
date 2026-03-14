@@ -116,9 +116,27 @@ public class AuthController {
 
     @PostMapping("/changePassword")
     public ResponseEntity<?> changePassword(@RequestBody Map<String, String> request, HttpServletRequest httpRequest) {
-        String username = request.get("username");
+        String username = null;
+        String authHeader = httpRequest.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = authHeader.substring(7);
+            try {
+                username = jwtUtil.getUsernameFromToken(token);
+            } catch (Exception e) {
+                return ResponseEntity.badRequest().body(Map.of("message", "token无效"));
+            }
+        }
+
+        if (username == null || username.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "未登录"));
+        }
+
         String oldPassword = request.get("oldPassword");
         String newPassword = request.get("newPassword");
+
+        if (oldPassword == null || oldPassword.isBlank() || newPassword == null || newPassword.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "密码不能为空"));
+        }
 
         User user = userService.findByUsername(username);
         if (user == null) {

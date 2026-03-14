@@ -16,7 +16,7 @@
 
     <el-table :data="messages" v-loading="loading" style="width: 100%" @row-click="handleRowClick">
       <el-table-column label="类型" width="80">
-        <template #default="{ row }">
+        <template #default>
           <el-icon :size="20" color="#E6A23C"><Bell /></el-icon>
         </template>
       </el-table-column>
@@ -34,6 +34,11 @@
           </el-tag>
         </template>
       </el-table-column>
+      <el-table-column label="操作" width="100" fixed="right">
+        <template #default="{ row }">
+          <el-button type="primary" link @click.stop="openDetail(row)">详情</el-button>
+        </template>
+      </el-table-column>
     </el-table>
 
     <el-pagination
@@ -45,13 +50,35 @@
       layout="total, prev, pager, next"
       @current-change="loadMessages"
     />
+
+    <el-dialog v-model="detailVisible" title="消息详情" width="680px">
+      <div class="detail-actions" v-if="currentMessage">
+        <el-button size="small" @click="copyTitle">复制标题</el-button>
+        <el-button size="small" @click="copyContent">复制内容</el-button>
+        <el-button size="small" type="primary" @click="copyAll">复制全部</el-button>
+      </div>
+      <el-descriptions :column="1" border v-if="currentMessage">
+        <el-descriptions-item label="标题">{{ currentMessage.title || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="时间">{{ formatTime(currentMessage.createdAt) }}</el-descriptions-item>
+        <el-descriptions-item label="状态">
+          {{ currentMessage.isRead ? '已读' : '未读' }}
+        </el-descriptions-item>
+        <el-descriptions-item label="类型">{{ currentMessage.type || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="内容">
+          <div class="message-content" v-html="renderMessageContent(currentMessage.content)"></div>
+        </el-descriptions-item>
+      </el-descriptions>
+      <template #footer>
+        <el-button type="primary" @click="detailVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getMessages, markMessageRead, markAllMessagesRead, getUnreadCount } from '../api'
+import { getMessages, markMessageRead, markAllMessagesRead } from '../api'
 import { ElMessage } from 'element-plus'
 import { Bell } from '@element-plus/icons-vue'
 
@@ -63,6 +90,8 @@ const activeTab = ref('all')
 const page = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
+const detailVisible = ref(false)
+const currentMessage = ref(null)
 
 function formatTime(timeStr) {
   if (!timeStr) return ''
@@ -105,6 +134,83 @@ async function handleRowClick(row) {
   }
 }
 
+async function openDetail(row) {
+  if (!row.isRead) {
+    try {
+      await markMessageRead(row.id)
+      row.isRead = true
+      unreadCount.value = Math.max(0, unreadCount.value - 1)
+    } catch (e) {
+      ElMessage.warning('标记已读失败，请稍后重试')
+    }
+  }
+  currentMessage.value = row
+  detailVisible.value = true
+}
+
+async function copyText(text) {
+  const finalText = String(text || '')
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(finalText)
+      ElMessage.success('复制成功')
+      return
+    }
+  } catch (e) {
+    // fallback below
+  }
+
+  const area = document.createElement('textarea')
+  area.value = finalText
+  area.setAttribute('readonly', '')
+  area.style.position = 'fixed'
+  area.style.left = '-9999px'
+  document.body.appendChild(area)
+  area.select()
+  document.execCommand('copy')
+  document.body.removeChild(area)
+  ElMessage.success('复制成功')
+}
+
+function copyTitle() {
+  copyText(currentMessage.value?.title || '')
+}
+
+function copyContent() {
+  copyText(currentMessage.value?.content || '')
+}
+
+function copyAll() {
+  const msg = currentMessage.value
+  const text = [
+    `标题: ${msg?.title || '-'}`,
+    `时间: ${formatTime(msg?.createdAt)}`,
+    `状态: ${msg?.isRead ? '已读' : '未读'}`,
+    `类型: ${msg?.type || '-'}`,
+    `内容: ${msg?.content || '-'}`
+  ].join('\n')
+  copyText(text)
+}
+
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function renderMessageContent(content) {
+  const raw = content && String(content).trim() ? String(content) : '-'
+  const escaped = escapeHtml(raw)
+  const withLinks = escaped.replace(
+    /(https?:\/\/[^\s<]+)/g,
+    '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
+  )
+  return withLinks.replace(/\n/g, '<br>')
+}
+
 async function markAllRead() {
   try {
     await markAllMessagesRead()
@@ -123,5 +229,21 @@ onMounted(() => {
 <style scoped>
 :deep(.el-table__row) {
   cursor: pointer;
+}
+
+.detail-actions {
+  margin-bottom: 12px;
+}
+
+.message-content {
+  line-height: 1.6;
+  max-height: 260px;
+  overflow: auto;
+  word-break: break-word;
+}
+
+.message-content :deep(a) {
+  color: #409eff;
+  text-decoration: underline;
 }
 </style>
