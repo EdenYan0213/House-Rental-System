@@ -28,6 +28,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getMobileRoomSummary, saveMeterReadings } from '@/api'
+import { enqueueOfflineMeterReading } from '@/utils/mobileOffline'
 
 const route = useRoute()
 const router = useRouter()
@@ -52,7 +53,9 @@ async function submit() {
     ElMessage.success('录入成功')
     goBack()
   } catch (_) {
-    ElMessage.error('提交失败')
+    enqueueOfflineMeterReading({ roomId: roomId.value, ...form.value })
+    ElMessage.warning('网络异常，已离线暂存，恢复网络后将自动上传')
+    goBack()
   } finally {
     saving.value = false
   }

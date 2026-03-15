@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">house-mobile</string>
+    <string name="title_activity_main">house-mobile</string>
+    <string name="package_name">com.house.mobile</string>
+    <string name="custom_url_scheme">com.house.mobile</string>
+</resources>

@@ -91,7 +91,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   Odometer,
@@ -112,7 +112,6 @@ import {
 import {
   getUser,
   removeToken,
-  hasRole,
   updateProfile,
   setUser,
   getThemePreference,
@@ -123,10 +122,22 @@ import { applyThemePreference } from './utils/theme'
 const route = useRoute()
 const router = useRouter()
 
-const user = computed(() => getUser())
+const currentUser = ref(getUser())
+const user = computed(() => currentUser.value)
 const currentPath = computed(() => route.path)
-const isLoginPage = computed(() => route.path === '/login' || route.path.startsWith('/mobile/') || route.path.startsWith('/qr/'))
+const isLoginPage = computed(() => route.path === '/login' || route.path.startsWith('/mobile') || route.path.startsWith('/qr/'))
 const themePreference = ref(getThemePreference())
+
+function refreshCurrentUser() {
+  currentUser.value = getUser()
+}
+
+function hasAnyRole(roles = []) {
+  const role = currentUser.value?.role?.toUpperCase()
+  if (!role) return false
+  if (role === 'SUPER_ADMIN') return true
+  return roles.map(item => String(item).toUpperCase()).includes(role)
+}
 
 const roleName = computed(() => {
   const role = user.value?.role?.toUpperCase()
@@ -143,16 +154,16 @@ const roleTagType = computed(() => {
 })
 
 const canManageUsers = computed(() => {
-  const u = getUser()
+  const u = user.value
   return u && (u.role === 'ADMIN' || u.role === 'SUPER_ADMIN')
 })
 const canAccessBuilding = computed(() => true)
-const canAccessFeeItems = computed(() => hasRole('ADMIN') || hasRole('SUPER_ADMIN'))
-const canAccessMeterReadings = computed(() => hasRole('ADMIN') || hasRole('SUPER_ADMIN'))
-const canAccessLogs = computed(() => hasRole('ADMIN') || hasRole('SUPER_ADMIN'))
-const canAccessRepairs = computed(() => hasRole('ADMIN') || hasRole('SUPER_ADMIN'))
+const canAccessFeeItems = computed(() => hasAnyRole(['ADMIN', 'SUPER_ADMIN']))
+const canAccessMeterReadings = computed(() => hasAnyRole(['ADMIN', 'SUPER_ADMIN']))
+const canAccessLogs = computed(() => hasAnyRole(['ADMIN', 'SUPER_ADMIN']))
+const canAccessRepairs = computed(() => hasAnyRole(['ADMIN', 'SUPER_ADMIN']))
 const canAccessSettings = computed(() => true)
-const canManageBackup = computed(() => hasRole('ADMIN') || hasRole('SUPER_ADMIN'))
+const canManageBackup = computed(() => hasAnyRole(['ADMIN', 'SUPER_ADMIN']))
 
 const pageTitleMap = {
   '/dashboard': '仪表盘',
@@ -203,11 +214,22 @@ async function handleThemeCommand(command) {
 }
 
 onMounted(() => {
+  refreshCurrentUser()
   const currentUser = getUser()
   const pref = currentUser?.themePreference || getThemePreference() || 'system'
   themePreference.value = pref
   applyThemePreference(pref)
   setThemePreference(pref)
+
+  window.addEventListener('storage', refreshCurrentUser)
+})
+
+watch(() => route.fullPath, () => {
+  refreshCurrentUser()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('storage', refreshCurrentUser)
 })
 </script>
 

@@ -43,6 +43,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { createRepairOrder, uploadFile, getMobileRoomSummary, getUser } from '@/api'
+import { enqueueOfflineRepair } from '@/utils/mobileOffline'
 
 const route = useRoute()
 const router = useRouter()
@@ -105,7 +106,14 @@ async function submit() {
     ElMessage.success('报修提交成功')
     goBack()
   } catch (_) {
-    ElMessage.error('提交失败')
+    enqueueOfflineRepair({
+      ...form.value,
+      roomId: roomId.value,
+      reporterType: 'admin',
+      reportedBy: getUser()?.userId
+    })
+    ElMessage.warning('网络异常，报修已离线暂存，恢复网络后自动上传')
+    goBack()
   } finally {
     saving.value = false
   }

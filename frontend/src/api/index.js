@@ -1,12 +1,58 @@
 import axios from 'axios'
+import { Capacitor } from '@capacitor/core'
+
+const API_BASE_URL_KEY = 'api_base_url'
+
+const ANDROID_BASE_DEFAULT = 'http://localhost:8080/api'
+
+function isNativeAndroid() {
+  return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'
+}
+
+function isAllowedAndroidBase(url) {
+  const value = (url || '').trim()
+  return value === ANDROID_BASE_DEFAULT || value === 'http://10.0.2.2:8080/api'
+}
+
+function resolveApiBaseUrl() {
+  const override = (localStorage.getItem(API_BASE_URL_KEY) || '').trim()
+  if (override) {
+    if (!isNativeAndroid()) return override
+    if (isAllowedAndroidBase(override)) return override
+    localStorage.removeItem(API_BASE_URL_KEY)
+  }
+
+  const envBase = (import.meta.env.VITE_API_BASE_URL || '').trim()
+  if (envBase) return envBase
+
+  if (isNativeAndroid()) {
+    // For real devices we use adb reverse with localhost.
+    return ANDROID_BASE_DEFAULT
+  }
+
+  return '/api'
+}
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: resolveApiBaseUrl(),
   timeout: 5000,
 })
 
 const TOKEN_KEY = 'token'
 const USER_KEY = 'user'
+
+export const getApiBaseUrl = () => api.defaults.baseURL
+
+export const setApiBaseUrl = (url) => {
+  const value = (url || '').trim()
+  if (!value) {
+    localStorage.removeItem(API_BASE_URL_KEY)
+    api.defaults.baseURL = resolveApiBaseUrl()
+    return
+  }
+  localStorage.setItem(API_BASE_URL_KEY, value)
+  api.defaults.baseURL = value
+}
 
 api.interceptors.request.use(config => {
   const token = localStorage.getItem(TOKEN_KEY)
@@ -151,6 +197,9 @@ export const getUnreadCount = () => api.get('/messages/unread-count')
 export const markMessageRead = (id) => api.put(`/messages/${id}/read`)
 export const markAllMessagesRead = () => api.put('/messages/read-all')
 export const batchSendMessages = (data) => api.post('/messages/batch-send', data)
+export const reportPushDeviceToken = (data) => api.post('/messages/push/register', data)
+export const savePushSettings = (data) => api.put('/messages/push/settings', data)
+export const getPushSettings = () => api.get('/messages/push/settings')
 
 export const getReminderSettings = () => api.get('/reminder-settings')
 export const updateReminderSettings = (data) => api.put('/reminder-settings', data)

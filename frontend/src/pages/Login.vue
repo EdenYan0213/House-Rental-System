@@ -13,6 +13,15 @@
           <el-button type="primary" style="width:100%" :loading="loading" @click="handleLogin">登录</el-button>
         </el-form-item>
       </el-form>
+
+      <el-divider content-position="left">连接设置</el-divider>
+      <el-input v-model="apiBaseDraft" placeholder="后端地址，如 http://10.0.2.2:8080/api" />
+      <div class="api-row">
+        <el-button size="small" type="primary" plain @click="saveApiBase">保存</el-button>
+        <el-button size="small" @click="resetApiBase">恢复默认</el-button>
+      </div>
+      <p class="api-tip">当前后端：{{ currentApiBase }}</p>
+
       <div class="tips">
         <p>默认管理员: admin / admin123</p>
       </div>
@@ -24,13 +33,27 @@
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { login, setToken, setUser, setThemePreference } from '@/api'
+import { Capacitor } from '@capacitor/core'
+import {
+  login,
+  setToken,
+  setUser,
+  setThemePreference,
+  getApiBaseUrl,
+  setApiBaseUrl
+} from '@/api'
 import { applyThemePreference } from '@/utils/theme'
 
 const router = useRouter()
 const route = useRoute()
 const formRef = ref(null)
 const loading = ref(false)
+const apiBaseDraft = ref('')
+const currentApiBase = ref(getApiBaseUrl())
+
+async function doLoginRequest() {
+  return login(form)
+}
 
 const form = reactive({
   username: '',
@@ -50,7 +73,26 @@ async function handleLogin() {
     
     loading.value = true
     try {
-      const res = await login(form)
+      let res
+      try {
+        res = await doLoginRequest()
+      } catch (err) {
+        const isNative = Capacitor.isNativePlatform()
+        const isNetworkError = !err.response
+        const base = getApiBaseUrl()
+
+        // Browser simulation may keep native API base (e.g. 10.0.2.2) in localStorage.
+        if (!isNative && isNetworkError && base && base !== '/api') {
+          setApiBaseUrl('')
+          currentApiBase.value = getApiBaseUrl()
+          apiBaseDraft.value = ''
+          ElMessage.warning('检测到浏览器环境地址不兼容，已自动切回默认后端并重试')
+          res = await doLoginRequest()
+        } else {
+          throw err
+        }
+      }
+
       if (res.data.token) {
         setToken(res.data.token)
         setUser({
@@ -64,14 +106,45 @@ async function handleLogin() {
         setThemePreference(res.data.themePreference || 'system')
         applyThemePreference(res.data.themePreference || 'system')
         ElMessage.success('登录成功')
-        router.push(route.query.redirect || '/dashboard')
+
+        const isNative = Capacitor.isNativePlatform()
+        if (isNative) {
+          // Native app should always enter mobile pages after login.
+          router.push('/mobile/home')
+          return
+        }
+
+        const redirect = route.query.redirect
+        if (redirect) {
+          router.push(redirect)
+          return
+        }
+
+        if (window.location.pathname.startsWith('/mobile')) {
+          router.push('/mobile/home')
+        } else {
+          router.push('/dashboard')
+        }
       }
     } catch (err) {
-      ElMessage.error(err.response?.data?.message || '登录失败')
+      ElMessage.error(err.response?.data?.message || err.message || `登录失败（当前后端：${getApiBaseUrl()}）`)
     } finally {
       loading.value = false
     }
   })
+}
+
+function saveApiBase() {
+  setApiBaseUrl(apiBaseDraft.value)
+  currentApiBase.value = getApiBaseUrl()
+  ElMessage.success('后端地址已保存')
+}
+
+function resetApiBase() {
+  setApiBaseUrl('')
+  apiBaseDraft.value = ''
+  currentApiBase.value = getApiBaseUrl()
+  ElMessage.success('已恢复默认后端地址')
 }
 </script>
 
@@ -100,5 +173,17 @@ async function handleLogin() {
   color: #999;
   font-size: 12px;
   margin-top: 10px;
+}
+
+.api-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.api-tip {
+  margin-top: 8px;
+  color: #6b7280;
+  font-size: 12px;
 }
 </style>

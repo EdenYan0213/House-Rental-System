@@ -26,7 +26,20 @@ import MobileRoom from '../pages/mobile/MobileRoom.vue'
 import MobileMeter from '../pages/mobile/MobileMeter.vue'
 import MobileRepair from '../pages/mobile/MobileRepair.vue'
 import MobileBills from '../pages/mobile/MobileBills.vue'
+import MobileLayout from '../pages/mobile/MobileLayout.vue'
+import MobileHome from '../pages/mobile/MobileHome.vue'
+import MobileMeterTasks from '../pages/mobile/MobileMeterTasks.vue'
+import MobileRepairCenter from '../pages/mobile/MobileRepairCenter.vue'
+import MobileTenantLookup from '../pages/mobile/MobileTenantLookup.vue'
+import MobileMe from '../pages/mobile/MobileMe.vue'
+import MobileSettings from '../pages/mobile/MobileSettings.vue'
+import MobileScan from '../pages/mobile/MobileScan.vue'
+import MobileBillsCenter from '../pages/mobile/MobileBillsCenter.vue'
+import MobileMessagesCenter from '../pages/mobile/MobileMessagesCenter.vue'
+import MobileBuildings from '../pages/mobile/MobileBuildings.vue'
+import MobileBuildingRooms from '../pages/mobile/MobileBuildingRooms.vue'
 import { getToken, getUser } from '../api'
+import { Capacitor } from '@capacitor/core'
 
 const routes = [
   { path: '/', redirect: '/dashboard' },
@@ -53,6 +66,24 @@ const routes = [
   { path: '/repairs/workers', component: RepairWorkers },
   { path: '/buildings/:buildingId/rooms/:roomId/assets', component: RoomAssets },
   { path: '/backup', component: Backup },
+  {
+    path: '/mobile',
+    component: MobileLayout,
+    redirect: '/mobile/home',
+    children: [
+      { path: 'home', component: MobileHome },
+      { path: 'meter-tasks', component: MobileMeterTasks },
+      { path: 'repairs', component: MobileRepairCenter },
+      { path: 'bills', component: MobileBillsCenter },
+      { path: 'messages', component: MobileMessagesCenter },
+      { path: 'buildings', component: MobileBuildings },
+      { path: 'buildings/:id/rooms', component: MobileBuildingRooms },
+      { path: 'tenants', component: MobileTenantLookup },
+      { path: 'scan', component: MobileScan },
+      { path: 'me', component: MobileMe },
+      { path: 'settings', component: MobileSettings }
+    ]
+  },
   { path: '/qr/room/:id', redirect: to => `/mobile/room/${to.params.id}` },
   { path: '/mobile/room/:id', component: MobileRoom },
   { path: '/mobile/meter/:roomId', component: MobileMeter },
@@ -72,12 +103,26 @@ router.beforeEach((to, from, next) => {
   if (to.path !== '/login' && !token) {
     next({ path: '/login', query: { redirect: to.fullPath } })
   } else if (to.path === '/login' && token) {
-    next(to.query.redirect || '/dashboard')
+    if (Capacitor.isNativePlatform()) {
+      next('/mobile/home')
+    } else {
+      next(to.query.redirect || '/dashboard')
+    }
   } else if (
     ['/mobile/meter/', '/mobile/repair/', '/mobile/bills/'].some(prefix => to.path.startsWith(prefix)) &&
     user?.role?.toUpperCase() === 'USER'
   ) {
     next(`/mobile/room/${to.params.roomId}`)
+  } else if (
+    ['/mobile/meter-tasks', '/mobile/repairs'].some(prefix => to.path.startsWith(prefix)) &&
+    user?.role?.toUpperCase() === 'USER'
+  ) {
+    next('/mobile/home')
+  } else if (
+    ['/mobile/bills', '/mobile/messages'].some(prefix => to.path.startsWith(prefix)) &&
+    user?.role?.toUpperCase() === 'USER'
+  ) {
+    next('/mobile/home')
   } else if (to.path === '/logs' && !['SUPER_ADMIN', 'ADMIN'].includes(user?.role?.toUpperCase())) {
     next('/dashboard')
   } else if (to.path === '/remind' && !['SUPER_ADMIN', 'ADMIN'].includes(user?.role?.toUpperCase())) {
