@@ -2,6 +2,22 @@ server:
   port: 8080
 
 spring:
+  ai:
+    openai:
+      chat:
+        enabled: false
+      embedding:
+        enabled: false
+      audio:
+        speech:
+          enabled: false
+        transcription:
+          enabled: false
+      moderation:
+        enabled: false
+      api-key: ${SPRING_AI_OPENAI_API_KEY:${AI_PRIMARY_API_KEY:${AI_SILICONFLOW_API_KEY:dummy-key}}}
+      speech:
+        api-key: ${SPRING_AI_OPENAI_SPEECH_API_KEY:${SPRING_AI_OPENAI_API_KEY:${AI_PRIMARY_API_KEY:${AI_SILICONFLOW_API_KEY:dummy-key}}}}
   jpa:
     show-sql: true
     properties:
@@ -62,3 +78,27 @@ app:
     base-url: ${QR_BASE_URL:http://localhost:5173}
   backup:
     storage-path: ${BACKUP_STORAGE_PATH:./backups}
+  ai-assistant:
+    default-model: ${AI_DEFAULT_MODEL:primary}
+    max-retries: ${AI_MAX_RETRIES:2}
+    sms-overdue-template: ${AI_SMS_OVERDUE_TEMPLATE:尊敬的{租户姓名}，您房间{房间号}有{逾期笔数}笔账单逾期，总欠费{总欠费金额}元，请尽快登录系统支付。}
+    fallback-message: ${AI_FALLBACK_MESSAGE:抱歉，未能理解您的指令，请重新描述。您可以说"今天101房间水表1250.5，电表3680"或"给张三发账单短信"。}
+    providers:
+      - name: primary
+        base-url: ${AI_PRIMARY_BASE_URL:https://open.bigmodel.cn/api/paas/v4/chat/completions}
+        api-key: ${AI_PRIMARY_API_KEY:}
+        model: ${AI_PRIMARY_MODEL:GLM-4.7-flash}
+        temperature: ${AI_PRIMARY_TEMPERATURE:0}
+        timeout-millis: ${AI_PRIMARY_TIMEOUT_MS:2500}
+      - name: siliconflow
+        base-url: ${AI_SILICONFLOW_BASE_URL:https://api.siliconflow.cn}
+        api-key: ${AI_SILICONFLOW_API_KEY:sk-aempgvopllpgbqzikljzdwmngiyrhsfrbdoiexcsirnwgxhj}
+        model: ${AI_SILICONFLOW_MODEL:Qwen/Qwen3-8B}
+        temperature: ${AI_SILICONFLOW_TEMPERATURE:0}
+        timeout-millis: ${AI_SILICONFLOW_TIMEOUT_MS:4000}
+      - name: backup
+        base-url: ${AI_BACKUP_BASE_URL:https://api.openai.com}
+        api-key: ${AI_BACKUP_API_KEY:}
+        model: ${AI_BACKUP_MODEL:gpt-4o-mini}
+        temperature: ${AI_BACKUP_TEMPERATURE:0}
+        timeout-millis: ${AI_BACKUP_TIMEOUT_MS:2500}

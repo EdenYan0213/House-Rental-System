@@ -1,8 +1,9 @@
 <template>
-  <el-container style="height: 100vh" v-if="!isLoginPage">
-    <el-aside width="220px" class="sidebar">
-      <div class="logo">房屋租赁系统</div>
-      <el-menu :default-active="currentPath" router class="sidebar-menu">
+  <div>
+    <el-container style="height: 100vh" v-if="!isLoginPage">
+      <el-aside width="220px" class="sidebar">
+        <div class="logo">房屋租赁系统</div>
+        <el-menu :default-active="currentPath" router class="sidebar-menu">
         <el-menu-item index="/dashboard">
           <el-icon><Odometer /></el-icon>
           <span>仪表盘</span>
@@ -57,12 +58,12 @@
           <el-menu-item index="/logs" v-if="canAccessLogs">操作日志</el-menu-item>
           <el-menu-item index="/backup" v-if="canManageBackup">数据备份与恢复</el-menu-item>
         </el-sub-menu>
-      </el-menu>
-    </el-aside>
-    <el-container>
-      <el-header class="header">
-        <div class="header-title">{{ pageTitle }}</div>
-        <div class="header-right">
+        </el-menu>
+      </el-aside>
+      <el-container>
+        <el-header class="header">
+          <div class="header-title">{{ pageTitle }}</div>
+          <div class="header-right">
           <el-dropdown @command="handleThemeCommand" trigger="click">
             <el-button text class="theme-trigger">
               <el-icon v-if="themePreference === 'dark'"><Sunny /></el-icon>
@@ -77,17 +78,22 @@
               </el-dropdown-menu>
             </template>
           </el-dropdown>
+          <el-button v-if="canUseAiAssistant" text class="theme-trigger" @click="showAiDrawer = true">
+            <el-icon><ChatDotRound /></el-icon>
+          </el-button>
           <el-tag size="small" :type="roleTagType">{{ roleName }}</el-tag>
           <span class="username">{{ user?.realName || user?.username }}</span>
           <el-button type="danger" size="small" @click="handleLogout">退出</el-button>
-        </div>
-      </el-header>
-      <el-main>
-        <router-view />
-      </el-main>
+          </div>
+        </el-header>
+        <el-main>
+          <router-view />
+        </el-main>
+      </el-container>
     </el-container>
-  </el-container>
-  <router-view v-else />
+    <router-view v-else />
+    <AiAssistantDrawer v-if="!isLoginPage && canUseAiAssistant" v-model="showAiDrawer" />
+  </div>
 </template>
 
 <script setup>
@@ -105,10 +111,12 @@ import {
   Bell,
   TrendCharts,
   Tools,
+  ChatDotRound,
   MoonNight,
   Sunny,
   Monitor
 } from '@element-plus/icons-vue'
+import AiAssistantDrawer from '@/components/AiAssistantDrawer.vue'
 import {
   getUser,
   removeToken,
@@ -127,6 +135,7 @@ const user = computed(() => currentUser.value)
 const currentPath = computed(() => route.path)
 const isLoginPage = computed(() => route.path === '/login' || route.path.startsWith('/mobile') || route.path.startsWith('/qr/'))
 const themePreference = ref(getThemePreference())
+const showAiDrawer = ref(false)
 
 function refreshCurrentUser() {
   currentUser.value = getUser()
@@ -164,6 +173,7 @@ const canAccessLogs = computed(() => hasAnyRole(['ADMIN', 'SUPER_ADMIN']))
 const canAccessRepairs = computed(() => hasAnyRole(['ADMIN', 'SUPER_ADMIN']))
 const canAccessSettings = computed(() => true)
 const canManageBackup = computed(() => hasAnyRole(['ADMIN', 'SUPER_ADMIN']))
+const canUseAiAssistant = computed(() => hasAnyRole(['ADMIN', 'SUPER_ADMIN']))
 
 const pageTitleMap = {
   '/dashboard': '仪表盘',

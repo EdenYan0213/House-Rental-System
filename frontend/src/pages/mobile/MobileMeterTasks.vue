@@ -65,7 +65,10 @@ function formatNum(value) {
 }
 
 function goInput(roomId) {
-  router.push(`/mobile/meter/${roomId}`)
+  router.push({
+    path: `/mobile/meter/${roomId}`,
+    query: { from: 'meter-tasks' }
+  })
 }
 
 function applyFilter() {

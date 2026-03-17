@@ -29,6 +29,27 @@ public class OperationLog {
   @Column(name = "created_at")
   private LocalDateTime createdAt;
 
+  @Column(name = "ai_instruction", columnDefinition = "TEXT")
+  private String aiInstruction;
+
+  @Column(name = "ai_intent")
+  private String aiIntent;
+
+  @Column(name = "ai_entities", columnDefinition = "TEXT")
+  private String aiEntities;
+
+  @Column(name = "ai_status")
+  private String aiStatus;
+
+  @Column(name = "ai_response_message", columnDefinition = "TEXT")
+  private String aiResponseMessage;
+
+  @Column(name = "ai_duration_ms")
+  private Long aiDurationMs;
+
+  @Column(name = "ai_model_name")
+  private String aiModelName;
+
   public Long getId() {
     return id;
   }
@@ -83,5 +104,61 @@ public class OperationLog {
 
   public void setCreatedAt(LocalDateTime createdAt) {
     this.createdAt = createdAt;
+  }
+
+  public String getAiInstruction() {
+    return aiInstruction;
+  }
+
+  public void setAiInstruction(String aiInstruction) {
+    this.aiInstruction = aiInstruction;
+  }
+
+  public String getAiIntent() {
+    return aiIntent;
+  }
+
+  public void setAiIntent(String aiIntent) {
+    this.aiIntent = aiIntent;
+  }
+
+  public String getAiEntities() {
+    return aiEntities;
+  }
+
+  public void setAiEntities(String aiEntities) {
+    this.aiEntities = aiEntities;
+  }
+
+  public String getAiStatus() {
+    return aiStatus;
+  }
+
+  public void setAiStatus(String aiStatus) {
+    this.aiStatus = aiStatus;
+  }
+
+  public String getAiResponseMessage() {
+    return aiResponseMessage;
+  }
+
+  public void setAiResponseMessage(String aiResponseMessage) {
+    this.aiResponseMessage = aiResponseMessage;
+  }
+
+  public Long getAiDurationMs() {
+    return aiDurationMs;
+  }
+
+  public void setAiDurationMs(Long aiDurationMs) {
+    this.aiDurationMs = aiDurationMs;
+  }
+
+  public String getAiModelName() {
+    return aiModelName;
+  }
+
+  public void setAiModelName(String aiModelName) {
+    this.aiModelName = aiModelName;
   }
 }

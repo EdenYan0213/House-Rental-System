@@ -120,7 +120,10 @@ function goBack() {
 
 function goMeter() {
   if (!summary.value.canOperate) return
-  router.push(`/mobile/meter/${roomId.value}`)
+  router.push({
+    path: `/mobile/meter/${roomId.value}`,
+    query: { from: 'room' }
+  })
 }
 
 function goRepair() {

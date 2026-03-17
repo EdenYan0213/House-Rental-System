@@ -232,7 +232,7 @@ public class RepairOrderService {
   }
 
   @Transactional
-  public Map<String, Object> cancel(Long id, String cancelReason, HttpServletRequest request) {
+  public RepairOrder cancel(Long id, String cancelReason, HttpServletRequest request) {
     RepairOrder order = repairOrderRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("工单不存在"));
     var snapshot = operationSnapshotService.capture(
         "维修管理", "cancel", "repair_order", order.getId(), order.getOrderNo(), order);
@@ -243,11 +243,7 @@ public class RepairOrderService {
     operationSnapshotService.complete(snapshot.getId(), saved);
     fillDisplayFields(saved);
     operationLogService.log("维修管理", "取消工单: " + saved.getOrderNo(), request);
-    return Map.of(
-        "data", saved,
-        "undoSnapshotId", snapshot.getId(),
-        "undoExpireAt", snapshot.getExpiredAt(),
-        "undoTip", "操作成功，可在30分钟内撤销");
+    return saved;
   }
 
   @Transactional

@@ -35,6 +35,7 @@
         </el-badge>
         <el-button @click="go('/mobile/buildings')">楼栋房间</el-button>
         <el-button @click="go('/mobile/tenants')">租户查询</el-button>
+        <el-button v-if="canUseAiAssistant" type="success" plain @click="go('/mobile/ai-assistant')">AI助手</el-button>
         <el-button @click="go('/mobile/scan')">扫码进房间</el-button>
       </div>
     </el-card>
@@ -71,6 +72,11 @@ const stats = ref({
 const userName = computed(() => {
   const user = getUser()
   return user?.realName || user?.username || '管理员'
+})
+
+const canUseAiAssistant = computed(() => {
+  const role = getUser()?.role?.toUpperCase()
+  return role === 'SUPER_ADMIN' || role === 'ADMIN'
 })
 
 function go(path) {

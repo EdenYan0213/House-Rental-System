@@ -33,6 +33,7 @@ import MobileRepairCenter from '../pages/mobile/MobileRepairCenter.vue'
 import MobileTenantLookup from '../pages/mobile/MobileTenantLookup.vue'
 import MobileMe from '../pages/mobile/MobileMe.vue'
 import MobileSettings from '../pages/mobile/MobileSettings.vue'
+import MobileAiAssistant from '../pages/mobile/MobileAiAssistant.vue'
 import MobileScan from '../pages/mobile/MobileScan.vue'
 import MobileBillsCenter from '../pages/mobile/MobileBillsCenter.vue'
 import MobileMessagesCenter from '../pages/mobile/MobileMessagesCenter.vue'
@@ -80,6 +81,7 @@ const routes = [
       { path: 'buildings/:id/rooms', component: MobileBuildingRooms },
       { path: 'tenants', component: MobileTenantLookup },
       { path: 'scan', component: MobileScan },
+      { path: 'ai-assistant', component: MobileAiAssistant },
       { path: 'me', component: MobileMe },
       { path: 'settings', component: MobileSettings }
     ]

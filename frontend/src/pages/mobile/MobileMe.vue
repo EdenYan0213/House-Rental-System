@@ -47,6 +47,7 @@
     <el-card shadow="never" class="panel">
       <template #header>系统操作</template>
       <div class="action-list">
+        <el-button v-if="canUseAiAssistant" type="success" plain class="action-btn" @click="router.push('/mobile/ai-assistant')">AI助手</el-button>
         <el-button type="primary" plain class="action-btn" @click="goSettings">个人设置</el-button>
         <el-button plain class="action-btn" @click="clearCache">清理缓存</el-button>
         <el-button type="danger" class="action-btn" @click="logout">退出登录</el-button>
@@ -91,6 +92,11 @@ const roleText = computed(() => {
   if (role === 'SUPER_ADMIN') return '超级管理员'
   if (role === 'ADMIN') return '管理员'
   return '普通用户'
+})
+
+const canUseAiAssistant = computed(() => {
+  const role = user?.role?.toUpperCase()
+  return role === 'SUPER_ADMIN' || role === 'ADMIN'
 })
 
 function goSettings() {

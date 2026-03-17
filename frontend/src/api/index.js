@@ -1,60 +1,56 @@
 import axios from 'axios'
-import { Capacitor } from '@capacitor/core'
-
-const API_BASE_URL_KEY = 'api_base_url'
-
-const ANDROID_BASE_DEFAULT = 'http://localhost:8080/api'
-
-function isNativeAndroid() {
-  return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'android'
-}
-
-function isAllowedAndroidBase(url) {
-  const value = (url || '').trim()
-  return value === ANDROID_BASE_DEFAULT || value === 'http://10.0.2.2:8080/api'
-}
-
-function resolveApiBaseUrl() {
-  const override = (localStorage.getItem(API_BASE_URL_KEY) || '').trim()
-  if (override) {
-    if (!isNativeAndroid()) return override
-    if (isAllowedAndroidBase(override)) return override
-    localStorage.removeItem(API_BASE_URL_KEY)
-  }
-
-  const envBase = (import.meta.env.VITE_API_BASE_URL || '').trim()
-  if (envBase) return envBase
-
-  if (isNativeAndroid()) {
-    // For real devices we use adb reverse with localhost.
-    return ANDROID_BASE_DEFAULT
-  }
-
-  return '/api'
-}
 
 const api = axios.create({
-  baseURL: resolveApiBaseUrl(),
+  baseURL: '/api',
   timeout: 5000,
 })
 
 const TOKEN_KEY = 'token'
 const USER_KEY = 'user'
+const API_BASE_KEY = 'apiBaseUrl'
+const THEME_KEY = 'themePreference'
 
-export const getApiBaseUrl = () => api.defaults.baseURL
+function normalizeApiBaseUrl(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
 
-export const setApiBaseUrl = (url) => {
-  const value = (url || '').trim()
-  if (!value) {
-    localStorage.removeItem(API_BASE_URL_KEY)
-    api.defaults.baseURL = resolveApiBaseUrl()
+  let url = raw.replace(/\/+$/, '')
+  if (url === '/api' || url.endsWith('/api')) return url
+
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return `${url}/api`
+  }
+
+  return url
+}
+
+export const getApiBaseUrl = () => {
+  const saved = localStorage.getItem(API_BASE_KEY)
+  return saved || '/api'
+}
+
+export const setApiBaseUrl = (value) => {
+  const normalized = normalizeApiBaseUrl(value)
+  if (!normalized) {
+    localStorage.removeItem(API_BASE_KEY)
     return
   }
-  localStorage.setItem(API_BASE_URL_KEY, value)
-  api.defaults.baseURL = value
+  localStorage.setItem(API_BASE_KEY, normalized)
+}
+
+export const getThemePreference = () => {
+  const value = localStorage.getItem(THEME_KEY)
+  if (value === 'light' || value === 'dark' || value === 'system') return value
+  return 'system'
+}
+
+export const setThemePreference = (value) => {
+  const theme = value === 'light' || value === 'dark' || value === 'system' ? value : 'system'
+  localStorage.setItem(THEME_KEY, theme)
 }
 
 api.interceptors.request.use(config => {
+  config.baseURL = getApiBaseUrl()
   const token = localStorage.getItem(TOKEN_KEY)
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
@@ -68,8 +64,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem(TOKEN_KEY)
       localStorage.removeItem(USER_KEY)
-      const redirect = encodeURIComponent(window.location.pathname + window.location.search)
-      window.location.href = `/login?redirect=${redirect}`
+      window.location.href = '/login'
     }
     return Promise.reject(error)
   }
@@ -78,7 +73,7 @@ api.interceptors.response.use(
 export const login = (data) => api.post('/auth/login', data)
 export const register = (data) => api.post('/auth/register', data)
 export const getCurrentUser = () => api.get('/auth/current')
-export const changePassword = (data) => api.put('/users/change-password', data)
+export const changePassword = (data) => api.post('/auth/changePassword', data)
 
 export const getBuildings = () => api.get('/buildings')
 export const getBuilding = (id) => api.get(`/buildings/${id}`)
@@ -94,9 +89,6 @@ export const deleteRoom = (id) => api.delete(`/rooms/${id}`)
 export const createRoomsBatch = (data) => api.post('/rooms/batch', data)
 export const createRoomsBatchOverride = (data) => api.post('/rooms/batch/override', data)
 export const batchAdjustRoomRent = (data) => api.post('/rooms/batch-adjust-rent', data)
-export const getRoomQrLink = (roomId) => api.get(`/qr/rooms/${roomId}/link`)
-export const getRoomQrPng = (roomId, params) => api.get(`/qr/rooms/${roomId}/png`, { params, responseType: 'blob' })
-export const exportRoomQrsPdf = (data) => api.post('/qr/rooms/batch-pdf', data, { responseType: 'blob' })
 
 export const getApplianceTemplates = () => api.get('/appliance-templates')
 export const createApplianceTemplate = (data) => api.post('/appliance-templates', data)
@@ -112,6 +104,7 @@ export const batchRoomAppliancesFromTemplate = (data) => api.post('/room-applian
 export const getRepairOrders = (params) => api.get('/repair-orders', { params })
 export const getRepairOrder = (id) => api.get(`/repair-orders/${id}`)
 export const createRepairOrder = (data) => api.post('/repair-orders', data)
+export const getMobileRoomSummary = (roomId) => api.get(`/mobile/room/${roomId}`)
 export const assignRepairWorker = (id, data) => api.put(`/repair-orders/${id}/assign`, data)
 export const startRepairOrder = (id) => api.put(`/repair-orders/${id}/start`)
 export const completeRepairOrder = (id, data) => api.put(`/repair-orders/${id}/complete`, data)
@@ -197,9 +190,9 @@ export const getUnreadCount = () => api.get('/messages/unread-count')
 export const markMessageRead = (id) => api.put(`/messages/${id}/read`)
 export const markAllMessagesRead = () => api.put('/messages/read-all')
 export const batchSendMessages = (data) => api.post('/messages/batch-send', data)
-export const reportPushDeviceToken = (data) => api.post('/messages/push/register', data)
-export const savePushSettings = (data) => api.put('/messages/push/settings', data)
-export const getPushSettings = () => api.get('/messages/push/settings')
+export const reportPushDeviceToken = (data) => api.post('/messages/push-device-token', data)
+export const savePushSettings = (data) => api.post('/messages/push-settings', data)
+export const executeAiCommand = (data) => api.post('/ai-assistant/execute', data)
 
 export const getReminderSettings = () => api.get('/reminder-settings')
 export const updateReminderSettings = (data) => api.put('/reminder-settings', data)
@@ -209,6 +202,13 @@ export const exportLogs = (params) => api.get('/logs/export', { params })
 export const getOperationSnapshots = (params) => api.get('/operation-snapshots', { params })
 export const getOperationSnapshotDetail = (id) => api.get(`/operation-snapshots/${id}`)
 export const recoverOperationSnapshot = (id) => api.post(`/operation-snapshots/${id}/recover`)
+export const getBackupRecords = (params) => api.get('/backup/records', { params })
+export const createManualBackup = () => api.post('/backup/manual')
+export const deleteBackup = (id) => api.delete(`/backup/records/${id}`)
+export const downloadBackup = (id) => api.get(`/backup/download/${id}`, { responseType: 'blob' })
+export const restoreBackup = (id) => api.post(`/backup/restore/${id}`)
+export const getBackupConfig = () => api.get('/backup/config')
+export const updateBackupConfig = (data) => api.put('/backup/config', data)
 export const exportModuleData = (module, data) => api.post(`/export/${module}`, data || {}, { responseType: 'blob' })
 export const exportRoomApplianceChecklistPdf = (roomId, type) =>
   api.get('/export/room-appliance-checklist-pdf', { params: { roomId, type }, responseType: 'blob' })
@@ -224,8 +224,8 @@ export const generateBill = (month) => {
 export const regenerateBill = (id) => api.post(`/bills/regenerate/${id}`)
 export const regenerateBillByContract = (contractId) => api.post(`/bills/regenerate/contract/${contractId}`)
 export const voidBill = (id) => api.put(`/bills/${id}/void`)
+export const sendBillSms = (id) => api.post(`/bills/${id}/send-sms`)
 export const recordPayment = (id, data) => api.post(`/bills/${id}/payments`, data)
-export const sendBillSms = (id) => api.get(`/bills/${id}/send-sms`)
 
 export const getToken = () => localStorage.getItem(TOKEN_KEY)
 export const setToken = (token) => localStorage.setItem(TOKEN_KEY, token)
@@ -249,11 +249,6 @@ export const enableUser = (id) => api.put(`/users/${id}/enable`)
 export const disableUser = (id) => api.put(`/users/${id}/disable`)
 export const resetUserPassword = (id, newPassword) => api.put(`/users/${id}/reset-password`, { newPassword })
 export const updateProfile = (data) => api.put('/users/profile', data)
-export const getMobileRoomSummary = (roomId) => api.get(`/mobile/room/${roomId}`)
-
-const THEME_KEY = 'themePreference'
-export const getThemePreference = () => localStorage.getItem(THEME_KEY) || 'system'
-export const setThemePreference = (value) => localStorage.setItem(THEME_KEY, value)
 
 export const hasRole = (role) => {
   const user = getUser()
@@ -294,20 +289,5 @@ export const canExportBill = () => hasRole('ADMIN') || hasRole('SUPER_ADMIN')
 export const canRefundDeposit = () => hasRole('ADMIN') || hasRole('SUPER_ADMIN')
 
 export const canManageUsers = () => hasRole('SUPER_ADMIN')
-
-export const getBackupRecords = (params) => api.get('/backup/records', { params })
-export const getBackupRecord = (id) => api.get(`/backup/records/${id}`)
-export const createManualBackup = () => api.get('/backup/manual')
-export const deleteBackup = (id) => api.delete(`/backup/records/${id}`)
-export const downloadBackup = (id) => api.get(`/backup/download/${id}`, { responseType: 'blob' })
-export const restoreBackup = (id) => api.get(`/backup/restore/${id}`)
-export const getBackupConfig = () => api.get('/backup/config')
-export const updateBackupConfig = (data) => api.put('/backup/config', data)
-export const getBackupRestoreLogs = () => api.get('/backup/restore-logs')
-export const getMaintenanceStatus = () => api.get('/backup/maintenance-status')
-export const enableMaintenance = (reason) => api.post('/backup/maintenance/enable', { reason })
-export const disableMaintenance = () => api.post('/backup/maintenance/disable')
-
-export const canManageBackup = () => hasRole('SUPER_ADMIN')
 
 export default api

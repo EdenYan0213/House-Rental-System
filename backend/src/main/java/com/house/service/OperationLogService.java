@@ -34,6 +34,32 @@ public class OperationLogService {
     operationLogRepository.save(log);
   }
 
+  public void logAi(Long userId,
+      String instruction,
+      String intent,
+      String entities,
+      String status,
+      String responseMessage,
+      Long durationMs,
+      String modelName,
+      HttpServletRequest request) {
+    OperationLog log = new OperationLog();
+    log.setModule("AI助手");
+    log.setAction("自然语言指令执行");
+    log.setOperator(resolveOperator());
+    log.setIp(resolveIp(request));
+    log.setOperationTime(LocalDateTime.now());
+    log.setCreatedAt(LocalDateTime.now());
+    log.setAiInstruction(instruction);
+    log.setAiIntent(intent);
+    log.setAiEntities(entities);
+    log.setAiStatus(status);
+    log.setAiResponseMessage(responseMessage);
+    log.setAiDurationMs(durationMs);
+    log.setAiModelName(modelName);
+    operationLogRepository.save(log);
+  }
+
   public Page<OperationLog> search(String operator, String startDate, String endDate, int page, int size) {
     Specification<OperationLog> spec = (root, query, cb) -> cb.conjunction();
 

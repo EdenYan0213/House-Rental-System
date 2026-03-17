@@ -43,7 +43,21 @@ const form = ref({
 })
 
 function goBack() {
-  router.push(`/mobile/room/${roomId.value}`)
+  if (window.history.length > 1) {
+    router.back()
+    return
+  }
+
+  const from = String(route.query.from || '')
+  if (from === 'meter-tasks') {
+    router.push('/mobile/meter-tasks')
+    return
+  }
+  if (from === 'room') {
+    router.push(`/mobile/room/${roomId.value}`)
+    return
+  }
+  router.push('/mobile/home')
 }
 
 async function submit() {
