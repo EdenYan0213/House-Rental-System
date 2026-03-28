@@ -7,9 +7,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.file.Files;
@@ -29,8 +29,21 @@ public class FileStorageService {
     private FileStorageConfig fileStorageConfig;
 
     public String storeFile(MultipartFile file) throws IOException {
+        return storeFileInternal(file, null, null);
+    }
+
+    public String storeComplaintImage(MultipartFile file) throws IOException {
+        return storeFileInternal(file, 5L * 1024 * 1024, Arrays.asList("jpg", "jpeg", "png"));
+    }
+
+    private String storeFileInternal(MultipartFile file, Long maxSizeBytes, List<String> forcedExtensions)
+            throws IOException {
         if (file.isEmpty()) {
             throw new IOException("Cannot upload empty file");
+        }
+
+        if (maxSizeBytes != null && file.getSize() > maxSizeBytes) {
+            throw new IOException("File size exceeds limit");
         }
 
         String originalFilename = file.getOriginalFilename();
@@ -39,7 +52,10 @@ public class FileStorageService {
         }
 
         String fileExtension = getFileExtension(originalFilename);
-        if (!isAllowedExtension(fileExtension)) {
+        if (forcedExtensions != null && !forcedExtensions.contains(fileExtension.toLowerCase())) {
+            throw new IOException("File type " + fileExtension + " is not allowed");
+        }
+        if (forcedExtensions == null && !isAllowedExtension(fileExtension)) {
             throw new IOException("File type " + fileExtension + " is not allowed");
         }
 
@@ -103,7 +119,7 @@ public class FileStorageService {
         }
 
         try {
-            URL url = new URL(imageUrl);
+            URL url = URI.create(imageUrl).toURL();
             URLConnection connection = url.openConnection();
             connection.setConnectTimeout(10000);
             connection.setReadTimeout(10000);
@@ -177,7 +193,8 @@ public class FileStorageService {
                     .filter(Files::isRegularFile)
                     .filter(file -> {
                         try {
-                            return file.toFile().lastModified() < System.currentTimeMillis() - daysOld * 24 * 60 * 60 * 1000L;
+                            return file.toFile().lastModified() < System.currentTimeMillis()
+                                    - daysOld * 24 * 60 * 60 * 1000L;
                         } catch (Exception e) {
                             return false;
                         }

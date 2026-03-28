@@ -83,9 +83,11 @@ export const deleteBuilding = (id) => api.delete(`/buildings/${id}`)
 
 export const getRooms = (params) => api.get('/rooms', { params })
 export const getRoom = (id) => api.get(`/rooms/${id}`)
+export const getRoomDetail = (id) => api.get(`/rooms/${id}/detail`)
 export const createRoom = (data) => api.post('/rooms', data)
 export const updateRoom = (id, data) => api.put(`/rooms/${id}`, data)
 export const deleteRoom = (id) => api.delete(`/rooms/${id}`)
+export const batchDeleteRooms = (roomIds) => api.post('/rooms/batch-delete', { roomIds })
 export const createRoomsBatch = (data) => api.post('/rooms/batch', data)
 export const createRoomsBatchOverride = (data) => api.post('/rooms/batch/override', data)
 export const batchAdjustRoomRent = (data) => api.post('/rooms/batch-adjust-rent', data)
@@ -120,10 +122,31 @@ export const createRepairWorker = (data) => api.post('/repair-workers', data)
 export const updateRepairWorker = (id, data) => api.put(`/repair-workers/${id}`, data)
 export const toggleRepairWorker = (id) => api.put(`/repair-workers/${id}/toggle`)
 
+export const getComplaints = (params) => api.get('/complaints', { params })
+export const getComplaint = (id) => api.get(`/complaints/${id}`)
+export const createComplaint = (data) => api.post('/complaints', data)
+export const acceptComplaint = (id, data) => api.put(`/complaints/${id}/accept`, data)
+export const replyComplaint = (id, data) => api.put(`/complaints/${id}/reply`, data)
+export const completeComplaint = (id, data) => api.put(`/complaints/${id}/complete`, data)
+export const reassignComplaint = (id, data) => api.put(`/complaints/${id}/reassign`, data)
+export const closeComplaint = (id, data) => api.put(`/complaints/${id}/close`, data)
+export const confirmComplaint = (id) => api.put(`/complaints/${id}/confirm`)
+export const getComplaintHandlers = () => api.get('/complaints/handlers')
+export const getTenantComplaints = (tenantId) => api.get(`/complaints/tenant/${tenantId}`)
+export const getComplaintStats = (params) => api.get('/complaints/stats', { params })
+
 export const uploadFile = (file) => {
   const formData = new FormData()
   formData.append('file', file)
   return api.post('/files/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+
+export const uploadComplaintFile = (file) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return api.post('/files/uploadComplaint', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   })
 }
@@ -165,6 +188,7 @@ export const updateFeeItem = (id, data) => api.put(`/fee-items/${id}`, data)
 export const deleteFeeItem = (id) => api.delete(`/fee-items/${id}`)
 
 export const getMeterReadings = (params) => api.get('/meter-readings', { params })
+export const exportMeterReadingsCsv = (params) => api.get('/meter-readings/export-csv', { params, responseType: 'blob' })
 export const saveMeterReadings = (data) => api.post('/meter-readings', data)
 export const deleteMeterReading = (id) => api.delete(`/meter-readings/${id}`)
 export const downloadMeterReadingImportTemplate = () => api.get('/meter-readings/import-template', { responseType: 'blob' })
@@ -198,7 +222,15 @@ export const getReminderSettings = () => api.get('/reminder-settings')
 export const updateReminderSettings = (data) => api.put('/reminder-settings', data)
 
 export const getOperationLogs = (params) => api.get('/logs', { params })
-export const exportLogs = (params) => api.get('/logs/export', { params })
+export const exportLogs = (params) => api.get('/logs/export', { params, responseType: 'blob' })
+export const getLogFilters = () => api.get('/logs/filters')
+export const getLogAnalytics = (params) => api.get('/logs/analytics', { params })
+export const runLogLifecycle = () => api.post('/log-lifecycle/run')
+export const getAlertRules = () => api.get('/alerts/rules')
+export const saveAlertRule = (data) => api.post('/alerts/rules', data)
+export const deleteAlertRule = (id) => api.delete(`/alerts/rules/${id}`)
+export const getAlertRecords = (params) => api.get('/alerts/records', { params })
+export const handleAlertRecord = (id) => api.put(`/alerts/records/${id}/handle`)
 export const getOperationSnapshots = (params) => api.get('/operation-snapshots', { params })
 export const getOperationSnapshotDetail = (id) => api.get(`/operation-snapshots/${id}`)
 export const recoverOperationSnapshot = (id) => api.post(`/operation-snapshots/${id}/recover`)
@@ -207,6 +239,15 @@ export const createManualBackup = () => api.post('/backup/manual')
 export const deleteBackup = (id) => api.delete(`/backup/records/${id}`)
 export const downloadBackup = (id) => api.get(`/backup/download/${id}`, { responseType: 'blob' })
 export const restoreBackup = (id) => api.post(`/backup/restore/${id}`)
+export const uploadAndRestoreBackup = (file) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return api.post('/backup/upload-and-restore', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  })
+}
 export const getBackupConfig = () => api.get('/backup/config')
 export const updateBackupConfig = (data) => api.put('/backup/config', data)
 export const exportModuleData = (module, data) => api.post(`/export/${module}`, data || {}, { responseType: 'blob' })
@@ -214,12 +255,19 @@ export const exportRoomApplianceChecklistPdf = (roomId, type) =>
   api.get('/export/room-appliance-checklist-pdf', { params: { roomId, type }, responseType: 'blob' })
 
 export const getBills = (params) => api.get('/bills', { params })
+export const exportBillsCsv = (params) => api.get('/bills/export-csv', { params, responseType: 'blob' })
 export const getBill = (id) => api.get(`/bills/${id}`)
 export const generateBill = (month) => {
   if (month) {
     return api.post(`/bills/generate?month=${month}`)
   }
   return api.post('/bills/generate')
+}
+export const generateBillForRoom = (roomId, month) => {
+  if (month) {
+    return api.post(`/bills/generate/room/${roomId}?month=${month}`)
+  }
+  return api.post(`/bills/generate/room/${roomId}`)
 }
 export const regenerateBill = (id) => api.post(`/bills/regenerate/${id}`)
 export const regenerateBillByContract = (contractId) => api.post(`/bills/regenerate/contract/${contractId}`)
@@ -249,6 +297,9 @@ export const enableUser = (id) => api.put(`/users/${id}/enable`)
 export const disableUser = (id) => api.put(`/users/${id}/disable`)
 export const resetUserPassword = (id, newPassword) => api.put(`/users/${id}/reset-password`, { newPassword })
 export const updateProfile = (data) => api.put('/users/profile', data)
+export const dismissGuide = (key) => api.post('/guide/dismiss', { key })
+export const resetGuide = () => api.post('/guide/reset')
+export const getGuideTaskProgress = () => api.get('/guide/task-progress')
 
 export const hasRole = (role) => {
   const user = getUser()

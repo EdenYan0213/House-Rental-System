@@ -66,16 +66,24 @@ public class ContractController {
   }
 
   @PutMapping("/{id}")
-  public ResponseEntity<Contract> update(@PathVariable Long id, @RequestBody Contract contract) {
+  public ResponseEntity<Contract> update(@PathVariable Long id, @RequestBody Contract contract,
+      HttpServletRequest request) {
     return contractService.findById(id).map(existing -> {
+      Double beforeRent = existing.getMonthlyRent();
       contract.setId(id);
       Contract saved = contractService.update(contract);
+      if (beforeRent != null && saved.getMonthlyRent() != null && !beforeRent.equals(saved.getMonthlyRent())) {
+        operationLogService.log(
+            "contract", "edit", String.valueOf(id), existing.getContractNo(), existing, saved,
+            "修改租金: " + beforeRent + " -> " + saved.getMonthlyRent(), request, true, null, null,
+            Map.of("contractId", id, "beforeRent", beforeRent, "afterRent", saved.getMonthlyRent()));
+      }
       return ResponseEntity.ok(saved);
     }).orElse(ResponseEntity.notFound().build());
   }
 
   @DeleteMapping("/{id}")
-  public ResponseEntity<?> delete(@PathVariable Long id) {
+  public ResponseEntity<?> delete(@PathVariable Long id, HttpServletRequest request) {
     Contract before = contractRepository.findById(id).orElse(null);
     if (before == null) {
       return ResponseEntity.notFound().build();
@@ -83,6 +91,9 @@ public class ContractController {
     OperationSnapshot snapshot = operationSnapshotService.capture(
         "合同管理", "delete", "contract", id, before.getContractNo(), before);
     contractService.delete(id);
+    operationLogService.log(
+        "contract", "delete", String.valueOf(id), before.getContractNo(), before, null,
+        "删除合同: " + before.getContractNo(), request, true, null, null, Map.of("contractId", id));
     return ResponseEntity.ok(Map.of(
         "undoSnapshotId", snapshot.getId(),
         "undoExpireAt", snapshot.getExpiredAt(),
@@ -151,7 +162,8 @@ public class ContractController {
           body.get("inheritDeposit") == null ? Boolean.TRUE : Boolean.valueOf(body.get("inheritDeposit").toString()),
           body.get("inheritPaymentMethod") == null ? Boolean.TRUE
               : Boolean.valueOf(body.get("inheritPaymentMethod").toString()));
-      operationLogService.log("批量操作", "批量续租: 合同" + contractIds.size() + "份", request);
+      operationLogService.log("contract", "edit", null, null, null, null,
+          "批量续租: 合同" + contractIds.size() + "份", request, true, null, null, body);
       return ResponseEntity.ok(result);
     } catch (Exception e) {
       return ResponseEntity.badRequest().body(e.getMessage());
@@ -172,7 +184,8 @@ public class ContractController {
           body.get("terminateDate") == null ? null : body.get("terminateDate").toString(),
           body.get("reason") == null ? null : body.get("reason").toString(),
           body.get("allowForce") != null && Boolean.parseBoolean(body.get("allowForce").toString()));
-      operationLogService.log("批量操作", "批量退租: 合同" + contractIds.size() + "份", request);
+      operationLogService.log("contract", "edit", null, null, null, null,
+          "批量退租: 合同" + contractIds.size() + "份", request, true, null, null, body);
       return ResponseEntity.ok(result);
     } catch (Exception e) {
       return ResponseEntity.badRequest().body(e.getMessage());

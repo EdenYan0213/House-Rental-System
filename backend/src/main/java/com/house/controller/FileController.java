@@ -32,13 +32,35 @@ public class FileController {
             String filename = fileStorageService.storeFile(file);
             String fileUrl = fileStorageService.getFileUrl(filename);
             long fileSize = file.getSize();
-            
+
             response.put("success", true);
             response.put("filename", filename);
             response.put("originalFilename", file.getOriginalFilename());
             response.put("url", fileUrl);
             response.put("size", fileSize);
-            
+
+            return ResponseEntity.ok(response);
+        } catch (IOException e) {
+            response.put("success", false);
+            response.put("message", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
+    }
+
+    @PostMapping("/uploadComplaint")
+    public ResponseEntity<Map<String, Object>> uploadComplaintFile(@RequestParam("file") MultipartFile file) {
+        Map<String, Object> response = new HashMap<>();
+        try {
+            String filename = fileStorageService.storeComplaintImage(file);
+            String fileUrl = fileStorageService.getFileUrl(filename);
+            long fileSize = file.getSize();
+
+            response.put("success", true);
+            response.put("filename", filename);
+            response.put("originalFilename", file.getOriginalFilename());
+            response.put("url", fileUrl);
+            response.put("size", fileSize);
+
             return ResponseEntity.ok(response);
         } catch (IOException e) {
             response.put("success", false);
@@ -53,7 +75,7 @@ public class FileController {
         Map<String, Object> result = new HashMap<>();
         int successCount = 0;
         int failCount = 0;
-        
+
         for (MultipartFile file : files) {
             try {
                 String filename = fileStorageService.storeFile(file);
@@ -71,13 +93,13 @@ public class FileController {
                 result.put(file.getOriginalFilename(), errorInfo);
             }
         }
-        
+
         response.put("success", failCount == 0);
         response.put("total", files.length);
         response.put("successCount", successCount);
         response.put("failCount", failCount);
         response.put("files", result);
-        
+
         return ResponseEntity.ok(response);
     }
 
@@ -86,7 +108,7 @@ public class FileController {
         try {
             Path filePath = Paths.get(fileStorageConfig.getUploadDir()).resolve(filename);
             Resource resource = new UrlResource(filePath.toUri());
-            
+
             if (resource.exists() || resource.isReadable()) {
                 String contentType = determineContentType(filename);
                 return ResponseEntity.ok()
@@ -106,7 +128,7 @@ public class FileController {
         try {
             Path filePath = Paths.get(fileStorageConfig.getUploadDir()).resolve(filename);
             Resource resource = new UrlResource(filePath.toUri());
-            
+
             if (resource.exists() || resource.isReadable()) {
                 String contentType = determineContentType(filename);
                 return ResponseEntity.ok()
@@ -125,10 +147,10 @@ public class FileController {
     public ResponseEntity<Map<String, Object>> deleteFile(@PathVariable String filename) {
         Map<String, Object> response = new HashMap<>();
         boolean deleted = fileStorageService.deleteFile(filename);
-        
+
         response.put("success", deleted);
         response.put("message", deleted ? "File deleted successfully" : "Failed to delete file");
-        
+
         return ResponseEntity.ok(response);
     }
 
@@ -151,7 +173,7 @@ public class FileController {
     public ResponseEntity<Map<String, Object>> uploadByUrl(@RequestBody Map<String, String> request) {
         Map<String, Object> response = new HashMap<>();
         String imageUrl = request.get("url");
-        
+
         if (imageUrl == null || imageUrl.trim().isEmpty()) {
             response.put("success", false);
             response.put("message", "URL cannot be empty");
@@ -161,12 +183,12 @@ public class FileController {
         try {
             String filename = fileStorageService.saveImageFromUrl(imageUrl);
             String fileUrl = fileStorageService.getFileUrl(filename);
-            
+
             response.put("success", true);
             response.put("filename", filename);
             response.put("url", fileUrl);
             response.put("originalUrl", imageUrl);
-            
+
             return ResponseEntity.ok(response);
         } catch (IOException e) {
             response.put("success", false);

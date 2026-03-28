@@ -3,7 +3,6 @@ package com.house.service;
 import com.house.model.*;
 import com.house.repo.*;
 import com.house.model.Tenant;
-import com.house.service.TenantService;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,6 +10,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
 
@@ -113,6 +114,57 @@ public class BillService {
     } catch (Exception e) {
       throw new RuntimeException("账单生成失败: " + e.getMessage());
     }
+  }
+
+  // 按房间 + 指定月份生成账单（若 month 为空则默认上月）
+  @Transactional
+  public int generateBillsForRoomAndMonth(Long roomId, String month) {
+    if (roomId == null) {
+      throw new IllegalArgumentException("房间ID不能为空");
+    }
+
+    String targetMonth = month;
+    if (targetMonth == null || targetMonth.isBlank()) {
+      targetMonth = YearMonth.now().minusMonths(1).toString();
+    }
+
+    YearMonth ym = YearMonth.parse(targetMonth);
+    LocalDate start = ym.atDay(1);
+    LocalDate end = ym.atEndOfMonth();
+
+    List<Contract> contracts = contractRepository.findByRoomId(roomId);
+    List<Contract> activeContracts = new ArrayList<>();
+    for (Contract c : contracts) {
+      String status = c.getStatus();
+      if ("ACTIVE".equalsIgnoreCase(status) || "进行中".equals(status)) {
+        activeContracts.add(c);
+      }
+    }
+
+    if (activeContracts.isEmpty()) {
+      throw new IllegalStateException("该房间无进行中的合同，无法生成账单");
+    }
+
+    LinkedHashMap<Long, Contract> unique = new LinkedHashMap<>();
+    for (Contract c : activeContracts) {
+      unique.put(c.getId(), c);
+    }
+
+    int count = 0;
+    StringBuilder errors = new StringBuilder();
+    for (Contract c : unique.values()) {
+      try {
+        createBillForContract(c, start, end, ym.toString());
+        count++;
+      } catch (Exception e) {
+        errors.append("合同 ").append(c.getContractNo()).append(": ").append(e.getMessage()).append("; ");
+      }
+    }
+
+    if (errors.length() > 0) {
+      throw new RuntimeException("部分账单生成失败: " + errors);
+    }
+    return count;
   }
 
   // 按合同 + 指定月份生成/覆盖账单（未付款时会覆盖）

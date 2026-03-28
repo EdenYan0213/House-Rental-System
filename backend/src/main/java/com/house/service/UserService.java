@@ -62,6 +62,15 @@ public class UserService {
         if (user.getThemePreference() == null || user.getThemePreference().isBlank()) {
             user.setThemePreference("system");
         }
+        if (user.getFirstLogin() == null) {
+            user.setFirstLogin(true);
+        }
+        if (user.getShowContextTips() == null) {
+            user.setShowContextTips(true);
+        }
+        if (user.getShowTaskCard() == null) {
+            user.setShowTaskCard(true);
+        }
         userRepository.insert(user);
         return user;
     }

@@ -16,6 +16,7 @@
               <span v-else>-</span>
             </div>
             <el-button type="primary" @click="handleGenerate" v-if="canGenerate">生成账单</el-button>
+            <el-button type="primary" plain @click="openRoomGenerate" v-if="canGenerate">按房间生成</el-button>
           </div>
         </div>
       </template>
@@ -35,6 +36,7 @@
         <el-form-item>
           <el-button type="primary" @click="loadBills">查询</el-button>
           <el-button @click="resetQuery">重置</el-button>
+          <el-button type="success" plain @click="handleExportCsv">导出CSV</el-button>
         </el-form-item>
       </el-form>
 
@@ -84,6 +86,14 @@
               <el-button type="primary" link @click="viewDetail(row)">详情</el-button>
               <el-button type="info" link @click="handleSendSms(row)">发短信</el-button>
               <el-button type="warning" link @click="openRegenerate(row)" v-if="canGenerate && !isBillFinal(row)">重新生成</el-button>
+              <el-button
+                type="primary"
+                link
+                @click="handleGenerateForRow(row)"
+                v-if="canGenerate && row.roomId"
+              >
+                房间生成
+              </el-button>
               <el-button type="success" link @click="openPayment(row)" v-if="canPay && !isBillFinal(row)">收款</el-button>
               <el-button type="danger" link @click="handleVoid(row)" v-if="canVoid && !isBillFinal(row)">作废</el-button>
             </div>
@@ -135,21 +145,76 @@
         <el-button type="primary" @click="submitRegenerate" :loading="regenerating">确认生成</el-button>
       </template>
     </el-dialog>
+
+    <!-- 按房间生成账单 -->
+    <el-dialog v-model="roomGenerateVisible" title="按房间生成账单" width="500px">
+      <el-form label-width="100px">
+        <el-form-item label="楼栋" required>
+          <el-select
+            v-model="roomGenerateForm.buildingId"
+            placeholder="请选择楼栋"
+            style="width: 100%"
+            filterable
+            @change="onBuildingChange"
+          >
+            <el-option v-for="b in buildingOptions" :key="b.id" :label="b.name" :value="b.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="楼层" required>
+          <el-select
+            v-model="roomGenerateForm.floor"
+            placeholder="请选择楼层"
+            style="width: 100%"
+            :disabled="!roomGenerateForm.buildingId"
+            @change="onFloorChange"
+          >
+            <el-option v-for="f in floorOptions" :key="f" :label="`${f}层`" :value="f" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="账单月份">
+          <el-input v-model="roomGenerateForm.month" placeholder="不填默认上月，如 2026-03" />
+        </el-form-item>
+        <el-form-item label="选择房间" required>
+          <el-select
+            v-model="roomGenerateForm.roomId"
+            placeholder="请选择房间"
+            filterable
+            style="width: 100%"
+            :disabled="!roomGenerateForm.floor"
+          >
+            <el-option
+              v-for="room in roomOptionsFiltered"
+              :key="room.id"
+              :label="formatRoomOption(room)"
+              :value="room.id"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="roomGenerateVisible = false">取消</el-button>
+        <el-button type="primary" :loading="generatingRoom" @click="submitRoomGenerate">确认生成</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getBills,
   generateBill,
+  generateBillForRoom,
   regenerateBill,
   voidBill,
   recordPayment,
   sendBillSms,
+  exportBillsCsv,
   getFeeItems,
+  getBuildings,
+  getRooms,
   canGenerateBill,
   canRecordPayment,
   canVoidBill
@@ -157,6 +222,7 @@ import {
 import { showUndoToast } from '../utils/undo'
 
 const router = useRouter()
+const route = useRoute()
 
 const canGenerate = computed(() => canGenerateBill())
 const canPay = computed(() => canRecordPayment())
@@ -167,11 +233,24 @@ const paying = ref(false)
 const regenerating = ref(false)
 const bills = ref([])
 const queryForm = reactive({ month: '', status: '' })
+const roomIdFilter = ref('')
 const paymentVisible = ref(false)
 const paymentRef = ref(null)
 const currentBill = ref(null)
 const regenerateVisible = ref(false)
 const regenerateBillId = ref(null)
+const roomGenerateVisible = ref(false)
+const generatingRoom = ref(false)
+const buildingOptions = ref([])
+const floorOptions = ref([])
+const roomOptions = ref([])
+const roomOptionsFiltered = ref([])
+const roomGenerateForm = reactive({
+  buildingId: null,
+  floor: null,
+  roomId: null,
+  month: ''
+})
 
 const paymentForm = reactive({
   paidAmount: 0,
@@ -221,6 +300,7 @@ async function loadBills() {
     const params = {}
     if (queryForm.month) params.month = queryForm.month
     if (queryForm.status) params.status = queryForm.status
+    if (roomIdFilter.value) params.roomId = Number(roomIdFilter.value)
     const res = await getBills(params)
     bills.value = res.data || []
   } catch (err) {
@@ -233,6 +313,7 @@ async function loadBills() {
 function resetQuery() {
   queryForm.month = ''
   queryForm.status = ''
+  roomIdFilter.value = ''
   loadBills()
 }
 
@@ -243,6 +324,139 @@ async function handleGenerate() {
     loadBills()
   } catch (err) {
     ElMessage.error('生成失败')
+  }
+}
+
+async function handleGenerateForRow(row) {
+  if (!row?.roomId) {
+    ElMessage.warning('该账单未关联房间')
+    return
+  }
+  try {
+    const month = queryForm.month || row.billMonth || ''
+    await generateBillForRoom(row.roomId, month)
+    ElMessage.success(`房间 ${row.roomNumber || row.roomId} 账单生成成功`)
+    await loadBills()
+  } catch (err) {
+    ElMessage.error(err?.response?.data || err?.message || '按房间生成失败')
+  }
+}
+
+function formatRoomOption(room) {
+  const building = room?.buildingName ? `${room.buildingName}-` : ''
+  return `${building}${room?.roomNumber || room?.id}`
+}
+
+async function loadRoomOptions() {
+  try {
+    const params = { size: 1000 }
+    if (roomGenerateForm.buildingId) {
+      params.buildingId = roomGenerateForm.buildingId
+    }
+    if (roomGenerateForm.floor !== null && roomGenerateForm.floor !== undefined) {
+      params.floor = roomGenerateForm.floor
+    }
+    const res = await getRooms(params)
+    roomOptions.value = res.data?.content || res.data || []
+  } catch (err) {
+    roomOptions.value = []
+  }
+}
+
+async function loadBuildings() {
+  try {
+    const res = await getBuildings()
+    buildingOptions.value = res.data || []
+  } catch (err) {
+    buildingOptions.value = []
+  }
+}
+
+function refreshFloorOptions() {
+  const set = new Set((roomOptions.value || []).map(r => r.floor).filter(v => v !== null && v !== undefined))
+  floorOptions.value = Array.from(set).sort((a, b) => a - b)
+}
+
+function refreshRoomOptionsFiltered() {
+  if (roomGenerateForm.floor === null || roomGenerateForm.floor === undefined) {
+    roomOptionsFiltered.value = []
+    return
+  }
+  roomOptionsFiltered.value = (roomOptions.value || []).filter(r => r.floor === roomGenerateForm.floor)
+}
+
+async function onBuildingChange() {
+  roomGenerateForm.floor = null
+  roomGenerateForm.roomId = null
+  roomOptionsFiltered.value = []
+  await loadRoomOptions()
+  refreshFloorOptions()
+}
+
+async function onFloorChange() {
+  roomGenerateForm.roomId = null
+  // 同楼栋下楼层切换时直接过滤本地数据，避免重复请求
+  refreshRoomOptionsFiltered()
+}
+
+async function openRoomGenerate() {
+  roomGenerateForm.buildingId = null
+  roomGenerateForm.floor = null
+  roomGenerateForm.roomId = null
+  roomGenerateForm.month = queryForm.month || ''
+  roomOptions.value = []
+  floorOptions.value = []
+  roomOptionsFiltered.value = []
+  await loadBuildings()
+  await loadRoomOptions()
+  roomGenerateVisible.value = true
+}
+
+async function submitRoomGenerate() {
+  if (!roomGenerateForm.buildingId) {
+    ElMessage.warning('请选择楼栋')
+    return
+  }
+  if (roomGenerateForm.floor === null || roomGenerateForm.floor === undefined) {
+    ElMessage.warning('请选择楼层')
+    return
+  }
+  if (!roomGenerateForm.roomId) {
+    ElMessage.warning('请选择房间')
+    return
+  }
+
+  generatingRoom.value = true
+  try {
+    await generateBillForRoom(roomGenerateForm.roomId, roomGenerateForm.month)
+    ElMessage.success('按房间生成账单成功')
+    roomGenerateVisible.value = false
+    await loadBills()
+  } catch (err) {
+    ElMessage.error(err?.response?.data || err?.message || '按房间生成失败')
+  } finally {
+    generatingRoom.value = false
+  }
+}
+
+async function handleExportCsv() {
+  try {
+    const params = {}
+    if (queryForm.month) params.month = queryForm.month
+    if (queryForm.status) params.status = queryForm.status
+    if (roomIdFilter.value) params.roomId = Number(roomIdFilter.value)
+    const res = await exportBillsCsv(params)
+
+    const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `bills-${Date.now()}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success('账单CSV导出成功')
+  } catch (err) {
+    ElMessage.error('账单CSV导出失败')
   }
 }
 
@@ -341,6 +555,13 @@ async function handleSendSms(row) {
 }
 
 onMounted(() => {
+  const routeMonth = String(route.query.month || '').trim()
+  const routeStatus = String(route.query.status || '').trim()
+  const routeRoomId = String(route.query.roomId || '').trim()
+  if (routeMonth) queryForm.month = routeMonth
+  if (routeStatus) queryForm.status = routeStatus
+  if (routeRoomId) roomIdFilter.value = routeRoomId
+
   loadBills()
   loadUnits()
 })

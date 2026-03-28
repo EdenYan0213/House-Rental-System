@@ -1,0 +1,20 @@
+{
+  "name": "tenant-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 5188",
+    "build": "vite build",
+    "preview": "vite preview --port 5189"
+  },
+  "dependencies": {
+    "axios": "^1.8.2",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^4.6.2",
+    "vite": "^4.5.14"
+  }
+}

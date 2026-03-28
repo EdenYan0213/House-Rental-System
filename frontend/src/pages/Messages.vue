@@ -14,10 +14,23 @@
       </el-tab-pane>
     </el-tabs>
 
+    <el-row style="margin-top: 8px" :gutter="10" align="middle">
+      <el-col :span="6">
+        <el-select v-model="typeFilter" clearable placeholder="消息类型" style="width: 100%" @change="onTypeFilterChange">
+          <el-option label="全部类型" value="" />
+          <el-option label="租户注册" value="TENANT_REGISTER" />
+          <el-option label="租房沟通" value="TENANT_RENT_INTENT" />
+          <el-option label="合同到期" value="CONTRACT_EXPIRE" />
+          <el-option label="短信通知" value="SMS_NOTIFY" />
+          <el-option label="短信模拟" value="SMS_MOCK" />
+        </el-select>
+      </el-col>
+    </el-row>
+
     <el-table :data="messages" v-loading="loading" style="width: 100%" @row-click="handleRowClick">
-      <el-table-column label="类型" width="80">
-        <template #default>
-          <el-icon :size="20" color="#E6A23C"><Bell /></el-icon>
+      <el-table-column label="类型" width="130">
+        <template #default="{ row }">
+          <el-tag :type="typeTagType(row.type)" size="small">{{ typeText(row.type) }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="title" label="标题" min-width="150" />
@@ -34,9 +47,20 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="100" fixed="right">
+      <el-table-column label="操作" width="110" fixed="right" align="center">
         <template #default="{ row }">
-          <el-button type="primary" link @click.stop="openDetail(row)">详情</el-button>
+          <div class="message-actions">
+            <el-button class="message-action-btn" type="primary" link @click.stop="openDetail(row)">详情</el-button>
+            <el-button
+              v-if="canNavigate(row)"
+              class="message-action-btn"
+              type="warning"
+              link
+              @click.stop="goFromMessage(row)"
+            >
+              前往
+            </el-button>
+          </div>
         </template>
       </el-table-column>
     </el-table>
@@ -87,6 +111,7 @@ const messages = ref([])
 const loading = ref(false)
 const unreadCount = ref(0)
 const activeTab = ref('all')
+const typeFilter = ref('')
 const page = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
@@ -112,6 +137,9 @@ async function loadMessages() {
     if (activeTab.value === 'unread') {
       params.isRead = false
     }
+    if (typeFilter.value) {
+      params.type = typeFilter.value
+    }
     const res = await getMessages(params)
     messages.value = res.data.content || []
     total.value = res.data.totalElements || 0
@@ -123,6 +151,55 @@ async function loadMessages() {
   }
 }
 
+function onTypeFilterChange() {
+  page.value = 1
+  loadMessages()
+}
+
+function typeText(type) {
+  const map = {
+    TENANT_REGISTER: '租户注册',
+    TENANT_RENT_INTENT: '租房沟通',
+    CONTRACT_EXPIRE: '合同到期',
+    SMS_NOTIFY: '短信通知',
+    SMS_MOCK: '短信模拟'
+  }
+  return map[type] || (type || '-')
+}
+
+function typeTagType(type) {
+  if (type === 'TENANT_REGISTER') return 'success'
+  if (type === 'TENANT_RENT_INTENT') return 'warning'
+  if (type === 'CONTRACT_EXPIRE') return 'danger'
+  if (type === 'SMS_NOTIFY' || type === 'SMS_MOCK') return 'info'
+  return ''
+}
+
+function canNavigate(row) {
+  return ['CONTRACT_EXPIRE', 'TENANT_REGISTER', 'TENANT_RENT_INTENT'].includes(row?.type)
+}
+
+function extractPhone(content) {
+  const text = String(content || '')
+  const m = text.match(/1\d{10}/)
+  return m ? m[0] : ''
+}
+
+function goFromMessage(row) {
+  if (row.type === 'CONTRACT_EXPIRE') {
+    router.push({ path: '/contracts', query: row.relatedId ? { id: row.relatedId } : {} })
+    return
+  }
+  if (row.type === 'TENANT_REGISTER' || row.type === 'TENANT_RENT_INTENT') {
+    const phone = extractPhone(row.content)
+    if (phone) {
+      router.push({ path: '/tenants', query: { q: phone } })
+    } else {
+      router.push('/tenants')
+    }
+  }
+}
+
 async function handleRowClick(row) {
   if (!row.isRead) {
     await markMessageRead(row.id)
@@ -131,6 +208,8 @@ async function handleRowClick(row) {
   }
   if (row.type === 'CONTRACT_EXPIRE' && row.relatedId) {
     router.push({ path: '/contracts', query: { id: row.relatedId } })
+  } else if (row.type === 'TENANT_REGISTER' || row.type === 'TENANT_RENT_INTENT') {
+    goFromMessage(row)
   }
 }
 
@@ -233,6 +312,22 @@ onMounted(() => {
 
 .detail-actions {
   margin-bottom: 12px;
+}
+
+.message-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.message-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+.message-action-btn {
+  min-width: 34px;
 }
 
 .message-content {

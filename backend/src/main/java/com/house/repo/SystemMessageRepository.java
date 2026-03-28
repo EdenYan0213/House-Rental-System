@@ -12,6 +12,10 @@ import java.util.Optional;
 public interface SystemMessageRepository extends JpaRepository<SystemMessage, Long> {
   Page<SystemMessage> findByIsRead(Boolean isRead, Pageable pageable);
 
+  Page<SystemMessage> findByType(String type, Pageable pageable);
+
+  Page<SystemMessage> findByTypeAndIsRead(String type, Boolean isRead, Pageable pageable);
+
   long countByIsRead(Boolean isRead);
 
   Optional<SystemMessage> findTopByOrderByCreatedAtDesc();

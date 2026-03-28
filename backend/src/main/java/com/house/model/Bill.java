@@ -4,9 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
-import jakarta.persistence.Transient;
 import java.util.List;
-import com.house.model.PaymentRecord;
 
 @Entity
 @Data
@@ -83,28 +81,99 @@ public class Bill {
 
   private Integer deleted;
 
-  public void setId(Long id) { this.id = id; }
-  public Long getId() { return id; }
-  public void setContractId(Long contractId) { this.contractId = contractId; }
-  public Long getContractId() { return contractId; }
-  public void setBillMonth(String billMonth) { this.billMonth = billMonth; }
-  public String getBillMonth() { return billMonth; }
-  public void setTotalAmount(Double totalAmount) { this.totalAmount = totalAmount; }
-  public Double getTotalAmount() { return totalAmount; }
-  public void setStatus(String status) { this.status = status; }
-  public String getStatus() { return status; }
-  public void setGeneratedDate(LocalDateTime generatedDate) { this.generatedDate = generatedDate; }
-  public LocalDateTime getGeneratedDate() { return generatedDate; }
-  public void setRoomId(Long roomId) { this.roomId = roomId; }
-  public Long getRoomId() { return roomId; }
-  public void setRoomNumber(String roomNumber) { this.roomNumber = roomNumber; }
-  public String getRoomNumber() { return roomNumber; }
-  public void setBuildingName(String buildingName) { this.buildingName = buildingName; }
-  public String getBuildingName() { return buildingName; }
-  public void setTenantName(String tenantName) { this.tenantName = tenantName; }
-  public String getTenantName() { return tenantName; }
-  public void setTenantPhone(String tenantPhone) { this.tenantPhone = tenantPhone; }
-  public String getTenantPhone() { return tenantPhone; }
-  public void setDeleted(Integer deleted) { this.deleted = deleted; }
-  public Integer getDeleted() { return deleted; }
+  public void setId(Long id) {
+    this.id = id;
+  }
+
+  public Long getId() {
+    return id;
+  }
+
+  public void setContractId(Long contractId) {
+    this.contractId = contractId;
+  }
+
+  public Long getContractId() {
+    return contractId;
+  }
+
+  public void setBillMonth(String billMonth) {
+    this.billMonth = billMonth;
+  }
+
+  public String getBillMonth() {
+    return billMonth;
+  }
+
+  public void setTotalAmount(Double totalAmount) {
+    this.totalAmount = totalAmount;
+  }
+
+  public Double getTotalAmount() {
+    return totalAmount;
+  }
+
+  public void setStatus(String status) {
+    this.status = status;
+  }
+
+  public String getStatus() {
+    return status;
+  }
+
+  public void setGeneratedDate(LocalDateTime generatedDate) {
+    this.generatedDate = generatedDate;
+  }
+
+  public LocalDateTime getGeneratedDate() {
+    return generatedDate;
+  }
+
+  public void setRoomId(Long roomId) {
+    this.roomId = roomId;
+  }
+
+  public Long getRoomId() {
+    return roomId;
+  }
+
+  public void setRoomNumber(String roomNumber) {
+    this.roomNumber = roomNumber;
+  }
+
+  public String getRoomNumber() {
+    return roomNumber;
+  }
+
+  public void setBuildingName(String buildingName) {
+    this.buildingName = buildingName;
+  }
+
+  public String getBuildingName() {
+    return buildingName;
+  }
+
+  public void setTenantName(String tenantName) {
+    this.tenantName = tenantName;
+  }
+
+  public String getTenantName() {
+    return tenantName;
+  }
+
+  public void setTenantPhone(String tenantPhone) {
+    this.tenantPhone = tenantPhone;
+  }
+
+  public String getTenantPhone() {
+    return tenantPhone;
+  }
+
+  public void setDeleted(Integer deleted) {
+    this.deleted = deleted;
+  }
+
+  public Integer getDeleted() {
+    return deleted;
+  }
 }

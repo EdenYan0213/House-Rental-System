@@ -54,6 +54,18 @@
       <el-button type="primary" @click="handleManualBackup" :loading="backupLoading">
         立即备份
       </el-button>
+      <el-upload
+        v-if="canRestore"
+        class="upload-restore"
+        :show-file-list="false"
+        accept=".zip,application/zip"
+        :before-upload="beforeUploadRestoreFile"
+        :http-request="handleUploadAndRestore"
+      >
+        <el-button type="danger" :loading="uploadRestoreLoading">
+          上传并恢复
+        </el-button>
+      </el-upload>
       <span class="time-hint">手动备份不占用自动备份保留名额</span>
     </el-card>
 
@@ -170,6 +182,7 @@ import {
   deleteBackup,
   downloadBackup,
   restoreBackup,
+  uploadAndRestoreBackup,
   getBackupConfig,
   updateBackupConfig
 } from '@/api'
@@ -186,6 +199,7 @@ const backups = ref([])
 const backupLoading = ref(false)
 const restoreDialogVisible = ref(false)
 const restoreLoading = ref(false)
+const uploadRestoreLoading = ref(false)
 const selectedBackup = ref(null)
 const restoreConfirmed = ref(false)
 const canRestore = hasRole('ADMIN')
@@ -251,6 +265,50 @@ const handleRestore = (row) => {
   selectedBackup.value = row
   restoreConfirmed.value = false
   restoreDialogVisible.value = true
+}
+
+const beforeUploadRestoreFile = (file) => {
+  const name = (file.name || '').toLowerCase()
+  if (!name.endsWith('.zip')) {
+    ElMessage.error('仅支持上传 .zip 备份文件')
+    return false
+  }
+  return true
+}
+
+const handleUploadAndRestore = async (options) => {
+  const { file } = options
+  try {
+    await ElMessageBox.confirm(
+      `确定使用文件 \"${file.name}\" 执行恢复吗？该操作会覆盖当前数据且不可逆。`,
+      '上传恢复确认',
+      {
+        confirmButtonText: '确认恢复',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+
+    uploadRestoreLoading.value = true
+    const { data } = await uploadAndRestoreBackup(file)
+    if (data?.status === 'success') {
+      ElMessage.success('上传并恢复成功')
+      await loadBackups()
+      options.onSuccess?.(data)
+      return
+    }
+
+    const reason = data?.failReason || data?.message || '恢复失败'
+    ElMessage.error('上传恢复失败: ' + reason)
+    options.onError?.(new Error(reason))
+  } catch (error) {
+    if (error !== 'cancel') {
+      ElMessage.error('上传恢复失败: ' + (error.response?.data?.message || error.message))
+      options.onError?.(error)
+    }
+  } finally {
+    uploadRestoreLoading.value = false
+  }
 }
 
 const confirmRestore = async () => {
@@ -334,6 +392,11 @@ onMounted(() => {
   margin-left: 10px;
   color: #909399;
   font-size: 12px;
+}
+
+.upload-restore {
+  display: inline-block;
+  margin-left: 12px;
 }
 
 .confirm-text {

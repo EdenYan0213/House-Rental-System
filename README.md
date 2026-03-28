@@ -48,3 +48,17 @@ npm run dev
 - 为身份证等敏感字段完善更安全的加密/密钥管理。
 - 添加安全认证（JWT）和权限控制。
 - 添加单元测试与接口测试。
+
+## 性能压测与优化
+
+已新增性能压测与索引优化落地文件：
+
+- 方案文档：`docs/performance/PERFORMANCE_TEST_PLAN.md`
+- 基准压测脚本：`backend/scripts/perf/perf_baseline.ps1`
+- 索引迁移脚本：`backend/sql/migrate_add_performance_indexes.sql`
+
+示例：
+
+```bash
+powershell -ExecutionPolicy Bypass -File backend/scripts/perf/perf_baseline.ps1
+```

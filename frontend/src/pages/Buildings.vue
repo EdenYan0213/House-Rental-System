@@ -246,8 +246,11 @@ async function remove(row) {
     const res = await deleteBuilding(row.id)
     showUndoToast(res?.data, load)
     await load()
-  } catch (_) {
-    // User cancelled.
+  } catch (e) {
+    if (e === 'cancel' || e === 'close') {
+      return
+    }
+    ElMessage.error(e?.response?.data || e?.message || '删除失败')
   }
 }
 

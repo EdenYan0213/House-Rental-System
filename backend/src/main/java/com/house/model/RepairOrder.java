@@ -57,6 +57,12 @@ public class RepairOrder {
   @Column(name = "finish_time")
   private LocalDateTime finishTime;
 
+  @Column(name = "expected_time")
+  private LocalDateTime expectedTime;
+
+  @Column(name = "contact_phone")
+  private String contactPhone;
+
   @Column(name = "accept_time")
   private LocalDateTime acceptTime;
 

@@ -10,7 +10,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @Service
@@ -23,11 +22,11 @@ public class ReminderService {
   private final ObjectMapper objectMapper;
 
   public ReminderService(ContractRepository contractRepository,
-                        ReminderSettingsRepository reminderSettingsRepository,
-                        SystemMessageRepository systemMessageRepository,
-                        RoomRepository roomRepository,
-                        TenantRepository tenantRepository,
-                        ObjectMapper objectMapper) {
+      ReminderSettingsRepository reminderSettingsRepository,
+      SystemMessageRepository systemMessageRepository,
+      RoomRepository roomRepository,
+      TenantRepository tenantRepository,
+      ObjectMapper objectMapper) {
     this.contractRepository = contractRepository;
     this.reminderSettingsRepository = reminderSettingsRepository;
     this.systemMessageRepository = systemMessageRepository;
@@ -62,7 +61,7 @@ public class ReminderService {
 
     for (Contract contract : activeContracts) {
       long daysLeft = java.time.temporal.ChronoUnit.DAYS.between(today, contract.getEndDate());
-      
+
       for (Integer reminderDay : reminderDays) {
         if (daysLeft == reminderDay) {
           if (!hasSentReminder(contract, reminderDay)) {
@@ -79,7 +78,10 @@ public class ReminderService {
       return false;
     }
     try {
-      Map<String, String> sentMap = objectMapper.readValue(contract.getReminderSent(), Map.class);
+      Map<String, String> sentMap = objectMapper.readValue(
+          contract.getReminderSent(),
+          new com.fasterxml.jackson.core.type.TypeReference<Map<String, String>>() {
+          });
       return sentMap.containsKey(day.toString());
     } catch (JsonProcessingException e) {
       return false;
@@ -87,9 +89,9 @@ public class ReminderService {
   }
 
   private void sendReminder(Contract contract, Integer daysLeft) {
-    final String[] roomNumber = {""};
-    final String[] tenantName = {""};
-    
+    final String[] roomNumber = { "" };
+    final String[] tenantName = { "" };
+
     if (contract.getRoomId() != null) {
       roomRepository.findById(contract.getRoomId()).ifPresent(r -> roomNumber[0] = r.getRoomNumber());
     }
@@ -117,7 +119,10 @@ public class ReminderService {
     Map<String, String> sentMap = new HashMap<>();
     if (contract.getReminderSent() != null && !contract.getReminderSent().isEmpty()) {
       try {
-        sentMap = objectMapper.readValue(contract.getReminderSent(), Map.class);
+        sentMap = objectMapper.readValue(
+            contract.getReminderSent(),
+            new com.fasterxml.jackson.core.type.TypeReference<Map<String, String>>() {
+            });
       } catch (JsonProcessingException e) {
       }
     }

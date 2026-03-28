@@ -18,7 +18,6 @@ import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class BackupService {
@@ -200,7 +199,6 @@ public class BackupService {
 
             Path uploadPath = Paths.get(filesDir);
             if (Files.exists(uploadPath) && Files.isDirectory(uploadPath)) {
-                Path rootDir = uploadPath.getParent() != null ? uploadPath.getParent() : uploadPath;
                 Files.walk(uploadPath)
                         .filter(Files::isRegularFile)
                         .forEach(file -> {
@@ -310,6 +308,61 @@ public class BackupService {
 
         } catch (Exception e) {
             logger.error("恢复失败", e);
+            log.setStatus("failed");
+            log.setFailReason(e.getMessage());
+        } finally {
+            disableMaintenanceMode();
+        }
+
+        return restoreLogRepository.save(log);
+    }
+
+    /**
+     * 上传备份文件直接恢复（不落库，仅恢复）
+     */
+    @Transactional
+    public RestoreLog restoreFromUploadedFile(String zipFilePath, Long operatorId) {
+        enableMaintenanceMode("上传备份恢复", operatorId);
+
+        RestoreLog log = new RestoreLog();
+        log.setRestoreTime(LocalDateTime.now());
+        log.setBackupId(null);
+        log.setOperatorId(operatorId);
+        log.setStatus("success");
+
+        try {
+            if (!Files.exists(Paths.get(zipFilePath))) {
+                throw new RuntimeException("上传的备份文件不存在");
+            }
+
+            String tempDir = System.getProperty("java.io.tmpdir") + "restore_uploaded_" + System.currentTimeMillis()
+                    + "/";
+            extractZipArchive(zipFilePath, tempDir);
+
+            String dbName = extractDbName(dbUrl);
+            String sqlFile = tempDir + "database.sql";
+            if (Files.exists(Paths.get(sqlFile))) {
+                restoreDatabase(dbName, sqlFile);
+            }
+
+            String extractedUploads = tempDir + "uploads/";
+            if (Files.exists(Paths.get(extractedUploads))) {
+                Path targetUploads = Paths.get(uploadDir);
+                Files.createDirectories(targetUploads);
+                copyDirectory(Paths.get(extractedUploads), targetUploads);
+            }
+
+            deleteDirectory(Paths.get(tempDir));
+
+            ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder
+                    .getRequestAttributes();
+            HttpServletRequest request = attributes != null ? attributes.getRequest() : null;
+            if (request != null) {
+                operationLogService.log("RESTORE", "上传备份恢复: " + zipFilePath, request);
+            }
+
+        } catch (Exception e) {
+            logger.error("上传备份恢复失败", e);
             log.setStatus("failed");
             log.setFailReason(e.getMessage());
         } finally {

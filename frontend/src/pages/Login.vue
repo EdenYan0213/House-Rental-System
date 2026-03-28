@@ -101,7 +101,11 @@ async function handleLogin() {
           realName: res.data.realName,
           role: res.data.role,
           email: res.data.email,
-          themePreference: res.data.themePreference || 'system'
+          themePreference: res.data.themePreference || 'system',
+          firstLogin: res.data.firstLogin !== false,
+          showContextTips: res.data.showContextTips !== false,
+          showTaskCard: res.data.showTaskCard !== false,
+          dismissedGuideKeys: []
         })
         setThemePreference(res.data.themePreference || 'system')
         applyThemePreference(res.data.themePreference || 'system')

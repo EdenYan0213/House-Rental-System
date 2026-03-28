@@ -8,6 +8,8 @@
       <div>
         <el-button type="primary" @click="openCreate">新建房间</el-button>
         <el-button @click="openBatch">批量生成</el-button>
+        <el-button :disabled="rooms.length === 0" @click="toggleSelectAll">{{ allSelected ? '取消全选' : '一键全选' }}</el-button>
+        <el-button type="danger" plain :disabled="selectedRoomIds.length === 0" @click="batchDelete">批量删除</el-button>
         <el-button type="warning" :disabled="selectedRoomIds.length === 0" @click="openBatchRentDialog">批量调整租金</el-button>
       </div>
     </el-row>
@@ -32,9 +34,11 @@
             <h3>{{ room.roomNumber }}</h3>
             <p class="detail">{{ room.layout }} · {{ room.area }}m² · {{ room.floor }}层</p>
             <div class="actions">
+              <el-button size="small" @click="goDetail(room)">详情</el-button>
               <el-button type="primary" size="small" @click="editRoom(room)">编辑</el-button>
               <el-button size="small" @click="goAssets(room)">器具</el-button>
               <el-button size="small" @click="goMeter(room)">水电</el-button>
+              <el-button size="small" @click="goComplaint(room)">投诉</el-button>
               <el-button size="small" type="danger" @click="del(room)">删除</el-button>
             </div>
           </div>
@@ -213,7 +217,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
@@ -222,6 +226,7 @@ import {
   createRoom,
   updateRoom,
   deleteRoom,
+  batchDeleteRooms,
   getBuilding,
   createRoomsBatch,
   createRoomsBatchOverride,
@@ -254,6 +259,7 @@ const selectedRoomIds = ref([])
 const showBatchRentDialog = ref(false)
 const batchRentLoading = ref(false)
 const batchRentForm = ref({ mode: 'FIXED', fixedAmount: 0, percent: 0, syncActiveContracts: true })
+const allSelected = computed(() => rooms.value.length > 0 && selectedRoomIds.value.length === rooms.value.length)
 
 function beforeUpload(file) {
   const ext = (file.name || '').split('.').pop()?.toLowerCase() || ''
@@ -275,6 +281,8 @@ function beforeUpload(file) {
 async function load() {
   const res = await getRooms({ buildingId })
   rooms.value = res.data
+  const validIds = new Set((rooms.value || []).map(r => r.id))
+  selectedRoomIds.value = selectedRoomIds.value.filter(id => validIds.has(id))
   try {
     const b = await getBuilding(buildingId)
     buildingName.value = b.data.name
@@ -289,6 +297,14 @@ function toggleRoomSelection(roomId, checked) {
   } else {
     selectedRoomIds.value = selectedRoomIds.value.filter(id => id !== roomId)
   }
+}
+
+function toggleSelectAll() {
+  if (allSelected.value) {
+    selectedRoomIds.value = []
+    return
+  }
+  selectedRoomIds.value = (rooms.value || []).map(room => room.id)
 }
 
 function openBatchRentDialog() {
@@ -405,7 +421,35 @@ async function del(r) {
     const res = await deleteRoom(r.id)
     showUndoToast(res?.data, load)
     await load()
-  } catch (e) {}
+  } catch (e) {
+    if (e !== 'cancel') {
+      const message = e?.response?.data || e?.message || '删除失败'
+      if (String(message).includes('已出租')) {
+        ElMessageBox.alert(message, '删除失败', { type: 'warning' })
+      } else {
+        ElMessage.error(message)
+      }
+    }
+  }
+}
+
+async function batchDelete() {
+  if (selectedRoomIds.value.length === 0) {
+    ElMessage.warning('请先选择房间')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(`确定删除选中的 ${selectedRoomIds.value.length} 个房间吗？`, '提示', { type: 'warning' })
+    const res = await batchDeleteRooms(selectedRoomIds.value)
+    ElMessage.success(`已删除 ${res?.data?.deletedCount || 0} 个房间`)
+    showUndoToast(res?.data, load)
+    selectedRoomIds.value = []
+    await load()
+  } catch (e) {
+    if (e && e !== 'cancel') {
+      ElMessage.error(e.response?.data || e.message || '批量删除失败')
+    }
+  }
 }
 
 async function batchCreate() {
@@ -484,8 +528,16 @@ function goMeter(room) {
   router.push(`/buildings/${buildingId}/rooms/${room.id}/meter`)
 }
 
+function goDetail(room) {
+  router.push(`/buildings/${buildingId}/rooms/${room.id}/detail`)
+}
+
 function goAssets(room) {
   router.push(`/buildings/${buildingId}/rooms/${room.id}/assets`)
+}
+
+function goComplaint(room) {
+  router.push(`/complaints?roomId=${room.id}`)
 }
 
 function goBack() {

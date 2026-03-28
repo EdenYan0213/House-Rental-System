@@ -28,7 +28,24 @@ public class JwtUtil {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userId", userId);
         claims.put("role", role);
-        
+
+        return Jwts.builder()
+                .setClaims(claims)
+                .setSubject(username)
+                .setIssuedAt(new Date())
+                .setExpiration(new Date(System.currentTimeMillis() + expiration))
+                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    public String generateToken(String username, Long userId, String role, Map<String, Object> extraClaims) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", userId);
+        claims.put("role", role);
+        if (extraClaims != null && !extraClaims.isEmpty()) {
+            claims.putAll(extraClaims);
+        }
+
         return Jwts.builder()
                 .setClaims(claims)
                 .setSubject(username)
@@ -56,6 +73,10 @@ public class JwtUtil {
 
     public String getRoleFromToken(String token) {
         return parseToken(token).get("role", String.class);
+    }
+
+    public <T> T getClaim(String token, String name, Class<T> clazz) {
+        return parseToken(token).get(name, clazz);
     }
 
     public boolean isTokenExpired(String token) {

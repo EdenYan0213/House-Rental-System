@@ -3,7 +3,6 @@ package com.house.controller;
 import com.house.model.BackupConfig;
 import com.house.model.BackupRecord;
 import com.house.model.RestoreLog;
-import com.house.model.User;
 import com.house.service.BackupService;
 import com.house.util.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
@@ -20,6 +19,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
@@ -144,6 +144,39 @@ public class BackupController {
     @GetMapping("/restore/{id}")
     public ResponseEntity<RestoreLog> restoreBackupByGet(@PathVariable Long id, HttpServletRequest request) {
         return restoreBackup(id, request);
+    }
+
+    /**
+     * 上传备份文件并直接恢复（跨设备恢复）
+     */
+    @PostMapping("/upload-and-restore")
+    public ResponseEntity<RestoreLog> uploadAndRestore(@RequestParam("file") MultipartFile file,
+            HttpServletRequest request) {
+        if (!hasAnyRole(request, "SUPER_ADMIN", "ADMIN")) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        try {
+            String tempDir = System.getProperty("java.io.tmpdir");
+            String filename = "uploaded_backup_" + System.currentTimeMillis() + ".zip";
+            java.nio.file.Path tempPath = java.nio.file.Paths.get(tempDir, filename);
+            file.transferTo(tempPath);
+
+            Long operatorId = getCurrentUserId(request);
+            RestoreLog log = backupService.restoreFromUploadedFile(tempPath.toString(), operatorId);
+
+            java.nio.file.Files.deleteIfExists(tempPath);
+            return ResponseEntity.ok(log);
+        } catch (Exception e) {
+            RestoreLog failed = new RestoreLog();
+            failed.setRestoreTime(java.time.LocalDateTime.now());
+            failed.setStatus("failed");
+            failed.setFailReason(e.getMessage());
+            return ResponseEntity.ok(failed);
+        }
     }
 
     @GetMapping("/config")

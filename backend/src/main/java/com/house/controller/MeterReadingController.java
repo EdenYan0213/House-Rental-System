@@ -7,6 +7,7 @@ import com.house.model.Room;
 import com.house.repo.BuildingRepository;
 import com.house.repo.MeterReadingRepository;
 import com.house.repo.RoomRepository;
+import com.house.service.MeterReadingBatchService;
 import com.house.service.OperationSnapshotService;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -21,6 +22,9 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -40,15 +44,18 @@ public class MeterReadingController {
   private final MeterReadingRepository meterReadingRepository;
   private final RoomRepository roomRepository;
   private final BuildingRepository buildingRepository;
+  private final MeterReadingBatchService meterReadingBatchService;
   private final OperationSnapshotService operationSnapshotService;
 
   public MeterReadingController(MeterReadingRepository meterReadingRepository,
       RoomRepository roomRepository,
       BuildingRepository buildingRepository,
+      MeterReadingBatchService meterReadingBatchService,
       OperationSnapshotService operationSnapshotService) {
     this.meterReadingRepository = meterReadingRepository;
     this.roomRepository = roomRepository;
     this.buildingRepository = buildingRepository;
+    this.meterReadingBatchService = meterReadingBatchService;
     this.operationSnapshotService = operationSnapshotService;
   }
 
@@ -73,43 +80,61 @@ public class MeterReadingController {
     return meterReadingRepository.findAll();
   }
 
+  @GetMapping("/export-csv")
+  public ResponseEntity<byte[]> exportCsv(
+      @RequestParam(required = false) String date,
+      @RequestParam(required = false) String startDate,
+      @RequestParam(required = false) String endDate,
+      @RequestParam(required = false) Long buildingId,
+      @RequestParam(required = false) Long roomId) {
+    List<MeterReading> readings = queryReadingsForExport(date, startDate, endDate, buildingId, roomId);
+
+    Map<Long, Room> roomMap = roomRepository.findAll().stream()
+        .collect(Collectors.toMap(Room::getId, r -> r));
+    Map<Long, Building> buildingMap = buildingRepository.findAll().stream()
+        .collect(Collectors.toMap(Building::getId, b -> b));
+
+    StringBuilder csv = new StringBuilder();
+    csv.append("记录ID,日期,楼栋,房间号,水表读数,电表读数\n");
+    for (MeterReading item : readings) {
+      Room room = roomMap.get(item.getRoomId());
+      Building building = room == null ? null : buildingMap.get(room.getBuildingId());
+      csv.append(csvCell(item.getId())).append(',')
+          .append(csvCell(item.getRecordDate())).append(',')
+          .append(csvCell(building == null ? "" : building.getName())).append(',')
+          .append(csvCell(room == null ? "" : room.getRoomNumber())).append(',')
+          .append(csvCell(item.getWaterReading())).append(',')
+          .append(csvCell(item.getElectricReading()))
+          .append('\n');
+    }
+
+    byte[] bytes = ("\uFEFF" + csv).getBytes(StandardCharsets.UTF_8);
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=meter-readings-export.csv")
+        .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
+        .body(bytes);
+  }
+
   @PostMapping
   @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public List<MeterReading> save(@RequestBody List<Map<String, Object>> data) {
-    List<MeterReading> results = new ArrayList<>();
-    for (Map<String, Object> item : data) {
-      try {
+    try {
+      List<MeterReadingBatchService.MeterUpsertItem> items = new ArrayList<>();
+      for (Map<String, Object> item : data) {
         Long roomId = ((Number) item.get("roomId")).longValue();
-        String recordDateStr = (String) item.get("recordDate");
+        java.time.LocalDate recordDate = java.time.LocalDate.parse(String.valueOf(item.get("recordDate")));
         Double waterReading = item.get("waterReading") != null ? ((Number) item.get("waterReading")).doubleValue() : 0;
         Double electricReading = item.get("electricReading") != null
             ? ((Number) item.get("electricReading")).doubleValue()
             : 0;
-        if (waterReading < 0 || electricReading < 0) {
-          throw new IllegalArgumentException("水电读数不能为负数");
-        }
-
-        java.time.LocalDate rd = java.time.LocalDate.parse(recordDateStr);
-        MeterReading reading = meterReadingRepository.findByRoomIdAndRecordDate(roomId, rd);
-        if (reading == null) {
-          reading = MeterReading.builder()
-              .roomId(roomId)
-              .recordDate(rd)
-              .waterReading(waterReading)
-              .electricReading(electricReading)
-              .build();
-        } else {
-          reading.setWaterReading(waterReading);
-          reading.setElectricReading(electricReading);
-        }
-
-        results.add(meterReadingRepository.save(reading));
-      } catch (Exception e) {
-        e.printStackTrace();
-        throw new RuntimeException("保存水电记录失败: " + e.getMessage());
+        items.add(new MeterReadingBatchService.MeterUpsertItem(roomId, recordDate, waterReading, electricReading));
       }
+      return meterReadingBatchService.upsertBatch(items);
+    } catch (IllegalArgumentException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new RuntimeException("保存水电记录失败: " + e.getMessage());
     }
-    return results;
   }
 
   @GetMapping("/import-template")
@@ -310,7 +335,7 @@ public class MeterReadingController {
       throw new IllegalArgumentException("导入数据中包含不存在的房间，请重新解析后导入");
     }
 
-    List<MeterReading> toSave = new ArrayList<>();
+    List<MeterReadingBatchService.MeterUpsertItem> toSave = new ArrayList<>();
     for (ImportSuccessItem item : request.getRecords()) {
       if (item.getWaterReading() == null || item.getWaterReading() < 0 || item.getElectricReading() == null
           || item.getElectricReading() < 0) {
@@ -324,22 +349,14 @@ public class MeterReadingController {
         throw new IllegalArgumentException("导入数据包含无效日期，请重新解析后导入");
       }
 
-      MeterReading reading = meterReadingRepository.findByRoomIdAndRecordDate(item.getRoomId(), date);
-      if (reading == null) {
-        reading = MeterReading.builder()
-            .roomId(item.getRoomId())
-            .recordDate(date)
-            .waterReading(item.getWaterReading())
-            .electricReading(item.getElectricReading())
-            .build();
-      } else {
-        reading.setWaterReading(item.getWaterReading());
-        reading.setElectricReading(item.getElectricReading());
-      }
-      toSave.add(reading);
+      toSave.add(new MeterReadingBatchService.MeterUpsertItem(
+          item.getRoomId(),
+          date,
+          item.getWaterReading(),
+          item.getElectricReading()));
     }
 
-    meterReadingRepository.saveAll(toSave);
+    meterReadingBatchService.upsertBatch(toSave);
 
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("successCount", toSave.size());
@@ -384,6 +401,61 @@ public class MeterReadingController {
     if (file.getSize() > MAX_FILE_SIZE) {
       throw new IllegalArgumentException("文件大小不能超过10MB");
     }
+  }
+
+  private List<MeterReading> queryReadingsForExport(String date, String startDate, String endDate, Long buildingId,
+      Long roomId) {
+    List<MeterReading> readings;
+    if (roomId != null) {
+      readings = meterReadingRepository.findByRoomIdOrderByRecordDateDesc(roomId);
+    } else if (date != null && !date.isBlank()) {
+      readings = meterReadingRepository.findByRecordDate(LocalDate.parse(date));
+    } else {
+      readings = meterReadingRepository.findAll();
+    }
+
+    if (buildingId != null) {
+      Set<Long> roomIds = roomRepository.findByBuildingId(buildingId).stream()
+          .map(Room::getId)
+          .collect(Collectors.toSet());
+      readings = readings.stream().filter(r -> roomIds.contains(r.getRoomId())).toList();
+    }
+
+    LocalDate start = parseDateSafe(startDate);
+    LocalDate end = parseDateSafe(endDate);
+    if (start != null) {
+      readings = readings.stream().filter(r -> !r.getRecordDate().isBefore(start)).toList();
+    }
+    if (end != null) {
+      readings = readings.stream().filter(r -> !r.getRecordDate().isAfter(end)).toList();
+    }
+
+    return readings.stream()
+        .sorted(Comparator.comparing(MeterReading::getRecordDate).reversed()
+            .thenComparing(MeterReading::getRoomId, Comparator.nullsLast(Long::compareTo)))
+        .toList();
+  }
+
+  private LocalDate parseDateSafe(String value) {
+    if (value == null || value.isBlank()) {
+      return null;
+    }
+    try {
+      return LocalDate.parse(value.trim());
+    } catch (Exception ignore) {
+      return null;
+    }
+  }
+
+  private String csvCell(Object value) {
+    if (value == null) {
+      return "";
+    }
+    String text = String.valueOf(value);
+    if (text.contains(",") || text.contains("\"") || text.contains("\n") || text.contains("\r")) {
+      return "\"" + text.replace("\"", "\"\"") + "\"";
+    }
+    return text;
   }
 
   private Map<String, Integer> resolveHeaderColumns(Row headerRow) {

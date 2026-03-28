@@ -1,0 +1,122 @@
+import { ref } from 'vue'
+
+const LANG_KEY = 'tenant_lang'
+
+const messages = {
+  'zh-CN': {
+    tab_home: '首页',
+    tab_repairs: '报修',
+    tab_complaints: '投诉',
+    tab_bills: '账单',
+    tab_me: '我的',
+    me_phase3: '三期功能',
+    me_messages: '消息中心',
+    me_dashboard: '租客看板',
+    me_language: '语言与提醒',
+    me_sign: '电子签署',
+    msg_title: '消息中心',
+    msg_filter_all: '全部',
+    msg_filter_todo: '待办',
+    msg_filter_notice: '通知',
+    msg_unread: '未读',
+    msg_empty: '暂无消息',
+    msg_read: '标记已读',
+    msg_delete: '删除',
+    msg_process: '处理待办',
+    dash_title: '租客数据看板',
+    dash_bill: '近12个月账单',
+    dash_repair: '报修统计',
+    dash_complaint: '投诉统计',
+    dash_renew: '续租提醒',
+    dash_stay: '入住时长',
+    dash_days: '天',
+    dash_months: '个月',
+    lang_title: '语言与提醒设置',
+    lang_switch: '语言',
+    lang_zh: '中文',
+    lang_en: 'English',
+    lang_notify: '推送提醒',
+    lang_overdue: '账单逾期',
+    lang_repair: '报修/投诉进度',
+    lang_contract: '合同提醒',
+    lang_notice: '公告提醒',
+    save: '保存设置',
+    save_ok: '保存成功',
+    sign_title: '电子签署',
+    sign_verify_name: '实名认证姓名',
+    sign_verify_id: '身份证号',
+    sign_verify: '实名认证',
+    sign_submit: '提交签署',
+    sign_retry: '失败重试',
+    sign_status: '签署状态',
+    sign_verify_status: '实名状态',
+    sign_history: '签署记录',
+    sign_open_contract: '打开合同页',
+    sign_need_contract: '请先选择合同',
+    sign_to_contract: '前往合同'
+  },
+  'en-US': {
+    tab_home: 'Home',
+    tab_repairs: 'Repair',
+    tab_complaints: 'Complaint',
+    tab_bills: 'Bills',
+    tab_me: 'Me',
+    me_phase3: 'Phase 3',
+    me_messages: 'Message Center',
+    me_dashboard: 'Dashboard',
+    me_language: 'Language & Alerts',
+    me_sign: 'E-Sign',
+    msg_title: 'Message Center',
+    msg_filter_all: 'All',
+    msg_filter_todo: 'Todo',
+    msg_filter_notice: 'Notice',
+    msg_unread: 'Unread',
+    msg_empty: 'No messages',
+    msg_read: 'Mark Read',
+    msg_delete: 'Delete',
+    msg_process: 'Process Todo',
+    dash_title: 'Tenant Dashboard',
+    dash_bill: 'Last 12 Months Bills',
+    dash_repair: 'Repair Stats',
+    dash_complaint: 'Complaint Stats',
+    dash_renew: 'Renew Reminder',
+    dash_stay: 'Stay Length',
+    dash_days: 'days',
+    dash_months: 'months',
+    lang_title: 'Language & Notification Settings',
+    lang_switch: 'Language',
+    lang_zh: 'Chinese',
+    lang_en: 'English',
+    lang_notify: 'Push Notifications',
+    lang_overdue: 'Overdue Bills',
+    lang_repair: 'Repair/Complaint Progress',
+    lang_contract: 'Contract Reminder',
+    lang_notice: 'Announcement Reminder',
+    save: 'Save Settings',
+    save_ok: 'Saved',
+    sign_title: 'Electronic Signing',
+    sign_verify_name: 'Real-name',
+    sign_verify_id: 'ID Card',
+    sign_verify: 'Verify',
+    sign_submit: 'Submit Sign',
+    sign_retry: 'Retry',
+    sign_status: 'Sign Status',
+    sign_verify_status: 'Verify Status',
+    sign_history: 'Sign Records',
+    sign_open_contract: 'Open Contract',
+    sign_need_contract: 'Please choose a contract first',
+    sign_to_contract: 'Go Contract'
+  }
+}
+
+export const currentLanguage = ref(localStorage.getItem(LANG_KEY) || 'zh-CN')
+
+export function setLanguage(language) {
+  currentLanguage.value = language === 'en-US' ? 'en-US' : 'zh-CN'
+  localStorage.setItem(LANG_KEY, currentLanguage.value)
+}
+
+export function t(key) {
+  const lang = currentLanguage.value in messages ? currentLanguage.value : 'zh-CN'
+  return messages[lang][key] || messages['zh-CN'][key] || key
+}

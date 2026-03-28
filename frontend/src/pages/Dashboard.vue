@@ -58,6 +58,30 @@
     </el-row>
 
     <el-row :gutter="20" style="margin-top: 20px">
+      <el-col :span="24" v-if="showTaskCard">
+        <el-card>
+          <template #header>
+            <div class="task-card-header">
+              <span>新手任务进度</span>
+              <el-button link @click="hideTaskCard">隐藏卡片</el-button>
+            </div>
+          </template>
+          <el-progress :percentage="guideProgress.percent" :stroke-width="16" />
+          <div class="task-summary">已完成 {{ guideProgress.completed }} / {{ guideProgress.total }}</div>
+          <el-row :gutter="12" class="task-list-row">
+            <el-col :span="8" v-for="task in guideTasks" :key="task.key">
+              <div class="task-item" :class="{ done: task.done }">
+                <el-icon v-if="task.done"><CircleCheckFilled /></el-icon>
+                <el-icon v-else><Clock /></el-icon>
+                <span>{{ task.title }}</span>
+              </div>
+            </el-col>
+          </el-row>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <el-row :gutter="20" style="margin-top: 20px">
       <el-col :span="12">
         <el-card>
           <div slot="header">
@@ -97,9 +121,10 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { CircleCheckFilled, Clock } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
-import { getExpiringContracts } from '../api'
+import { getExpiringContracts, getGuideTaskProgress, updateProfile, getUser, setUser } from '../api'
 
 const router = useRouter()
 const stats = ref({
@@ -114,6 +139,9 @@ const expiringCount = ref(0)
 const trendChart = ref(null)
 const rentChart = ref(null)
 const buildingChart = ref(null)
+const guideTasks = ref([])
+const guideProgress = ref({ percent: 0, completed: 0, total: 0 })
+const showTaskCard = ref(false)
 
 function formatMoney(val) {
   return val ? val.toLocaleString() : '0'
@@ -173,6 +201,33 @@ async function loadExpiringContracts() {
   }
 }
 
+async function loadGuideProgress() {
+  try {
+    const res = await getGuideTaskProgress()
+    guideTasks.value = res.data.tasks || []
+    guideProgress.value = {
+      percent: res.data.percent || 0,
+      completed: res.data.completed || 0,
+      total: res.data.total || 0
+    }
+    const user = getUser()
+    showTaskCard.value = user?.showTaskCard !== false && res.data.showTaskCard !== false
+  } catch (e) {
+    console.error('Failed to load guide task progress', e)
+  }
+}
+
+async function hideTaskCard() {
+  showTaskCard.value = false
+  try {
+    await updateProfile({ showTaskCard: 'false' })
+    const user = getUser()
+    if (user) setUser({ ...user, showTaskCard: false })
+  } catch (_) {
+    // Ignore sync errors and keep local UI state.
+  }
+}
+
 function initCharts(data) {
   const trendChartEl = echarts.init(trendChart.value)
   trendChartEl.setOption({
@@ -215,6 +270,7 @@ onMounted(() => {
   loadStats()
   loadCharts()
   loadExpiringContracts()
+  loadGuideProgress()
 })
 </script>
 
@@ -239,5 +295,37 @@ onMounted(() => {
   text-align: center;
   color: #909399;
   padding: 20px;
+}
+
+.task-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.task-summary {
+  margin-top: 8px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.task-list-row {
+  margin-top: 14px;
+}
+
+.task-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f3f4f6;
+  color: #4b5563;
+  margin-bottom: 10px;
+}
+
+.task-item.done {
+  background: #ecfdf3;
+  color: #047857;
 }
 </style>

@@ -201,24 +201,21 @@ public class ContractService {
     if (oc.isEmpty()) {
       throw new IllegalArgumentException("合同不存在");
     }
-    Contract oldContract = oc.get();
+    Contract contract = oc.get();
+    if (!"ACTIVE".equals(contract.getStatus())) {
+      throw new IllegalStateException("仅进行中合同可续租");
+    }
+    if (newEndDate == null || newEndDate.isBlank()) {
+      throw new IllegalArgumentException("请填写新的结束日期");
+    }
+
     LocalDate newEnd = LocalDate.parse(newEndDate);
+    if (contract.getEndDate() != null && !newEnd.isAfter(contract.getEndDate())) {
+      throw new IllegalArgumentException("新的结束日期必须晚于当前结束日期");
+    }
 
-    String contractNo = "CT" + System.currentTimeMillis();
-    Contract newContract = Contract.builder()
-        .contractNo(contractNo)
-        .roomId(oldContract.getRoomId())
-        .tenantId(oldContract.getTenantId())
-        .startDate(oldContract.getEndDate().plusDays(1))
-        .endDate(newEnd)
-        .status("ACTIVE")
-        .deposit(oldContract.getDeposit())
-        .monthlyRent(oldContract.getMonthlyRent())
-        .paymentMethod(oldContract.getPaymentMethod())
-        .remark(oldContract.getRemark())
-        .build();
-
-    return contractRepository.save(newContract);
+    contract.setEndDate(newEnd);
+    return contractRepository.save(contract);
   }
 
   @Transactional

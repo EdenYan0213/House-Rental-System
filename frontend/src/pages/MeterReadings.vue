@@ -6,6 +6,7 @@
         <el-button v-if="canInput" type="primary" plain icon="Upload" @click="openImportDialog" style="margin-right: 10px">
           Excel导入
         </el-button>
+        <el-button type="success" plain @click="exportBuildingCsv" style="margin-right: 10px">导出CSV</el-button>
         <el-button type="primary" @click="saveAll" :loading="saving">保存全部</el-button>
       </div>
     </el-row>
@@ -176,6 +177,7 @@ import {
   canInputMeterReadings,
   confirmMeterReadingImport,
   downloadMeterReadingImportTemplate,
+  exportMeterReadingsCsv,
   getBuildings,
   getMeterReadings,
   getRooms,
@@ -418,6 +420,32 @@ function downloadErrorReport() {
 function afterImportView() {
   importDialogVisible.value = false
   loadRooms()
+}
+
+async function exportBuildingCsv() {
+  if (!buildingFilter.value) {
+    ElMessage.warning('请先选择楼栋')
+    return
+  }
+  try {
+    const params = {
+      buildingId: buildingFilter.value
+    }
+    if (recordDate.value) {
+      params.date = recordDate.value
+    }
+    const res = await exportMeterReadingsCsv(params)
+    const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `meter-building-${buildingFilter.value}-${Date.now()}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success('楼栋水电CSV导出成功')
+  } catch (e) {
+    ElMessage.error('楼栋水电CSV导出失败')
+  }
 }
 
 async function saveAll() {

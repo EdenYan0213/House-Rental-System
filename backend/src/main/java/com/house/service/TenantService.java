@@ -1,7 +1,6 @@
 package com.house.service;
 
 import com.house.model.Tenant;
-import com.house.model.Contract;
 import com.house.repo.TenantRepository;
 import com.house.repo.ContractRepository;
 import org.springframework.stereotype.Service;
@@ -26,6 +25,7 @@ public class TenantService {
     if (tenant.getDeleted() == null) {
       tenant.setDeleted(0);
     }
+    applyDefaults(tenant);
     return tenantRepository.save(tenant);
   }
 
@@ -59,12 +59,35 @@ public class TenantService {
       if (existing.getDeleted() == null) {
         existing.setDeleted(0);
       }
+      applyDefaults(existing);
       return tenantRepository.save(existing);
     }
     if (tenant.getDeleted() == null) {
       tenant.setDeleted(0);
     }
+    applyDefaults(tenant);
     return tenantRepository.save(tenant);
+  }
+
+  private void applyDefaults(Tenant tenant) {
+    if (tenant.getLanguagePreference() == null || tenant.getLanguagePreference().isBlank()) {
+      tenant.setLanguagePreference("zh-CN");
+    }
+    if (tenant.getNotifyOverdue() == null) {
+      tenant.setNotifyOverdue(1);
+    }
+    if (tenant.getNotifyRepair() == null) {
+      tenant.setNotifyRepair(1);
+    }
+    if (tenant.getNotifyContract() == null) {
+      tenant.setNotifyContract(1);
+    }
+    if (tenant.getNotifyNotice() == null) {
+      tenant.setNotifyNotice(1);
+    }
+    if (tenant.getRegisterSource() == null || tenant.getRegisterSource().isBlank()) {
+      tenant.setRegisterSource("ADMIN");
+    }
   }
 
   public void delete(Long id) {

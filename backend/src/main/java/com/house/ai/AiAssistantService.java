@@ -14,6 +14,7 @@ import com.house.repo.ContractRepository;
 import com.house.repo.MeterReadingRepository;
 import com.house.repo.RoomRepository;
 import com.house.repo.TenantRepository;
+import com.house.service.MeterReadingBatchService;
 import com.house.service.SmsService;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.openai.OpenAiChatModel;
@@ -34,6 +35,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -47,6 +49,7 @@ public class AiAssistantService {
   private final TenantRepository tenantRepository;
   private final ContractRepository contractRepository;
   private final BillRepository billRepository;
+  private final MeterReadingBatchService meterReadingBatchService;
   private final SmsService smsService;
 
   public AiAssistantService(
@@ -58,6 +61,7 @@ public class AiAssistantService {
       TenantRepository tenantRepository,
       ContractRepository contractRepository,
       BillRepository billRepository,
+      MeterReadingBatchService meterReadingBatchService,
       SmsService smsService) {
     this.properties = properties;
     this.objectMapper = objectMapper;
@@ -67,6 +71,7 @@ public class AiAssistantService {
     this.tenantRepository = tenantRepository;
     this.contractRepository = contractRepository;
     this.billRepository = billRepository;
+    this.meterReadingBatchService = meterReadingBatchService;
     this.smsService = smsService;
   }
 
@@ -100,7 +105,8 @@ public class AiAssistantService {
           intent = state.intent;
           entities = state.entities;
         } else {
-          response = AiAssistantResponse.fail(hasText(modelReply) ? modelReply : properties.getFallbackMessage(), "UNKNOWN");
+          response = AiAssistantResponse.fail(hasText(modelReply) ? modelReply : properties.getFallbackMessage(),
+              "UNKNOWN");
           intent = "UNKNOWN";
           entities = Map.of();
         }
@@ -119,7 +125,8 @@ public class AiAssistantService {
   }
 
   @Tool(description = "录入房间水电读数。参数: roomNumber, waterReading, electricReading, 可选date(YYYY-MM-DD/今天/昨天/明天), 可选buildingName")
-  public String toolMeterReading(String roomNumber, Double waterReading, Double electricReading, String date, String buildingName) {
+  public String toolMeterReading(String roomNumber, Double waterReading, Double electricReading, String date,
+      String buildingName) {
     Map<String, Object> entities = new HashMap<>();
     entities.put("room_number", roomNumber);
     entities.put("water_reading", waterReading);
@@ -127,6 +134,17 @@ public class AiAssistantService {
     entities.put("date", date);
     entities.put("building_name", buildingName);
     AiAssistantResponse response = handleMeterReading(entities);
+    InvocationState.set("METER_READING", entities, response);
+    return response.getMessage();
+  }
+
+  @Tool(description = "批量录入房间水电读数。参数: records数组(每项包含roomNumber, waterReading, electricReading, 可选date, 可选buildingName)，可选全局date和buildingName")
+  public String toolMeterReadingBatch(List<Map<String, Object>> records, String date, String buildingName) {
+    Map<String, Object> entities = new HashMap<>();
+    entities.put("records", records);
+    entities.put("date", date);
+    entities.put("building_name", buildingName);
+    AiAssistantResponse response = handleMeterReadingBatch(entities);
     InvocationState.set("METER_READING", entities, response);
     return response.getMessage();
   }
@@ -165,8 +183,8 @@ public class AiAssistantService {
   private ChatClient createChatClient(AiAssistantProperties.ModelProvider provider) {
     EndpointParts endpoint = resolveEndpoint(provider.getBaseUrl());
     OpenAiApi openAiApi = OpenAiApi.builder()
-      .baseUrl(endpoint.baseUrl)
-      .completionsPath(endpoint.completionsPath)
+        .baseUrl(endpoint.baseUrl)
+        .completionsPath(endpoint.completionsPath)
         .apiKey(provider.getApiKey())
         .build();
 
@@ -234,6 +252,7 @@ public class AiAssistantService {
   private String buildToolSystemPrompt() {
     return "你是房屋租赁系统助手。你只能通过已提供的工具来完成任务。" +
         "如果用户要做抄表、发账单短信、查合同、查用电量，必须调用对应工具。" +
+        "如果一句话中包含多个房间的抄表，优先调用批量抄表工具。" +
         "如果缺参数，也要先调用工具，由工具返回补充提示。" +
         "如果用户请求不在这4类中，直接简短回复无法处理，不要编造数据。";
   }
@@ -242,7 +261,6 @@ public class AiAssistantService {
     String roomNumber = getText(entities, "room_number");
     Double waterReading = getDouble(entities, "water_reading");
     Double electricReading = getDouble(entities, "electric_reading");
-
     if (!hasText(roomNumber)) {
       return AiAssistantResponse.fail("缺少房间号，请补充例如\"101房间\"。", "METER_READING");
     }
@@ -253,28 +271,113 @@ public class AiAssistantService {
       return AiAssistantResponse.fail("缺少电表读数，请补充电表数值。", "METER_READING");
     }
 
-    LocalDate recordDate = parseDateOrDefault(getText(entities, "date"), LocalDate.now());
-    RoomMatchResult roomMatch = resolveRoom(roomNumber, getText(entities, "building_name"));
-    if (roomMatch.getResponse() != null) {
-      return roomMatch.getResponse();
+    List<Map<String, Object>> records = new ArrayList<>();
+    Map<String, Object> row = new HashMap<>();
+    row.put("roomNumber", roomNumber);
+    row.put("waterReading", waterReading);
+    row.put("electricReading", electricReading);
+    row.put("date", getText(entities, "date"));
+    row.put("buildingName", getText(entities, "building_name"));
+    records.add(row);
+
+    Map<String, Object> batchEntities = new HashMap<>();
+    batchEntities.put("records", records);
+    batchEntities.put("date", getText(entities, "date"));
+    batchEntities.put("building_name", getText(entities, "building_name"));
+    return handleMeterReadingBatch(batchEntities);
+  }
+
+  private AiAssistantResponse handleMeterReadingBatch(Map<String, Object> entities) {
+    List<Map<String, Object>> records = toMapList(entities.get("records"));
+    if (records.isEmpty()) {
+      return AiAssistantResponse.fail("缺少抄表数据，请按“房间号+水表+电表”提供至少1条记录。", "METER_READING");
     }
-    Room room = roomMatch.getRoom();
 
-    MeterReading reading = meterReadingRepository.findByRoomIdAndRecordDate(room.getId(), recordDate);
-    if (reading == null) {
-      reading = MeterReading.builder().roomId(room.getId()).recordDate(recordDate).build();
+    LocalDate defaultDate = parseDateOrDefault(getText(entities, "date"), LocalDate.now());
+    String defaultBuildingName = getText(entities, "building_name");
+
+    List<ResolvedMeterRecord> resolved = new ArrayList<>();
+    for (int i = 0; i < records.size(); i++) {
+      Map<String, Object> row = records.get(i);
+      int rowNo = i + 1;
+
+      String roomNumber = getTextAny(row, "roomNumber", "room_number");
+      if (!hasText(roomNumber)) {
+        return AiAssistantResponse.fail("第" + rowNo + "条缺少房间号，请补充。", "METER_READING");
+      }
+
+      Double waterReading = getDoubleAny(row, "waterReading", "water_reading");
+      if (waterReading == null) {
+        return AiAssistantResponse.fail("第" + rowNo + "条缺少水表读数，请补充。", "METER_READING");
+      }
+
+      Double electricReading = getDoubleAny(row, "electricReading", "electric_reading");
+      if (electricReading == null) {
+        return AiAssistantResponse.fail("第" + rowNo + "条缺少电表读数，请补充。", "METER_READING");
+      }
+
+      if (waterReading < 0 || electricReading < 0) {
+        return AiAssistantResponse.fail("第" + rowNo + "条读数不能为负数。", "METER_READING");
+      }
+
+      String rowDateText = getTextAny(row, "date", "recordDate", "record_date");
+      LocalDate rowDate = parseDateOrDefault(rowDateText, defaultDate);
+      String rowBuilding = getTextAny(row, "buildingName", "building_name");
+      if (!hasText(rowBuilding)) {
+        rowBuilding = defaultBuildingName;
+      }
+
+      RoomMatchResult roomMatch = resolveRoom(roomNumber, rowBuilding);
+      if (roomMatch.getResponse() != null) {
+        return roomMatch.getResponse();
+      }
+
+      Room room = roomMatch.getRoom();
+      Building building = room.getBuildingId() == null ? null
+          : buildingRepository.findById(room.getBuildingId()).orElse(null);
+      String displayRoom = (building == null ? "" : building.getName()) + room.getRoomNumber();
+
+      resolved.add(new ResolvedMeterRecord(room, rowDate, waterReading, electricReading, displayRoom));
     }
-    reading.setWaterReading(waterReading);
-    reading.setElectricReading(electricReading);
-    meterReadingRepository.save(reading);
 
-    Building building = room.getBuildingId() == null ? null : buildingRepository.findById(room.getBuildingId()).orElse(null);
-    String displayRoom = (building == null ? "" : building.getName()) + room.getRoomNumber();
+    try {
+      List<MeterReadingBatchService.MeterUpsertItem> items = resolved.stream()
+          .map(r -> new MeterReadingBatchService.MeterUpsertItem(
+              r.room.getId(),
+              r.recordDate,
+              r.waterReading,
+              r.electricReading))
+          .toList();
+      meterReadingBatchService.upsertBatch(items);
+    } catch (IllegalArgumentException ex) {
+      return AiAssistantResponse.fail(ex.getMessage(), "METER_READING");
+    }
 
+    if (resolved.size() == 1) {
+      ResolvedMeterRecord one = resolved.get(0);
+      AiAssistantResponse response = AiAssistantResponse.ok(
+          "房间 " + one.displayRoom + " 水电读数录入成功（水：" + one.waterReading + "，电：" + one.electricReading + "）",
+          "METER_READING");
+      response.setDetailLink("/meter-readings?date=" + one.recordDate + "&buildingId=" + one.room.getBuildingId());
+      return response;
+    }
+
+    String sample = resolved.stream()
+        .limit(3)
+        .map(r -> r.displayRoom)
+        .collect(Collectors.joining("、"));
     AiAssistantResponse response = AiAssistantResponse.ok(
-        "房间 " + displayRoom + " 水电读数录入成功（水：" + waterReading + "，电：" + electricReading + "）",
+        "已批量录入" + resolved.size() + "条水电读数（示例：" + sample + "）。",
         "METER_READING");
-    response.setDetailLink("/meter-readings?date=" + recordDate + "&buildingId=" + room.getBuildingId());
+
+    Set<LocalDate> dates = resolved.stream().map(r -> r.recordDate).collect(Collectors.toSet());
+    Set<Long> buildingIds = resolved.stream().map(r -> r.room.getBuildingId()).collect(Collectors.toSet());
+    if (dates.size() == 1 && buildingIds.size() == 1) {
+      response.setDetailLink(
+          "/meter-readings?date=" + resolved.get(0).recordDate + "&buildingId=" + resolved.get(0).room.getBuildingId());
+    } else {
+      response.setDetailLink("/meter-readings");
+    }
     return response;
   }
 
@@ -398,8 +501,10 @@ public class AiAssistantService {
     LocalDate start = month.atDay(1);
     LocalDate end = month.atEndOfMonth();
 
-    MeterReading prev = meterReadingRepository.findTopByRoomIdAndRecordDateLessThanOrderByRecordDateDesc(room.getId(), start);
-    MeterReading curr = meterReadingRepository.findTopByRoomIdAndRecordDateLessThanEqualOrderByRecordDateDesc(room.getId(), end);
+    MeterReading prev = meterReadingRepository.findTopByRoomIdAndRecordDateLessThanOrderByRecordDateDesc(room.getId(),
+        start);
+    MeterReading curr = meterReadingRepository
+        .findTopByRoomIdAndRecordDateLessThanEqualOrderByRecordDateDesc(room.getId(), end);
 
     double usage = 0.0;
     if (prev != null && curr != null && prev.getElectricReading() != null && curr.getElectricReading() != null) {
@@ -416,7 +521,8 @@ public class AiAssistantService {
       }
     }
 
-    Building building = room.getBuildingId() == null ? null : buildingRepository.findById(room.getBuildingId()).orElse(null);
+    Building building = room.getBuildingId() == null ? null
+        : buildingRepository.findById(room.getBuildingId()).orElse(null);
     String roomDisplay = (building == null ? "" : building.getName()) + room.getRoomNumber();
 
     AiAssistantResponse response = AiAssistantResponse.ok(
@@ -430,7 +536,8 @@ public class AiAssistantService {
     List<Tenant> tenants = resolveTenantCandidates(tenantName);
     if (tenants.isEmpty()) {
       return TenantSelection.withResponse(
-          AiAssistantResponse.fail("未找到租户\"" + tenantName + "\"，请确认姓名是否正确。", activeOnly ? "SEND_SMS" : "QUERY_CONTRACT"));
+          AiAssistantResponse.fail("未找到租户\"" + tenantName + "\"，请确认姓名是否正确。",
+              activeOnly ? "SEND_SMS" : "QUERY_CONTRACT"));
     }
 
     String roomHint = getText(entities, "room_number");
@@ -440,7 +547,8 @@ public class AiAssistantService {
     for (Tenant tenant : tenants) {
       List<Contract> contracts = contractRepository.findByTenantId(tenant.getId());
       if (activeOnly) {
-        contracts = contracts.stream().filter(c -> "ACTIVE".equalsIgnoreCase(safe(c.getStatus())) || "进行中".equals(c.getStatus())).toList();
+        contracts = contracts.stream()
+            .filter(c -> "ACTIVE".equalsIgnoreCase(safe(c.getStatus())) || "进行中".equals(c.getStatus())).toList();
       }
       for (Contract contract : contracts) {
         Room room = contract.getRoomId() == null ? null : roomRepository.findById(contract.getRoomId()).orElse(null);
@@ -482,7 +590,8 @@ public class AiAssistantService {
       }
       text.append("请重新输入，例如\"给A栋101的").append(tenantName).append("发账单短信\"。");
 
-      AiAssistantResponse response = AiAssistantResponse.fail(text.toString().trim(), activeOnly ? "SEND_SMS" : "QUERY_CONTRACT");
+      AiAssistantResponse response = AiAssistantResponse.fail(text.toString().trim(),
+          activeOnly ? "SEND_SMS" : "QUERY_CONTRACT");
       response.setRequiresClarification(true);
       response.setSuggestions(suggestions);
       return TenantSelection.withResponse(response);
@@ -505,8 +614,10 @@ public class AiAssistantService {
           .filter(c -> "ACTIVE".equalsIgnoreCase(safe(c.getStatus())) || "进行中".equals(c.getStatus()))
           .findFirst()
           .orElse(contracts.stream().findFirst().orElse(null));
-      Room room = active == null || active.getRoomId() == null ? null : roomRepository.findById(active.getRoomId()).orElse(null);
-      Building building = room == null || room.getBuildingId() == null ? null : buildingRepository.findById(room.getBuildingId()).orElse(null);
+      Room room = active == null || active.getRoomId() == null ? null
+          : roomRepository.findById(active.getRoomId()).orElse(null);
+      Building building = room == null || room.getBuildingId() == null ? null
+          : buildingRepository.findById(room.getBuildingId()).orElse(null);
 
       Map<String, Object> item = new LinkedHashMap<>();
       item.put("tenantName", tenant.getName());
@@ -535,14 +646,27 @@ public class AiAssistantService {
 
   private RoomMatchResult resolveRoom(String roomNumber, String buildingName) {
     List<Room> all = roomRepository.findAll();
-    List<Room> matched = all.stream().filter(r -> roomNumber.equalsIgnoreCase(safe(r.getRoomNumber()))).toList();
+    Map<Long, Building> buildingMap = buildingRepository.findAll().stream()
+        .collect(Collectors.toMap(Building::getId, b -> b));
 
-    if (hasText(buildingName)) {
-      Map<Long, Building> buildingMap = buildingRepository.findAll().stream()
-          .collect(Collectors.toMap(Building::getId, b -> b));
+    ParsedRoomInput parsed = parseCombinedRoomInput(roomNumber, buildingName, buildingMap);
+    String requestedRoomRaw = hasText(parsed.roomNumber) ? parsed.roomNumber : roomNumber;
+    String requestedRoomNormalized = normalizeRoomToken(requestedRoomRaw);
+
+    List<Room> matched = all.stream().filter(r -> {
+      String roomRaw = safe(r.getRoomNumber());
+      String roomNormalized = normalizeRoomToken(roomRaw);
+      if (hasText(requestedRoomNormalized)) {
+        return requestedRoomNormalized.equalsIgnoreCase(roomNormalized);
+      }
+      return requestedRoomRaw.equalsIgnoreCase(roomRaw);
+    }).toList();
+
+    if (hasText(parsed.buildingName)) {
+      String requestedBuilding = parsed.buildingName.trim();
       matched = matched.stream().filter(r -> {
         Building b = buildingMap.get(r.getBuildingId());
-        return b != null && safe(b.getName()).contains(buildingName);
+        return b != null && safe(b.getName()).contains(requestedBuilding);
       }).toList();
     }
 
@@ -551,8 +675,6 @@ public class AiAssistantService {
     }
 
     if (matched.size() > 1) {
-      Map<Long, Building> buildingMap = buildingRepository.findAll().stream()
-          .collect(Collectors.toMap(Building::getId, b -> b));
       List<Map<String, Object>> suggestions = matched.stream().map(room -> {
         Map<String, Object> s = new LinkedHashMap<>();
         Building b = buildingMap.get(room.getBuildingId());
@@ -577,9 +699,63 @@ public class AiAssistantService {
     return RoomMatchResult.withRoom(matched.get(0));
   }
 
+  private ParsedRoomInput parseCombinedRoomInput(String roomNumber, String buildingName,
+      Map<Long, Building> buildingMap) {
+    String resolvedBuilding = hasText(buildingName) ? buildingName.trim() : null;
+    String resolvedRoom = roomNumber;
+    if (!hasText(roomNumber)) {
+      return new ParsedRoomInput(resolvedRoom, resolvedBuilding);
+    }
+
+    String candidate = roomNumber.trim();
+    if (!hasText(resolvedBuilding) && buildingMap != null && !buildingMap.isEmpty()) {
+      List<Building> buildings = buildingMap.values().stream()
+          .filter(Objects::nonNull)
+          .sorted(Comparator.comparing((Building b) -> safe(b.getName()).length()).reversed())
+          .toList();
+
+      for (Building b : buildings) {
+        String name = safe(b.getName());
+        if (!hasText(name)) {
+          continue;
+        }
+        if (candidate.contains(name)) {
+          resolvedBuilding = name;
+          resolvedRoom = candidate.replace(name, "").trim();
+          break;
+        }
+      }
+    }
+
+    String normalizedRoom = normalizeRoomToken(resolvedRoom);
+    if (hasText(normalizedRoom)) {
+      resolvedRoom = normalizedRoom;
+    }
+
+    return new ParsedRoomInput(resolvedRoom, resolvedBuilding);
+  }
+
+  private String normalizeRoomToken(String value) {
+    if (!hasText(value)) {
+      return value;
+    }
+    String normalized = value.trim()
+        .replace("房间", "")
+        .replace("房号", "")
+        .replace("房", "")
+        .replace("室", "")
+        .replace("号", "")
+        .replace("-", "")
+        .replace("_", "")
+        .replace(" ", "")
+        .replace("　", "");
+    return normalized;
+  }
+
   private boolean isPendingStatus(Bill bill) {
     String status = safe(bill.getStatus()).toUpperCase(Locale.ROOT);
-    return "PENDING".equals(status) || "PARTIAL".equals(status) || "待支付".equals(bill.getStatus()) || "部分支付".equals(bill.getStatus());
+    return "PENDING".equals(status) || "PARTIAL".equals(status) || "待支付".equals(bill.getStatus())
+        || "部分支付".equals(bill.getStatus());
   }
 
   private int overdueDays(Bill bill) {
@@ -654,6 +830,19 @@ public class AiAssistantService {
     return String.valueOf(entities.get(key)).trim();
   }
 
+  private String getTextAny(Map<String, Object> entities, String... keys) {
+    if (entities == null || keys == null) {
+      return null;
+    }
+    for (String key : keys) {
+      String value = getText(entities, key);
+      if (hasText(value)) {
+        return value;
+      }
+    }
+    return null;
+  }
+
   private Double getDouble(Map<String, Object> entities, String key) {
     if (entities == null || entities.get(key) == null) {
       return null;
@@ -667,6 +856,39 @@ public class AiAssistantService {
     } catch (Exception ex) {
       return null;
     }
+  }
+
+  private Double getDoubleAny(Map<String, Object> entities, String... keys) {
+    if (entities == null || keys == null) {
+      return null;
+    }
+    for (String key : keys) {
+      Double value = getDouble(entities, key);
+      if (value != null) {
+        return value;
+      }
+    }
+    return null;
+  }
+
+  @SuppressWarnings("unchecked")
+  private List<Map<String, Object>> toMapList(Object value) {
+    if (!(value instanceof List<?> list)) {
+      return List.of();
+    }
+    List<Map<String, Object>> result = new ArrayList<>();
+    for (Object item : list) {
+      if (item instanceof Map<?, ?> map) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+          if (entry.getKey() != null) {
+            row.put(String.valueOf(entry.getKey()), entry.getValue());
+          }
+        }
+        result.add(row);
+      }
+    }
+    return result;
   }
 
   private boolean hasText(String value) {
@@ -717,6 +939,16 @@ public class AiAssistantService {
 
     public AiAssistantResponse getResponse() {
       return response;
+    }
+  }
+
+  private static class ParsedRoomInput {
+    private final String roomNumber;
+    private final String buildingName;
+
+    private ParsedRoomInput(String roomNumber, String buildingName) {
+      this.roomNumber = roomNumber;
+      this.buildingName = buildingName;
     }
   }
 
@@ -789,6 +1021,23 @@ public class AiAssistantService {
     private EndpointParts(String baseUrl, String completionsPath) {
       this.baseUrl = baseUrl;
       this.completionsPath = completionsPath;
+    }
+  }
+
+  private static class ResolvedMeterRecord {
+    private final Room room;
+    private final LocalDate recordDate;
+    private final Double waterReading;
+    private final Double electricReading;
+    private final String displayRoom;
+
+    private ResolvedMeterRecord(Room room, LocalDate recordDate, Double waterReading, Double electricReading,
+        String displayRoom) {
+      this.room = room;
+      this.recordDate = recordDate;
+      this.waterReading = waterReading;
+      this.electricReading = electricReading;
+      this.displayRoom = displayRoom;
     }
   }
 }

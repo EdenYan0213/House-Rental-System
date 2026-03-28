@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS `sys_user` (
   `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   `last_login_time` datetime COMMENT '最后登录时间',
   `theme_preference` varchar(20) NOT NULL DEFAULT 'system' COMMENT '主题偏好: light/dark/system',
+  `first_login` tinyint(1) NOT NULL DEFAULT 1 COMMENT '是否首次登录引导',
+  `show_context_tips` tinyint(1) NOT NULL DEFAULT 1 COMMENT '是否显示上下文提示',
+  `show_task_card` tinyint(1) NOT NULL DEFAULT 1 COMMENT '是否显示新手任务卡',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户表';
@@ -24,6 +27,17 @@ CREATE TABLE IF NOT EXISTS `sys_user` (
 INSERT INTO `sys_user` (`username`, `password`, `real_name`, `role`, `enabled`)
 SELECT 'admin', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EH', '系统管理员', 'SUPER_ADMIN', 1
 WHERE NOT EXISTS (SELECT 1 FROM `sys_user` WHERE `username` = 'admin');
+
+-- 新手引导关闭记录表
+CREATE TABLE IF NOT EXISTS `guide_dismiss` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `user_id` bigint NOT NULL,
+  `dismiss_key` varchar(100) NOT NULL,
+  `dismissed_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_guide_user_key` (`user_id`, `dismiss_key`),
+  KEY `idx_guide_user_id` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='引导关闭记录表';
 
 -- 楼栋表
 CREATE TABLE IF NOT EXISTS `building` (
@@ -58,10 +72,12 @@ CREATE TABLE IF NOT EXISTS `tenant` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '租户ID',
   `name` varchar(50) NOT NULL COMMENT '姓名',
   `phone` varchar(20) NOT NULL COMMENT '手机号',
+  `password` varchar(255) COMMENT '租客登录密码(BCrypt)',
   `id_card` varchar(18) COMMENT '身份证号',
   `emergency_contact` varchar(50) COMMENT '紧急联系人',
   `emergency_phone` varchar(20) COMMENT '紧急联系电话',
   `remark` text COMMENT '备注',
+  `register_source` varchar(20) NOT NULL DEFAULT 'ADMIN' COMMENT '注册来源: ADMIN/APP',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_phone` (`phone`)
@@ -163,14 +179,68 @@ CREATE TABLE IF NOT EXISTS `payment_record` (
 -- 操作日志表
 CREATE TABLE IF NOT EXISTS `operation_log` (
   `id` bigint NOT NULL AUTO_INCREMENT COMMENT '日志ID',
+  `user_id` bigint DEFAULT NULL COMMENT '操作用户ID',
+  `username` varchar(50) DEFAULT NULL COMMENT '用户名',
   `operation_time` datetime NOT NULL COMMENT '操作时间',
   `operator` varchar(50) NOT NULL COMMENT '操作人',
-  `module` varchar(50) COMMENT '模块',
-  `action` varchar(200) COMMENT '操作内容',
+  `module` varchar(50) NOT NULL COMMENT '模块',
+  `action` varchar(50) NOT NULL COMMENT '操作类型',
+  `business_id` varchar(100) DEFAULT NULL COMMENT '业务对象ID',
+  `business_name` varchar(255) DEFAULT NULL COMMENT '业务对象名称',
+  `detail_before` json DEFAULT NULL COMMENT '操作前快照',
+  `detail_after` json DEFAULT NULL COMMENT '操作后快照',
+  `change_summary` text COMMENT '变更摘要',
+  `request_ip` varchar(50) DEFAULT NULL COMMENT '请求IP',
+  `user_agent` varchar(255) DEFAULT NULL COMMENT 'UserAgent',
+  `request_params` text COMMENT '请求参数（脱敏）',
+  `result` tinyint NOT NULL DEFAULT 1 COMMENT '1成功0失败',
+  `fail_reason` text COMMENT '失败原因',
+  `duration_ms` int DEFAULT NULL COMMENT '耗时毫秒',
+  `log_level` tinyint NOT NULL DEFAULT 1 COMMENT '1-INFO 2-WARN 3-ERROR',
   `ip` varchar(50) COMMENT 'IP地址',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `ai_instruction` text COMMENT 'AI原始指令',
+  `ai_intent` varchar(100) DEFAULT NULL COMMENT 'AI意图',
+  `ai_entities` text COMMENT 'AI实体',
+  `ai_status` varchar(50) DEFAULT NULL COMMENT 'AI执行状态',
+  `ai_response_message` text COMMENT 'AI响应信息',
+  `ai_duration_ms` bigint DEFAULT NULL COMMENT 'AI执行耗时',
+  `ai_model_name` varchar(100) DEFAULT NULL COMMENT 'AI模型名',
   PRIMARY KEY (`id`)
+  ,KEY `idx_log_created_module_action` (`created_at`,`module`,`action`)
+  ,KEY `idx_log_business_id` (`business_id`)
+  ,KEY `idx_log_user_time` (`username`,`operation_time`)
+  ,KEY `idx_log_level_result_duration` (`log_level`,`result`,`duration_ms`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='操作日志表';
+
+CREATE TABLE IF NOT EXISTS `alert_rule` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `rule_type` varchar(50) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `enabled` tinyint NOT NULL DEFAULT 1,
+  `threshold_value` int DEFAULT NULL,
+  `window_minutes` int DEFAULT NULL,
+  `level` tinyint NOT NULL DEFAULT 2,
+  `notify_channels` varchar(255) DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_alert_rule_type` (`rule_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='预警规则';
+
+CREATE TABLE IF NOT EXISTS `alert_record` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `alert_type` varchar(50) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `content` text NOT NULL,
+  `level` tinyint NOT NULL,
+  `status` tinyint NOT NULL DEFAULT 0,
+  `operator_id` int DEFAULT NULL,
+  `handled_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_alert_type_status_time` (`alert_type`,`status`,`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='预警记录';
 
 -- 器具模板表
 CREATE TABLE IF NOT EXISTS `appliance_template` (
@@ -250,3 +320,71 @@ CREATE TABLE IF NOT EXISTS `repair_order` (
   KEY `idx_repair_order_worker` (`worker_id`),
   KEY `idx_repair_order_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='维修工单';
+
+-- 处理人表
+CREATE TABLE IF NOT EXISTS `handler` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `name` varchar(50) NOT NULL,
+  `role` varchar(50) DEFAULT NULL,
+  `phone` varchar(20) DEFAULT NULL,
+  `status` tinyint DEFAULT 1,
+  PRIMARY KEY (`id`),
+  KEY `idx_handler_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='投诉处理人';
+
+-- 投诉建议表
+CREATE TABLE IF NOT EXISTS `complaint_suggestion` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `complaint_no` varchar(50) NOT NULL,
+  `tenant_id` bigint DEFAULT NULL,
+  `room_id` bigint NOT NULL,
+  `reporter_type` varchar(20) DEFAULT 'admin',
+  `reported_by` bigint DEFAULT NULL,
+  `type` varchar(50) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `content` text,
+  `images` json DEFAULT NULL,
+  `is_anonymous` tinyint DEFAULT 0,
+  `priority` varchar(20) DEFAULT 'normal',
+  `status` varchar(30) DEFAULT 'pending',
+  `assigned_to` bigint DEFAULT NULL,
+  `assigned_at` datetime DEFAULT NULL,
+  `completed_at` datetime DEFAULT NULL,
+  `closed_at` datetime DEFAULT NULL,
+  `closed_reason` text,
+  `rating` tinyint DEFAULT NULL,
+  `comment` text,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_complaint_no` (`complaint_no`),
+  KEY `idx_complaint_status` (`status`),
+  KEY `idx_complaint_room_id` (`room_id`),
+  KEY `idx_complaint_tenant_id` (`tenant_id`),
+  KEY `idx_complaint_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='投诉建议';
+
+-- 投诉处理记录表
+CREATE TABLE IF NOT EXISTS `complaint_log` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `complaint_id` bigint NOT NULL,
+  `operator_type` varchar(20) DEFAULT 'admin',
+  `operator_id` bigint DEFAULT NULL,
+  `action` varchar(50) NOT NULL,
+  `content` text,
+  `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_complaint_log_complaint_id` (`complaint_id`),
+  KEY `idx_complaint_log_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='投诉处理记录';
+
+-- 管理员楼栋权限范围
+CREATE TABLE IF NOT EXISTS `admin_building_scope` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `admin_id` bigint NOT NULL,
+  `building_id` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_admin_building_scope` (`admin_id`,`building_id`),
+  KEY `idx_admin_building_scope_admin_id` (`admin_id`),
+  KEY `idx_admin_building_scope_building_id` (`building_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='管理员楼栋可见范围';

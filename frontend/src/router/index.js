@@ -4,6 +4,7 @@ import Dashboard from '../pages/Dashboard.vue'
 import Buildings from '../pages/Buildings.vue'
 import Rooms from '../pages/Rooms.vue'
 import RoomMeters from '../pages/RoomMeters.vue'
+import RoomDetail from '../pages/RoomDetail.vue'
 import Tenants from '../pages/Tenants.vue'
 import Contracts from '../pages/Contracts.vue'
 import ContractCreate from '../pages/ContractCreate.vue'
@@ -17,9 +18,12 @@ import Messages from '../pages/Messages.vue'
 import Blacklist from '../pages/Blacklist.vue'
 import Users from '../pages/Users.vue'
 import Logs from '../pages/Logs.vue'
+import AlertRules from '../pages/AlertRules.vue'
+import OperationAnalysis from '../pages/OperationAnalysis.vue'
 import Remind from '../pages/Remind.vue'
 import RepairOrders from '../pages/RepairOrders.vue'
 import RepairWorkers from '../pages/RepairWorkers.vue'
+import Complaints from '../pages/Complaints.vue'
 import RoomAssets from '../pages/RoomAssets.vue'
 import Backup from '../pages/Backup.vue'
 import MobileRoom from '../pages/mobile/MobileRoom.vue'
@@ -48,6 +52,7 @@ const routes = [
   { path: '/dashboard', component: Dashboard },
   { path: '/buildings', component: Buildings },
   { path: '/buildings/:id/rooms', component: Rooms },
+  { path: '/buildings/:buildingId/rooms/:roomId/detail', component: RoomDetail },
   { path: '/buildings/:buildingId/rooms/:roomId/meter', component: RoomMeters },
   { path: '/tenants', component: Tenants },
   { path: '/tenants/blacklist', component: Blacklist },
@@ -62,9 +67,12 @@ const routes = [
   { path: '/messages', component: Messages },
   { path: '/users', component: Users },
   { path: '/logs', component: Logs },
+  { path: '/alert-rules', component: AlertRules },
+  { path: '/operation-analysis', component: OperationAnalysis },
   { path: '/remind', component: Remind },
   { path: '/repairs/orders', component: RepairOrders },
   { path: '/repairs/workers', component: RepairWorkers },
+  { path: '/complaints', component: Complaints },
   { path: '/buildings/:buildingId/rooms/:roomId/assets', component: RoomAssets },
   { path: '/backup', component: Backup },
   {
@@ -125,11 +133,15 @@ router.beforeEach((to, from, next) => {
     user?.role?.toUpperCase() === 'USER'
   ) {
     next('/mobile/home')
-  } else if (to.path === '/logs' && !['SUPER_ADMIN', 'ADMIN'].includes(user?.role?.toUpperCase())) {
+  } else if (to.path === '/logs' && user?.role?.toUpperCase() !== 'SUPER_ADMIN') {
+    next('/dashboard')
+  } else if (['/alert-rules', '/operation-analysis'].includes(to.path) && user?.role?.toUpperCase() !== 'SUPER_ADMIN') {
     next('/dashboard')
   } else if (to.path === '/remind' && !['SUPER_ADMIN', 'ADMIN'].includes(user?.role?.toUpperCase())) {
     next('/dashboard')
   } else if (to.path.startsWith('/repairs') && !['SUPER_ADMIN', 'ADMIN'].includes(user?.role?.toUpperCase())) {
+    next('/dashboard')
+  } else if (to.path.startsWith('/complaints') && !['SUPER_ADMIN', 'ADMIN'].includes(user?.role?.toUpperCase())) {
     next('/dashboard')
   } else if (to.path === '/backup' && !['SUPER_ADMIN', 'ADMIN'].includes(user?.role?.toUpperCase())) {
     next('/dashboard')

@@ -46,4 +46,13 @@ public class User {
 
     @TableField("theme_preference")
     private String themePreference;
+
+    @TableField("first_login")
+    private Boolean firstLogin;
+
+    @TableField("show_context_tips")
+    private Boolean showContextTips;
+
+    @TableField("show_task_card")
+    private Boolean showTaskCard;
 }

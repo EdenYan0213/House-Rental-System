@@ -3,11 +3,11 @@ package com.house.controller;
 import com.house.model.Tenant;
 import com.house.model.OperationSnapshot;
 import com.house.repo.TenantRepository;
+import com.house.service.OperationLogService;
 import com.house.service.OperationSnapshotService;
 import com.house.service.TenantService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,12 +19,15 @@ public class TenantController {
   private final TenantService tenantService;
   private final TenantRepository tenantRepository;
   private final OperationSnapshotService operationSnapshotService;
+  private final OperationLogService operationLogService;
 
   public TenantController(TenantService tenantService, TenantRepository tenantRepository,
-      OperationSnapshotService operationSnapshotService) {
+      OperationSnapshotService operationSnapshotService,
+      OperationLogService operationLogService) {
     this.tenantService = tenantService;
     this.tenantRepository = tenantRepository;
     this.operationSnapshotService = operationSnapshotService;
+    this.operationLogService = operationLogService;
   }
 
   @GetMapping
@@ -61,7 +64,7 @@ public class TenantController {
   }
 
   @DeleteMapping("/{id}")
-  public ResponseEntity<?> delete(@PathVariable Long id) {
+  public ResponseEntity<?> delete(@PathVariable Long id, HttpServletRequest request) {
     Tenant before = tenantRepository.findById(id).orElse(null);
     if (before == null) {
       return ResponseEntity.notFound().build();
@@ -71,6 +74,9 @@ public class TenantController {
     tenantService.delete(id);
     Tenant after = tenantRepository.findById(id).orElse(null);
     operationSnapshotService.complete(snapshot.getId(), after);
+    operationLogService.log(
+        "tenant", "delete", String.valueOf(id), before.getName(), before, after,
+        "删除租户: " + before.getName(), request, true, null, null, Map.of("tenantId", id));
     return ResponseEntity.ok(Map.of(
         "undoSnapshotId", snapshot.getId(),
         "undoExpireAt", snapshot.getExpiredAt(),
@@ -126,6 +132,9 @@ public class TenantController {
       tenantService.removeFromBlacklist(id);
       Tenant after = tenantRepository.findById(id).orElse(null);
       operationSnapshotService.complete(snapshot.getId(), after);
+      operationLogService.log(
+          "tenant", "remove_blacklist", String.valueOf(id), before.getName(), before, after,
+          "移出黑名单: " + before.getName(), request, true, null, null, Map.of("tenantId", id));
       return ResponseEntity.ok(Map.of(
           "undoSnapshotId", snapshot.getId(),
           "undoExpireAt", snapshot.getExpiredAt(),

@@ -32,7 +32,16 @@
       <el-button icon="Search" @click="loadContracts">搜索</el-button>
     </el-row>
 
-    <el-table :data="contracts" style="width: 100%; margin-top: 16px" v-loading="loading" @selection-change="onSelectionChange">
+    <el-table
+      ref="contractsTableRef"
+      :data="contracts"
+      row-key="id"
+      :highlight-current-row="true"
+      :row-class-name="contractRowClassName"
+      style="width: 100%; margin-top: 16px"
+      v-loading="loading"
+      @selection-change="onSelectionChange"
+    >
       <el-table-column type="selection" width="50" />
       <el-table-column prop="contractNo" label="合同编号" width="150" />
       <el-table-column prop="roomNumber" label="房间号" width="100" />
@@ -59,12 +68,14 @@
           <el-tag :type="getStatusType(row.status)">{{ getStatusText(row.status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="200" fixed="right">
+      <el-table-column label="操作" width="320" fixed="right" align="center">
         <template #default="{ row }">
-          <el-button size="small" @click="viewDetail(row)">详情</el-button>
-          <el-button size="small" @click="goRepair(row)">报修</el-button>
-          <el-button size="small" type="warning" @click="renew(row)" :disabled="row.status !== 'ACTIVE'" v-if="canRenew">续租</el-button>
-          <el-button size="small" type="danger" @click="terminate(row)" :disabled="row.status !== 'ACTIVE'" v-if="canTerminate">解约</el-button>
+          <div class="contract-actions">
+            <el-button size="small" @click="viewDetail(row)">详情</el-button>
+            <el-button size="small" @click="goComplaint(row)">投诉</el-button>
+            <el-button size="small" type="warning" @click="renew(row)" :disabled="row.status !== 'ACTIVE'" v-if="canRenew">续租</el-button>
+            <el-button size="small" type="danger" @click="terminate(row)" :disabled="row.status !== 'ACTIVE'" v-if="canTerminate">解约</el-button>
+          </div>
         </template>
       </el-table-column>
     </el-table>
@@ -140,6 +151,33 @@
       </template>
     </el-dialog>
 
+    <el-dialog title="续租" v-model="showRenew" width="480px">
+      <el-form :model="renewForm" label-width="110px">
+        <el-form-item label="合同编号">
+          <el-input :model-value="currentContract?.contractNo || '-'" disabled />
+        </el-form-item>
+        <el-form-item label="租户/房间">
+          <el-input :model-value="`${currentContract?.tenantName || '-'} / ${currentContract?.roomNumber || '-'}`" disabled />
+        </el-form-item>
+        <el-form-item label="当前结束日期">
+          <el-input :model-value="currentContract?.endDate || '-'" disabled />
+        </el-form-item>
+        <el-form-item label="新结束日期" required>
+          <el-date-picker
+            v-model="renewForm.endDate"
+            type="date"
+            value-format="YYYY-MM-DD"
+            format="YYYY-MM-DD"
+            style="width: 100%"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showRenew = false">取消</el-button>
+        <el-button type="primary" :loading="renewing" @click="confirmRenew">确认续租</el-button>
+      </template>
+    </el-dialog>
+
     <el-dialog title="批量续租" v-model="showBatchRenew" width="560px">
       <el-form :model="batchRenewForm" label-width="120px">
         <el-form-item label="续租结束日期">
@@ -189,7 +227,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   addToBlacklist,
@@ -199,7 +237,9 @@ import {
   canRenewContract,
   canTerminateContract,
   exportModuleData,
+  getContract,
   getContracts,
+  renewContract,
   terminateContract
 } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -207,6 +247,7 @@ import { showUndoToast } from '../utils/undo'
 
 const router = useRouter()
 const route = useRoute()
+const contractsTableRef = ref(null)
 
 const canAdd = computed(() => canAddContract())
 const canRenew = computed(() => canRenewContract())
@@ -221,12 +262,17 @@ const pageSize = ref(20)
 const total = ref(0)
 const showDetail = ref(false)
 const showTerminate = ref(false)
+const showRenew = ref(false)
+const renewing = ref(false)
 const currentContract = ref(null)
 const terminateForm = ref({ terminateDate: '', reason: '' })
+const renewForm = ref({ endDate: '' })
 const selectedContractIds = ref([])
 const showBatchRenew = ref(false)
 const showBatchTerminate = ref(false)
 const batchLoading = ref(false)
+const highlightedContractId = ref(null)
+let contractHighlightTimer = null
 const batchRenewForm = ref({
   endDate: '',
   durationMonths: 12,
@@ -306,15 +352,89 @@ function viewDetail(row) {
   showDetail.value = true
 }
 
-function renew(row) {
-  router.push({ path: '/contracts/new', query: { renewFrom: row.id } })
+async function openDetailById(id) {
+  if (!id) return
+  try {
+    const res = await getContract(id)
+    if (res?.data) {
+      if (res.data.contractNo) {
+        searchQuery.value = res.data.contractNo
+        page.value = 1
+        await loadContracts()
+      }
+      currentContract.value = res.data
+      showDetail.value = true
+      await focusContractRow(id)
+    }
+  } catch (e) {
+    // ignore
+  }
 }
 
-function goRepair(row) {
+function contractRowClassName({ row }) {
+  return row?.id === highlightedContractId.value ? 'contract-row-highlight' : ''
+}
+
+async function focusContractRow(id) {
+  highlightedContractId.value = id
+
+  if (contractHighlightTimer) {
+    clearTimeout(contractHighlightTimer)
+  }
+
+  await nextTick()
+  const row = contracts.value.find(c => c.id === id)
+  if (row && contractsTableRef.value?.setCurrentRow) {
+    contractsTableRef.value.setCurrentRow(row)
+  }
+
+  setTimeout(() => {
+    const target = document.querySelector('.contract-row-highlight')
+    target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, 80)
+
+  contractHighlightTimer = setTimeout(() => {
+    highlightedContractId.value = null
+    if (contractsTableRef.value?.setCurrentRow) {
+      contractsTableRef.value.setCurrentRow()
+    }
+  }, 2000)
+}
+
+function renew(row) {
+  currentContract.value = row
+  const oldEnd = row?.endDate ? new Date(row.endDate) : new Date()
+  oldEnd.setFullYear(oldEnd.getFullYear() + 1)
+  renewForm.value.endDate = oldEnd.toISOString().slice(0, 10)
+  showRenew.value = true
+}
+
+async function confirmRenew() {
+  if (!currentContract.value?.id) {
+    return ElMessage.warning('未找到合同信息')
+  }
+  if (!renewForm.value.endDate) {
+    return ElMessage.warning('请选择新结束日期')
+  }
+  renewing.value = true
+  try {
+    await renewContract(currentContract.value.id, { endDate: renewForm.value.endDate })
+    ElMessage.success('续租成功，合同时间已延长')
+    showRenew.value = false
+    showDetail.value = false
+    await loadContracts()
+  } catch (e) {
+    ElMessage.error(e.response?.data || e.message || '续租失败')
+  } finally {
+    renewing.value = false
+  }
+}
+
+function goComplaint(row) {
   const q = new URLSearchParams()
   if (row.roomId) q.set('roomId', row.roomId)
   if (row.tenantId) q.set('tenantId', row.tenantId)
-  router.push(`/repairs/orders?${q.toString()}`)
+  router.push(`/complaints?${q.toString()}`)
 }
 
 function openBatchRenew() {
@@ -444,5 +564,43 @@ onMounted(() => {
     expiringFilter.value = '3'
   }
   loadContracts()
+
+  const detailId = Number(route.query.detailId)
+  if (!Number.isNaN(detailId) && detailId > 0) {
+    openDetailById(detailId)
+  }
+})
+
+watch(() => route.query.detailId, (nextId) => {
+  const detailId = Number(nextId)
+  if (!Number.isNaN(detailId) && detailId > 0) {
+    openDetailById(detailId)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (contractHighlightTimer) {
+    clearTimeout(contractHighlightTimer)
+  }
 })
 </script>
+
+<style scoped>
+.contract-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  gap: 8px;
+}
+
+.contract-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+:deep(.contract-row-highlight > td) {
+  background: #fff7e6 !important;
+  transition: background-color 0.35s ease;
+}
+</style>

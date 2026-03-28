@@ -1,15 +1,23 @@
 package com.house.model;
 
 import jakarta.persistence.*;
+import lombok.Data;
 
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "operation_log")
+@Data
 public class OperationLog {
   @Id
   @GeneratedValue(strategy = GenerationType.IDENTITY)
   private Long id;
+
+  @Column(name = "user_id")
+  private Long userId;
+
+  @Column(name = "username")
+  private String username;
 
   @Column(name = "operation_time")
   private LocalDateTime operationTime;
@@ -22,6 +30,42 @@ public class OperationLog {
 
   @Column(name = "action")
   private String action;
+
+  @Column(name = "business_id")
+  private String businessId;
+
+  @Column(name = "business_name")
+  private String businessName;
+
+  @Column(name = "detail_before", columnDefinition = "json")
+  private String detailBefore;
+
+  @Column(name = "detail_after", columnDefinition = "json")
+  private String detailAfter;
+
+  @Column(name = "change_summary", columnDefinition = "TEXT")
+  private String changeSummary;
+
+  @Column(name = "request_params", columnDefinition = "TEXT")
+  private String requestParams;
+
+  @Column(name = "request_ip")
+  private String requestIp;
+
+  @Column(name = "user_agent")
+  private String userAgent;
+
+  @Column(name = "result")
+  private Integer result;
+
+  @Column(name = "fail_reason", columnDefinition = "TEXT")
+  private String failReason;
+
+  @Column(name = "duration_ms")
+  private Integer durationMs;
+
+  @Column(name = "log_level")
+  private Integer logLevel;
 
   @Column(name = "ip")
   private String ip;
@@ -49,116 +93,4 @@ public class OperationLog {
 
   @Column(name = "ai_model_name")
   private String aiModelName;
-
-  public Long getId() {
-    return id;
-  }
-
-  public void setId(Long id) {
-    this.id = id;
-  }
-
-  public LocalDateTime getOperationTime() {
-    return operationTime;
-  }
-
-  public void setOperationTime(LocalDateTime operationTime) {
-    this.operationTime = operationTime;
-  }
-
-  public String getOperator() {
-    return operator;
-  }
-
-  public void setOperator(String operator) {
-    this.operator = operator;
-  }
-
-  public String getModule() {
-    return module;
-  }
-
-  public void setModule(String module) {
-    this.module = module;
-  }
-
-  public String getAction() {
-    return action;
-  }
-
-  public void setAction(String action) {
-    this.action = action;
-  }
-
-  public String getIp() {
-    return ip;
-  }
-
-  public void setIp(String ip) {
-    this.ip = ip;
-  }
-
-  public LocalDateTime getCreatedAt() {
-    return createdAt;
-  }
-
-  public void setCreatedAt(LocalDateTime createdAt) {
-    this.createdAt = createdAt;
-  }
-
-  public String getAiInstruction() {
-    return aiInstruction;
-  }
-
-  public void setAiInstruction(String aiInstruction) {
-    this.aiInstruction = aiInstruction;
-  }
-
-  public String getAiIntent() {
-    return aiIntent;
-  }
-
-  public void setAiIntent(String aiIntent) {
-    this.aiIntent = aiIntent;
-  }
-
-  public String getAiEntities() {
-    return aiEntities;
-  }
-
-  public void setAiEntities(String aiEntities) {
-    this.aiEntities = aiEntities;
-  }
-
-  public String getAiStatus() {
-    return aiStatus;
-  }
-
-  public void setAiStatus(String aiStatus) {
-    this.aiStatus = aiStatus;
-  }
-
-  public String getAiResponseMessage() {
-    return aiResponseMessage;
-  }
-
-  public void setAiResponseMessage(String aiResponseMessage) {
-    this.aiResponseMessage = aiResponseMessage;
-  }
-
-  public Long getAiDurationMs() {
-    return aiDurationMs;
-  }
-
-  public void setAiDurationMs(Long aiDurationMs) {
-    this.aiDurationMs = aiDurationMs;
-  }
-
-  public String getAiModelName() {
-    return aiModelName;
-  }
-
-  public void setAiModelName(String aiModelName) {
-    this.aiModelName = aiModelName;
-  }
 }

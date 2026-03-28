@@ -20,7 +20,16 @@
       </el-input>
     </el-row>
 
-    <el-table :data="tenants" style="width: 100%; margin-top: 16px" v-loading="loading" @selection-change="onSelectionChange">
+    <el-table
+      ref="tenantsTableRef"
+      :data="tenants"
+      row-key="id"
+      :highlight-current-row="true"
+      :row-class-name="tenantRowClassName"
+      style="width: 100%; margin-top: 16px"
+      v-loading="loading"
+      @selection-change="onSelectionChange"
+    >
       <el-table-column type="selection" width="50" />
       <el-table-column label="姓名" min-width="80">
         <template #default="{ row }">
@@ -38,24 +47,27 @@
           {{ maskIdCard(row.idCard) }}
         </template>
       </el-table-column>
-      <el-table-column label="紧急联系人/电话" min-width="140">
+      <el-table-column label="紧急联系人/电话" min-width="260">
         <template #default="{ row }">
           {{ row.emergencyContact || '-' }} / {{ row.emergencyPhone || '-' }}
         </template>
       </el-table-column>
-      <el-table-column label="合同" width="70">
+      <el-table-column label="合同" width="110" align="center">
         <template #default="{ row }">
           <el-tag v-if="row.activeContract" type="success" size="small">有合同</el-tag>
           <span v-else class="text-gray">无合同</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column label="操作" width="300" fixed="right" align="left">
         <template #default="{ row }">
-          <el-button size="small" type="primary" link @click="viewDetail(row)">详情</el-button>
-          <el-button size="small" type="primary" link @click="goRepair(row)">报修</el-button>
-          <el-button size="small" type="primary" link @click="openEdit(row)" v-if="canEdit">编辑</el-button>
-          <el-button size="small" type="warning" link @click="addToBlacklist(row)" v-if="canEdit && !row.isBlacklisted">拉黑</el-button>
-          <el-button size="small" type="danger" link @click="remove(row)" v-if="canDelete && !row.activeContract">删</el-button>
+          <div class="tenant-actions">
+            <el-button size="small" type="primary" link @click="viewDetail(row)">详情</el-button>
+            <el-button size="small" type="primary" link @click="goRepair(row)">报修</el-button>
+            <el-button size="small" type="primary" link @click="goComplaint(row)">投诉</el-button>
+            <el-button size="small" type="primary" link @click="openEdit(row)" v-if="canEdit">编辑</el-button>
+            <el-button size="small" type="warning" link @click="addToBlacklist(row)" v-if="canEdit && !row.isBlacklisted">拉黑</el-button>
+            <el-button size="small" type="danger" link @click="remove(row)" v-if="canDelete && !row.activeContract">删除</el-button>
+          </div>
         </template>
       </el-table-column>
     </el-table>
@@ -136,6 +148,25 @@
           <el-table-column prop="createdAt" label="报修时间" />
         </el-table>
       </div>
+      <div v-if="tenantComplaints.length > 0" style="margin-top: 20px">
+        <h4>投诉记录</h4>
+        <el-table :data="tenantComplaints" size="small" style="margin-top: 10px">
+          <el-table-column prop="complaintNo" label="编号" width="170" />
+          <el-table-column prop="createdAt" label="时间" width="170" />
+          <el-table-column prop="type" label="类型" width="120" />
+          <el-table-column prop="status" label="状态" width="110">
+            <template #default="{ row }">
+              <el-tag size="small">{{ row.status }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="title" label="标题" min-width="180" />
+          <el-table-column label="操作" width="90">
+            <template #default="{ row }">
+              <el-button size="small" type="primary" link @click="$router.push(`/complaints?status=all&q=${encodeURIComponent(row.complaintNo)}`)">查看</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
       <template #footer>
         <el-button @click="showDetail = false">关闭</el-button>
       </template>
@@ -196,8 +227,8 @@
 </style>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, computed, watch, nextTick, onBeforeUnmount } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import {
   addToBlacklist as apiAddToBlacklist,
   batchSendMessages,
@@ -207,7 +238,9 @@ import {
   createTenant,
   deleteTenant,
   exportModuleData,
+  getTenant,
   getTenants,
+  getTenantComplaints,
   getTenantRepairOrders,
   removeFromBlacklist as apiRemoveFromBlacklist,
   updateTenant
@@ -219,6 +252,8 @@ const canAdd = computed(() => canAddTenant())
 const canEdit = computed(() => canEditTenant())
 const canDelete = computed(() => canDeleteTenant())
 const router = useRouter()
+const route = useRoute()
+const tenantsTableRef = ref(null)
 
 const tenants = ref([])
 const loading = ref(false)
@@ -235,10 +270,13 @@ const addingBlacklist = ref(false)
 const currentTenant = ref(null)
 const tenantContracts = ref([])
 const tenantRepairs = ref([])
+const tenantComplaints = ref([])
 const selectedTenantIds = ref([])
 const showBatchNotify = ref(false)
 const notifySending = ref(false)
 const notifyForm = ref({ title: '系统通知', content: '', link: '' })
+const highlightedTenantId = ref(null)
+let tenantHighlightTimer = null
 const blacklistForm = ref({
   tenantId: null,
   tenantName: '',
@@ -312,11 +350,71 @@ async function viewDetail(row) {
   } catch (e) {
     tenantRepairs.value = []
   }
+  try {
+    const c = await getTenantComplaints(row.id)
+    tenantComplaints.value = c.data || []
+  } catch (e) {
+    tenantComplaints.value = []
+  }
   showDetail.value = true
+}
+
+async function openDetailById(id) {
+  if (!id) return
+  try {
+    const res = await getTenant(id)
+    const tenant = res?.data
+    if (tenant) {
+      // Narrow down current list to improve row locating and user context.
+      if (tenant.phone || tenant.name) {
+        searchQuery.value = tenant.phone || tenant.name
+        page.value = 1
+        await loadTenants()
+      }
+      await viewDetail(tenant)
+      await focusTenantRow(id)
+    }
+  } catch (e) {
+    // 忽略打开失败，避免影响页面正常加载
+  }
+}
+
+function tenantRowClassName({ row }) {
+  return row?.id === highlightedTenantId.value ? 'tenant-row-highlight' : ''
+}
+
+async function focusTenantRow(id) {
+  highlightedTenantId.value = id
+
+  if (tenantHighlightTimer) {
+    clearTimeout(tenantHighlightTimer)
+  }
+
+  await nextTick()
+  const row = tenants.value.find(t => t.id === id)
+  if (row && tenantsTableRef.value?.setCurrentRow) {
+    tenantsTableRef.value.setCurrentRow(row)
+  }
+
+  setTimeout(() => {
+    const target = document.querySelector('.tenant-row-highlight')
+    target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, 80)
+
+  tenantHighlightTimer = setTimeout(() => {
+    highlightedTenantId.value = null
+    if (tenantsTableRef.value?.setCurrentRow) {
+      tenantsTableRef.value.setCurrentRow()
+    }
+  }, 2000)
 }
 
 function goRepair(row) {
   router.push(`/repairs/orders?tenantId=${row.id}`)
+}
+
+function goComplaint(row) {
+  router.push(`/complaints?tenantId=${row.id}`)
 }
 
 async function save() {
@@ -447,5 +545,53 @@ async function exportCurrent() {
   }
 }
 
-onMounted(loadTenants)
+onMounted(() => {
+  const initialQ = String(route.query.q || '').trim()
+  if (initialQ) {
+    searchQuery.value = initialQ
+  }
+  loadTenants()
+
+  const detailId = Number(route.query.detailId)
+  if (!Number.isNaN(detailId) && detailId > 0) {
+    openDetailById(detailId)
+  }
+})
+
+watch(() => route.query.q, (nextQ) => {
+  const q = String(nextQ || '').trim()
+  if (q !== searchQuery.value) {
+    searchQuery.value = q
+    page.value = 1
+    loadTenants()
+  }
+})
+
+watch(() => route.query.detailId, (nextId) => {
+  const detailId = Number(nextId)
+  if (!Number.isNaN(detailId) && detailId > 0) {
+    openDetailById(detailId)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (tenantHighlightTimer) {
+    clearTimeout(tenantHighlightTimer)
+  }
+})
 </script>
+
+<style scoped>
+.tenant-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+:deep(.tenant-row-highlight > td) {
+  background: #fff7e6 !important;
+  transition: background-color 0.35s ease;
+}
+</style>

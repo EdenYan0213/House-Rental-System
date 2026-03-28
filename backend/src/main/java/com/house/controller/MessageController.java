@@ -45,12 +45,17 @@ public class MessageController {
 
   @GetMapping
   public Map<String, Object> list(
+      @RequestParam(required = false) String type,
       @RequestParam(required = false) Boolean isRead,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "10") int size) {
     PageRequest pageRequest = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
     Page<SystemMessage> messages;
-    if (isRead != null) {
+    if (type != null && !type.isBlank() && isRead != null) {
+      messages = messageRepository.findByTypeAndIsRead(type, isRead, pageRequest);
+    } else if (type != null && !type.isBlank()) {
+      messages = messageRepository.findByType(type, pageRequest);
+    } else if (isRead != null) {
       messages = messageRepository.findByIsRead(isRead, pageRequest);
     } else {
       messages = messageRepository.findAll(pageRequest);

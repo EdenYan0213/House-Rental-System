@@ -34,17 +34,25 @@ public class AuthController {
             User user = userService.findByUsername(request.getUsername());
 
             if (user == null) {
-                operationLogService.log("用户认证", "登录失败: 用户不存在(" + request.getUsername() + ")", httpRequest);
+                operationLogService.log("auth", "login", null, request.getUsername(), null, null,
+                        "登录失败: 用户不存在(" + request.getUsername() + ")", httpRequest,
+                        false, "用户不存在", null, request);
                 return ResponseEntity.badRequest().body(Map.of("message", "用户不存在"));
             }
 
             if (!user.getEnabled()) {
-                operationLogService.log("用户认证", "登录失败: 账号禁用(" + request.getUsername() + ")", httpRequest);
+                operationLogService.log("auth", "login", String.valueOf(user.getId()), request.getUsername(), null,
+                        null,
+                        "登录失败: 账号禁用(" + request.getUsername() + ")", httpRequest,
+                        false, "账号禁用", null, request);
                 return ResponseEntity.badRequest().body(Map.of("message", "账号已被禁用"));
             }
 
             if (!userService.validatePassword(request.getPassword(), user.getPassword())) {
-                operationLogService.log("用户认证", "登录失败: 密码错误(" + request.getUsername() + ")", httpRequest);
+                operationLogService.log("auth", "login", String.valueOf(user.getId()), request.getUsername(), null,
+                        null,
+                        "登录失败: 密码错误(" + request.getUsername() + ")", httpRequest,
+                        false, "密码错误", null, request);
                 return ResponseEntity.badRequest().body(Map.of("message", "密码错误"));
             }
 
@@ -60,14 +68,21 @@ public class AuthController {
                     .userId(user.getId())
                     .email(user.getEmail())
                     .themePreference(user.getThemePreference())
+                    .firstLogin(user.getFirstLogin())
+                    .showContextTips(user.getShowContextTips())
+                    .showTaskCard(user.getShowTaskCard())
                     .build();
 
-            operationLogService.log("用户认证", "登录成功: " + request.getUsername(), httpRequest);
+            operationLogService.log("auth", "login", String.valueOf(user.getId()), request.getUsername(), null, null,
+                    "登录成功: " + request.getUsername(), httpRequest,
+                    true, null, null, request);
 
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             e.printStackTrace();
-            operationLogService.log("用户认证", "登录失败: 系统异常(" + request.getUsername() + ")", httpRequest);
+            operationLogService.log("auth", "login", null, request.getUsername(), null, null,
+                    "登录失败: 系统异常(" + request.getUsername() + ")", httpRequest,
+                    false, e.getMessage(), null, request);
             return ResponseEntity.status(500).body(Map.of("message", "内部错误", "error", e.getMessage()));
         }
     }
@@ -110,6 +125,9 @@ public class AuthController {
         result.put("phone", user.getPhone());
         result.put("email", user.getEmail());
         result.put("themePreference", user.getThemePreference());
+        result.put("firstLogin", user.getFirstLogin());
+        result.put("showContextTips", user.getShowContextTips());
+        result.put("showTaskCard", user.getShowTaskCard());
 
         return ResponseEntity.ok(result);
     }
@@ -150,7 +168,11 @@ public class AuthController {
         user.setPassword(newPassword);
         userService.updateUser(user);
 
-        operationLogService.log("用户认证", "修改密码: " + username, httpRequest);
+        operationLogService.log(
+                "auth", "change_password", String.valueOf(user.getId()), username,
+                Map.of("username", username), Map.of("username", username),
+                "修改密码: " + username, httpRequest, true, null, null,
+                Map.of("username", username, "oldPassword", oldPassword, "newPassword", newPassword));
 
         return ResponseEntity.ok(Map.of("message", "密码修改成功"));
     }

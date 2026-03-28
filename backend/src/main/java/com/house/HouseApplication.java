@@ -12,6 +12,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.context.annotation.Bean;
+import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import com.house.service.RemindService;
 import java.util.concurrent.Executors;
@@ -20,6 +21,7 @@ import java.util.concurrent.TimeUnit;
 @SpringBootApplication
 @EntityScan(basePackages = "com.house.model")
 @EnableScheduling
+@EnableAsync
 public class HouseApplication {
   public static void main(String[] args) {
     SpringApplication.run(HouseApplication.class, args);

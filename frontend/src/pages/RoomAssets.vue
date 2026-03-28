@@ -8,6 +8,14 @@
       <div>
         <el-button type="primary" @click="openCreate">新增器具</el-button>
         <el-button @click="openBatchByTemplate">从模板批量添加</el-button>
+        <el-button
+          type="primary"
+          plain
+          :disabled="!isRentedRoom"
+          @click="generateRoomBill"
+        >
+          生成该房间账单
+        </el-button>
         <el-button type="success" @click="exportChecklist('move_in')">导出入住核对单PDF</el-button>
         <el-button type="warning" @click="exportChecklist('move_out')">导出退租核对单PDF</el-button>
       </div>
@@ -101,7 +109,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -114,7 +122,8 @@ import {
   batchRoomAppliancesFromTemplate,
   uploadFile,
   getRoomRepairOrders,
-  exportRoomApplianceChecklistPdf
+  exportRoomApplianceChecklistPdf,
+  generateBillForRoom
 } from '../api'
 
 const route = useRoute()
@@ -133,6 +142,10 @@ const form = ref({ roomId, applianceName: '', brand: '', quantity: 1, unit: '个
 
 const showTemplateDialog = ref(false)
 const selectedTemplateIds = ref([])
+const isRentedRoom = computed(() => {
+  const status = String(roomInfo.value?.status || '')
+  return status === '已租' || status.toUpperCase() === 'RENTED'
+})
 
 function statusTag(status) {
   if (status === '正常') return 'success'
@@ -256,6 +269,33 @@ async function exportChecklist(type) {
     ElMessage.success('PDF导出成功')
   } catch (e) {
     ElMessage.error(e.response?.data || 'PDF导出失败')
+  }
+}
+
+async function generateRoomBill() {
+  if (!isRentedRoom.value) {
+    ElMessage.warning('该房间未出租，不能生成账单')
+    return
+  }
+  try {
+    const { value } = await ElMessageBox.prompt(
+      '请输入账单月份（格式 yyyy-MM，可留空默认上月）',
+      '生成房间账单',
+      {
+        confirmButtonText: '生成',
+        cancelButtonText: '取消',
+        inputPlaceholder: '例如 2026-03',
+        inputPattern: /^$|^\d{4}-(0[1-9]|1[0-2])$/,
+        inputErrorMessage: '月份格式应为 yyyy-MM'
+      }
+    )
+
+    await generateBillForRoom(roomId, String(value || '').trim())
+    ElMessage.success('房间账单生成成功')
+  } catch (e) {
+    if (e !== 'cancel') {
+      ElMessage.error(e?.response?.data || e?.message || '生成账单失败')
+    }
   }
 }
 

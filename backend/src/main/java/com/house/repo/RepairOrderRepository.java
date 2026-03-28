@@ -11,5 +11,7 @@ public interface RepairOrderRepository extends JpaRepository<RepairOrder, Long>,
 
   List<RepairOrder> findByTenantIdOrderByCreatedAtDesc(Long tenantId);
 
+  List<RepairOrder> findByTenantIdAndStatusInOrderByCreatedAtDesc(Long tenantId, List<String> statuses);
+
   long countByWorkerId(Long workerId);
 }

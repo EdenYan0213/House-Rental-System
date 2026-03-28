@@ -3,8 +3,10 @@ import { ElButton, ElMessage, ElNotification } from 'element-plus'
 import { recoverOperationSnapshot } from '../api'
 
 export function showUndoToast(payload, onRecovered) {
-  const snapshotId = payload?.undoSnapshotId
-  if (!snapshotId) {
+  const snapshotIds = Array.isArray(payload?.undoSnapshotIds)
+    ? payload.undoSnapshotIds.filter(Boolean)
+    : (payload?.undoSnapshotId ? [payload.undoSnapshotId] : [])
+  if (snapshotIds.length === 0) {
     return
   }
 
@@ -22,7 +24,9 @@ export function showUndoToast(payload, onRecovered) {
         size: 'small',
         onClick: async () => {
           try {
-            await recoverOperationSnapshot(snapshotId)
+            for (const snapshotId of snapshotIds) {
+              await recoverOperationSnapshot(snapshotId)
+            }
             ElMessage.success('撤销成功')
             if (typeof onRecovered === 'function') {
               await onRecovered()
@@ -31,7 +35,7 @@ export function showUndoToast(payload, onRecovered) {
             ElMessage.error(e?.response?.data || e?.message || '撤销失败')
           }
         }
-      }, () => '撤销')
+      }, () => snapshotIds.length > 1 ? '批量撤销' : '撤销')
     ])
   })
 }

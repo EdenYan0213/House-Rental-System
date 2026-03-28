@@ -13,17 +13,15 @@ public class DashboardController {
 
   private final BillRepository billRepository;
   private final RoomRepository roomRepository;
-  private final ContractRepository contractRepository;
   private final BuildingRepository buildingRepository;
   private final PaymentRecordRepository paymentRecordRepository;
   private final ReminderService reminderService;
 
   public DashboardController(BillRepository billRepository, RoomRepository roomRepository,
-      ContractRepository contractRepository, BuildingRepository buildingRepository,
+      BuildingRepository buildingRepository,
       PaymentRecordRepository paymentRecordRepository, ReminderService reminderService) {
     this.billRepository = billRepository;
     this.roomRepository = roomRepository;
-    this.contractRepository = contractRepository;
     this.buildingRepository = buildingRepository;
     this.paymentRecordRepository = paymentRecordRepository;
     this.reminderService = reminderService;
@@ -78,7 +76,7 @@ public class DashboardController {
       LocalDate monthDate = now.minusMonths(i);
       String monthStr = monthDate.getMonthValue() + "月";
       months.add(monthStr);
-      
+
       // 该月收入 = 已支付账单的总金额
       double monthIncome = billRepository.findAll().stream()
           .filter(b -> b.getBillMonth() != null && b.getBillMonth().startsWith(monthDate.toString().substring(0, 7)))
@@ -86,7 +84,7 @@ public class DashboardController {
           .mapToDouble(b -> b.getTotalAmount() != null ? b.getTotalAmount() : 0)
           .sum();
       incomes.add(monthIncome);
-      
+
       // 支出暂设为收入的20%（可以根据实际支出记录计算）
       expenses.add(monthIncome * 0.2);
     }
@@ -133,8 +131,7 @@ public class DashboardController {
     List<?> contracts = reminderService.getExpiringContracts(days);
     long count = reminderService.getExpiringCount(days);
     return Map.of(
-      "contracts", contracts,
-      "count", count
-    );
+        "contracts", contracts,
+        "count", count);
   }
 }

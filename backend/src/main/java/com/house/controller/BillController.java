@@ -14,20 +14,24 @@ import com.house.repo.SystemMessageRepository;
 import com.house.service.BillService;
 import com.house.repo.FeeItemRepository;
 import com.house.model.FeeItem;
-import com.house.service.ContractService;
-import com.house.service.PaymentService;
 import com.house.service.RoomService;
 import com.house.service.SmsService;
 import com.house.model.Room;
 import com.house.model.Building;
 import com.house.model.OperationSnapshot;
 import com.house.repo.BuildingRepository;
-import com.house.dto.PaymentRequest;
 import com.house.service.OperationSnapshotService;
+import com.house.service.OperationLogService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -43,31 +47,33 @@ public class BillController {
   private final BillDetailRepository billDetailRepository;
   private final PaymentRecordRepository paymentRecordRepository;
   private final ContractRepository contractRepository;
-  private final PaymentService paymentService;
   private final FeeItemRepository feeItemRepository;
   private final RoomService roomService;
   private final BuildingRepository buildingRepository;
   private final OperationSnapshotService operationSnapshotService;
+  private final OperationLogService operationLogService;
   private final SmsService smsService;
   private final SystemMessageRepository systemMessageRepository;
 
   public BillController(BillService billService, BillRepository billRepository,
       BillDetailRepository billDetailRepository, PaymentRecordRepository paymentRecordRepository,
       ContractRepository contractRepository,
-      PaymentService paymentService, FeeItemRepository feeItemRepository, RoomService roomService,
+      FeeItemRepository feeItemRepository, RoomService roomService,
       BuildingRepository buildingRepository,
-      OperationSnapshotService operationSnapshotService, SmsService smsService,
+      OperationSnapshotService operationSnapshotService,
+      OperationLogService operationLogService,
+      SmsService smsService,
       SystemMessageRepository systemMessageRepository) {
     this.billService = billService;
     this.billRepository = billRepository;
     this.billDetailRepository = billDetailRepository;
     this.paymentRecordRepository = paymentRecordRepository;
     this.contractRepository = contractRepository;
-    this.paymentService = paymentService;
     this.feeItemRepository = feeItemRepository;
     this.roomService = roomService;
     this.buildingRepository = buildingRepository;
     this.operationSnapshotService = operationSnapshotService;
+    this.operationLogService = operationLogService;
     this.smsService = smsService;
     this.systemMessageRepository = systemMessageRepository;
   }
@@ -90,11 +96,58 @@ public class BillController {
     }
   }
 
+  // 按房间生成账单，month 可选，格式 yyyy-MM；若不传，默认上月
+  @PostMapping("/generate/room/{roomId}")
+  public ResponseEntity<?> generateByRoom(@PathVariable Long roomId, @RequestParam(required = false) String month) {
+    try {
+      int created = billService.generateBillsForRoomAndMonth(roomId, month);
+      return ResponseEntity.ok(Map.of("created", created, "roomId", roomId));
+    } catch (Exception e) {
+      return ResponseEntity.badRequest().body(e.getMessage());
+    }
+  }
+
   @GetMapping
   public List<Bill> list(@RequestParam(required = false) String month,
       @RequestParam(required = false) String status,
       @RequestParam(required = false) Long contractId,
       @RequestParam(required = false) Long roomId) {
+    return queryBills(month, status, contractId, roomId);
+  }
+
+  @GetMapping("/export-csv")
+  public ResponseEntity<byte[]> exportCsv(@RequestParam(required = false) String month,
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) Long contractId,
+      @RequestParam(required = false) Long roomId) {
+    List<Bill> list = queryBills(month, status, contractId, roomId);
+
+    StringBuilder csv = new StringBuilder();
+    csv.append("账单ID,账单月份,楼栋,房间号,租户,状态,总金额,已付金额,水量,电量,生成时间\n");
+    DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    for (Bill b : list) {
+      csv.append(csvCell(b.getId())).append(',')
+          .append(csvCell(b.getBillMonth())).append(',')
+          .append(csvCell(b.getBuildingName())).append(',')
+          .append(csvCell(b.getRoomNumber())).append(',')
+          .append(csvCell(b.getTenantName())).append(',')
+          .append(csvCell(b.getStatus())).append(',')
+          .append(csvCell(b.getTotalAmount())).append(',')
+          .append(csvCell(b.getPaidAmount())).append(',')
+          .append(csvCell(b.getWaterUsage())).append(',')
+          .append(csvCell(b.getElectricUsage())).append(',')
+          .append(csvCell(formatDateTime(b.getGeneratedDate(), dtf)))
+          .append('\n');
+    }
+
+    byte[] bytes = ("\uFEFF" + csv).getBytes(StandardCharsets.UTF_8);
+    return ResponseEntity.ok()
+        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=bills-export.csv")
+        .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))
+        .body(bytes);
+  }
+
+  private List<Bill> queryBills(String month, String status, Long contractId, Long roomId) {
     List<Bill> list;
     if (contractId != null) {
       list = billRepository.findByContractId(contractId);
@@ -131,6 +184,24 @@ public class BillController {
       }
     }
     return list;
+  }
+
+  private String csvCell(Object value) {
+    if (value == null) {
+      return "";
+    }
+    String text = String.valueOf(value);
+    if (text.contains(",") || text.contains("\"") || text.contains("\n") || text.contains("\r")) {
+      return "\"" + text.replace("\"", "\"\"") + "\"";
+    }
+    return text;
+  }
+
+  private String formatDateTime(LocalDateTime value, DateTimeFormatter formatter) {
+    if (value == null) {
+      return "";
+    }
+    return value.format(formatter);
   }
 
   @GetMapping("/{id}")
@@ -253,7 +324,7 @@ public class BillController {
       }
 
       String month = bill.getBillMonth();
-      int created = billService.generateBillsForMonth(month);
+      billService.generateBillsForMonth(month);
       return ResponseEntity.ok(Collections.singletonMap("message", "账单重新生成成功"));
     } catch (Exception e) {
       return ResponseEntity.badRequest().body(e.getMessage());
@@ -264,7 +335,7 @@ public class BillController {
   @PostMapping("/regenerate/contract/{contractId}")
   public ResponseEntity<?> regenerateByContract(@PathVariable Long contractId) {
     try {
-      int created = billService.generateBillsForContract(contractId);
+      billService.generateBillsForContract(contractId);
       return ResponseEntity.ok(Collections.singletonMap("message", "账单重新生成成功"));
     } catch (Exception e) {
       return ResponseEntity.badRequest().body(e.getMessage());
@@ -288,7 +359,7 @@ public class BillController {
   }
 
   @PutMapping("/{id}/void")
-  public ResponseEntity<?> voidBill(@PathVariable Long id) {
+  public ResponseEntity<?> voidBill(@PathVariable Long id, HttpServletRequest request) {
     Bill before = billRepository.findById(id).orElse(null);
     if (before == null) {
       return ResponseEntity.notFound().build();
@@ -308,6 +379,9 @@ public class BillController {
     before.setStatus("VOID");
     Bill after = billRepository.save(before);
     operationSnapshotService.complete(snapshot.getId(), after);
+    operationLogService.log(
+        "bill", "void", String.valueOf(id), targetName, snapshot.getBeforeData(), after,
+        "作废账单: " + targetName, request, true, null, null, Map.of("billId", id));
 
     return ResponseEntity.ok(Map.of(
         "data", after,

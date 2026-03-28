@@ -27,6 +27,7 @@
       />
       <el-button icon="Search" @click="handleSearch">搜索</el-button>
       <el-button @click="resetSearch">重置</el-button>
+      <el-button type="success" plain @click="exportRoomCsv">导出CSV</el-button>
     </el-row>
 
     <el-row style="margin-top: 16px" justify="space-between" align="middle">
@@ -87,7 +88,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { getRoom, getMeterReadings, saveMeterReadings, getBuilding, deleteMeterReading } from '../api'
+import { getRoom, getMeterReadings, saveMeterReadings, getBuilding, deleteMeterReading, exportMeterReadingsCsv } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const router = useRouter()
@@ -197,6 +198,31 @@ async function deleteRecord(row) {
     await loadMeterReadings()
   } catch (e) {
     if (e !== 'cancel') ElMessage.error('删除失败')
+  }
+}
+
+async function exportRoomCsv() {
+  try {
+    const params = {
+      roomId,
+      buildingId
+    }
+    if (searchDateRange.value && searchDateRange.value.length === 2) {
+      params.startDate = searchDateRange.value[0]
+      params.endDate = searchDateRange.value[1]
+    }
+
+    const res = await exportMeterReadingsCsv(params)
+    const blob = new Blob([res.data], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `meter-room-${roomId}-${Date.now()}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success('房间水电CSV导出成功')
+  } catch (e) {
+    ElMessage.error('房间水电CSV导出失败')
   }
 }
 

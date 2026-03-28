@@ -66,6 +66,23 @@
         </el-card>
       </el-tab-pane>
 
+      <el-tab-pane label="新手引导" name="guide">
+        <el-card style="max-width: 600px">
+          <el-form :model="guideForm" label-width="140px">
+            <el-form-item label="显示上下文提示">
+              <el-switch v-model="guideForm.showContextTips" />
+            </el-form-item>
+            <el-form-item label="显示任务进度卡">
+              <el-switch v-model="guideForm.showTaskCard" />
+            </el-form-item>
+            <el-form-item>
+              <el-button type="primary" @click="saveGuideSettings" :loading="savingGuide">保存设置</el-button>
+              <el-button @click="resetOnboarding" :loading="resettingGuide">重置新手引导</el-button>
+            </el-form-item>
+          </el-form>
+        </el-card>
+      </el-tab-pane>
+
       <el-tab-pane
         label="合同到期提醒"
         name="reminder"
@@ -156,6 +173,7 @@ import {
   getReminderSettings,
   updateReminderSettings,
   updateProfile,
+  resetGuide,
   getUser,
   setUser,
   hasRole,
@@ -168,6 +186,8 @@ const activeTab = ref("profile");
 const saving = ref(false);
 const changingPwd = ref(false);
 const savingReminder = ref(false);
+const savingGuide = ref(false);
+const resettingGuide = ref(false);
 const newDay = ref(3);
 const reminderDays = ref([]);
 
@@ -203,6 +223,11 @@ const reminderForm = ref({
   overdueReminderEnabled: false,
 });
 
+const guideForm = ref({
+  showContextTips: true,
+  showTaskCard: true,
+});
+
 async function loadProfile() {
   try {
     const user = getUser();
@@ -213,9 +238,59 @@ async function loadProfile() {
         phone: user.phone || "",
         email: user.email || "",
       };
+      guideForm.value = {
+        showContextTips: user.showContextTips !== false,
+        showTaskCard: user.showTaskCard !== false,
+      };
     }
   } catch (e) {
     console.error(e);
+  }
+}
+
+async function saveGuideSettings() {
+  savingGuide.value = true;
+  try {
+    await updateProfile({
+      showContextTips: guideForm.value.showContextTips ? "true" : "false",
+      showTaskCard: guideForm.value.showTaskCard ? "true" : "false",
+    });
+    const user = getUser();
+    if (user) {
+      setUser({
+        ...user,
+        showContextTips: guideForm.value.showContextTips,
+        showTaskCard: guideForm.value.showTaskCard,
+      });
+    }
+    ElMessage.success("引导设置已保存");
+  } catch (e) {
+    ElMessage.error("保存失败: " + (e.response?.data?.message || e.message));
+  } finally {
+    savingGuide.value = false;
+  }
+}
+
+async function resetOnboarding() {
+  resettingGuide.value = true;
+  try {
+    await resetGuide();
+    const user = getUser();
+    if (user) {
+      setUser({
+        ...user,
+        firstLogin: true,
+        showContextTips: true,
+        showTaskCard: true,
+        dismissedGuideKeys: [],
+      });
+    }
+    guideForm.value = { showContextTips: true, showTaskCard: true };
+    ElMessage.success("新手引导已重置，下次进入会重新触发");
+  } catch (e) {
+    ElMessage.error("重置失败: " + (e.response?.data?.message || e.message));
+  } finally {
+    resettingGuide.value = false;
   }
 }
 

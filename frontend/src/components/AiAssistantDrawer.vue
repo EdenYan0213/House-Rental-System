@@ -20,7 +20,7 @@
         v-model="input"
         type="textarea"
         :rows="4"
-        placeholder="请输入指令，例如：今天101房间水表1250.5，电表3680"
+        placeholder="请输入指令，例如：今天A栋101水表1250.5电表3680，A栋102水表1312.3电表3725"
         :disabled="sending"
         @keydown.ctrl.enter.prevent="send"
       />
@@ -57,7 +57,7 @@ const messages = ref([
   {
     id: 0,
     role: 'assistant',
-    text: '你好，我可以帮你录入水电、发送账单短信、查询合同和查询用电量。'
+    text: '你好，我可以帮你录入水电（支持一次录入多个房间）、发送账单短信、查询合同和查询用电量。'
   }
 ])
 

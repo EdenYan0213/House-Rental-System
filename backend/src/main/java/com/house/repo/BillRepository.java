@@ -12,5 +12,7 @@ public interface BillRepository extends JpaRepository<Bill, Long> {
 
   List<Bill> findByContractIdIn(List<Long> contractIds);
 
+  List<Bill> findByContractIdInOrderByBillMonthDescIdDesc(List<Long> contractIds);
+
   java.util.Optional<Bill> findByContractIdAndBillMonth(Long contractId, String billMonth);
 }

@@ -2,7 +2,9 @@ package com.house.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.house.model.User;
+import com.house.service.OperationLogService;
 import com.house.service.UserService;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -10,7 +12,6 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -21,6 +22,9 @@ public class UserController {
 
     @Autowired
     private UserService userService;
+
+    @Autowired
+    private OperationLogService operationLogService;
 
     @GetMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
@@ -89,7 +93,7 @@ public class UserController {
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<?> updateUser(@PathVariable Long id, @RequestBody User user) {
+    public ResponseEntity<?> updateUser(@PathVariable Long id, @RequestBody User user, HttpServletRequest request) {
         User existing = userService.findById(id);
         if (existing == null) {
             return ResponseEntity.badRequest().body(Map.of("message", "用户不存在"));
@@ -108,6 +112,14 @@ public class UserController {
         }
 
         User updated = userService.updateUser(user);
+        if (existing.getRole() != updated.getRole()) {
+            operationLogService.log(
+                    "user", "permission", String.valueOf(id), updated.getUsername(),
+                    Map.of("role", existing.getRole()), Map.of("role", updated.getRole()),
+                    "权限变更: " + existing.getRole() + " -> " + updated.getRole(),
+                    request, true, null, null,
+                    Map.of("userId", id, "beforeRole", existing.getRole(), "afterRole", updated.getRole()));
+        }
         updated.setPassword(null);
         return ResponseEntity.ok(updated);
     }
@@ -130,7 +142,7 @@ public class UserController {
 
     @PutMapping("/{id}/enable")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<?> enableUser(@PathVariable Long id) {
+    public ResponseEntity<?> enableUser(@PathVariable Long id, HttpServletRequest request) {
         User user = userService.findById(id);
         if (user == null) {
             return ResponseEntity.badRequest().body(Map.of("message", "用户不存在"));
@@ -141,12 +153,17 @@ public class UserController {
         }
 
         userService.enableUser(id);
+        operationLogService.log(
+                "user", "enable", String.valueOf(id), user.getUsername(),
+                Map.of("enabled", false), Map.of("enabled", true),
+                "启用用户: " + user.getUsername(), request, true, null, null,
+                Map.of("userId", id));
         return ResponseEntity.ok(Map.of("message", "启用成功"));
     }
 
     @PutMapping("/{id}/disable")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<?> disableUser(@PathVariable Long id) {
+    public ResponseEntity<?> disableUser(@PathVariable Long id, HttpServletRequest request) {
         User user = userService.findById(id);
         if (user == null) {
             return ResponseEntity.badRequest().body(Map.of("message", "用户不存在"));
@@ -157,13 +174,19 @@ public class UserController {
         }
 
         userService.disableUser(id);
+        operationLogService.log(
+                "user", "disable", String.valueOf(id), user.getUsername(),
+                Map.of("enabled", true), Map.of("enabled", false),
+                "禁用用户: " + user.getUsername(), request, true, null, null,
+                Map.of("userId", id));
         return ResponseEntity.ok(Map.of("message", "禁用成功"));
     }
 
     @PutMapping("/{id}/reset-password")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<?> resetPassword(@PathVariable Long id, @RequestBody Map<String, String> request) {
-        String newPassword = request.get("newPassword");
+    public ResponseEntity<?> resetPassword(@PathVariable Long id, @RequestBody Map<String, String> requestBody,
+            HttpServletRequest request) {
+        String newPassword = requestBody.get("newPassword");
         if (newPassword == null || newPassword.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "新密码不能为空"));
         }
@@ -174,6 +197,11 @@ public class UserController {
         }
 
         userService.resetPassword(id, newPassword);
+        operationLogService.log(
+                "user", "reset_password", String.valueOf(id), user.getUsername(),
+                Map.of("username", user.getUsername()), Map.of("username", user.getUsername()),
+                "重置用户密码: " + user.getUsername(), request, true, null, null,
+                Map.of("userId", id, "newPassword", newPassword));
         return ResponseEntity.ok(Map.of("message", "密码重置成功"));
     }
 
@@ -204,6 +232,15 @@ public class UserController {
                 }
                 currentUser.setThemePreference(normalized);
             }
+        }
+        if (request.containsKey("firstLogin")) {
+            currentUser.setFirstLogin(Boolean.parseBoolean(request.get("firstLogin")));
+        }
+        if (request.containsKey("showContextTips")) {
+            currentUser.setShowContextTips(Boolean.parseBoolean(request.get("showContextTips")));
+        }
+        if (request.containsKey("showTaskCard")) {
+            currentUser.setShowTaskCard(Boolean.parseBoolean(request.get("showTaskCard")));
         }
 
         userService.updateUser(currentUser);

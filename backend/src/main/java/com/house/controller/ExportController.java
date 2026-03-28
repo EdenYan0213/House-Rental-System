@@ -36,6 +36,7 @@ public class ExportController {
   private final MeterReadingRepository meterReadingRepository;
   private final RoomApplianceRepository roomApplianceRepository;
   private final RepairOrderRepository repairOrderRepository;
+  private final ComplaintSuggestionRepository complaintSuggestionRepository;
   private final BuildingRepository buildingRepository;
   private final OperationLogService operationLogService;
 
@@ -46,6 +47,7 @@ public class ExportController {
       MeterReadingRepository meterReadingRepository,
       RoomApplianceRepository roomApplianceRepository,
       RepairOrderRepository repairOrderRepository,
+      ComplaintSuggestionRepository complaintSuggestionRepository,
       BuildingRepository buildingRepository,
       OperationLogService operationLogService) {
     this.tenantRepository = tenantRepository;
@@ -55,6 +57,7 @@ public class ExportController {
     this.meterReadingRepository = meterReadingRepository;
     this.roomApplianceRepository = roomApplianceRepository;
     this.repairOrderRepository = repairOrderRepository;
+    this.complaintSuggestionRepository = complaintSuggestionRepository;
     this.buildingRepository = buildingRepository;
     this.operationLogService = operationLogService;
   }
@@ -105,6 +108,7 @@ public class ExportController {
         case "contracts" -> writeContracts(wb, selectedIds);
         case "bills" -> writeBills(wb, selectedIds);
         case "rooms" -> writeRooms(wb, selectedIds);
+        case "complaints" -> writeComplaints(wb, selectedIds);
         case "meter-readings" -> writeMeterReadings(wb, body);
         default -> throw new IllegalArgumentException("不支持的导出模块: " + module);
       }
@@ -236,6 +240,41 @@ public class ExportController {
       r.createCell(2).setCellValue(m.getRecordDate() == null ? "" : m.getRecordDate().toString());
       r.createCell(3).setCellValue(m.getWaterReading() == null ? 0 : m.getWaterReading());
       r.createCell(4).setCellValue(m.getElectricReading() == null ? 0 : m.getElectricReading());
+    }
+  }
+
+  private void writeComplaints(Workbook wb, List<Long> ids) {
+    Sheet sheet = wb.createSheet("投诉建议");
+    Row h = sheet.createRow(0);
+    h.createCell(0).setCellValue("ID");
+    h.createCell(1).setCellValue("投诉编号");
+    h.createCell(2).setCellValue("提交时间");
+    h.createCell(3).setCellValue("租户");
+    h.createCell(4).setCellValue("房间号");
+    h.createCell(5).setCellValue("投诉类型");
+    h.createCell(6).setCellValue("标题");
+    h.createCell(7).setCellValue("紧急程度");
+    h.createCell(8).setCellValue("状态");
+    h.createCell(9).setCellValue("是否匿名");
+    List<ComplaintSuggestion> data = (ids == null || ids.isEmpty())
+        ? complaintSuggestionRepository.findAll()
+        : complaintSuggestionRepository.findAllById(ids);
+    for (int i = 0; i < data.size(); i++) {
+      ComplaintSuggestion c = data.get(i);
+      Room room = c.getRoomId() == null ? null : roomRepository.findById(c.getRoomId()).orElse(null);
+      Tenant tenant = c.getTenantId() == null ? null : tenantRepository.findById(c.getTenantId()).orElse(null);
+      boolean anonymous = c.getIsAnonymous() != null && c.getIsAnonymous() == 1;
+      Row r = sheet.createRow(i + 1);
+      r.createCell(0).setCellValue(c.getId() == null ? 0 : c.getId());
+      r.createCell(1).setCellValue(c.getComplaintNo() == null ? "" : c.getComplaintNo());
+      r.createCell(2).setCellValue(c.getCreatedAt() == null ? "" : c.getCreatedAt().toString());
+      r.createCell(3).setCellValue(anonymous ? "匿名" : (tenant == null ? "" : tenant.getName()));
+      r.createCell(4).setCellValue(room == null ? "" : room.getRoomNumber());
+      r.createCell(5).setCellValue(c.getType() == null ? "" : c.getType());
+      r.createCell(6).setCellValue(c.getTitle() == null ? "" : c.getTitle());
+      r.createCell(7).setCellValue(c.getPriority() == null ? "" : c.getPriority());
+      r.createCell(8).setCellValue(c.getStatus() == null ? "" : c.getStatus());
+      r.createCell(9).setCellValue(anonymous ? "是" : "否");
     }
   }
 

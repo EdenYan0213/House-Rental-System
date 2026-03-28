@@ -3,6 +3,7 @@ package com.house.controller;
 import com.house.model.Building;
 import com.house.model.OperationSnapshot;
 import com.house.repo.BuildingRepository;
+import com.house.repo.RoomRepository;
 import com.house.service.OperationSnapshotService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -14,10 +15,14 @@ import java.util.List;
 public class BuildingController {
 
   private final BuildingRepository buildingRepository;
+  private final RoomRepository roomRepository;
   private final OperationSnapshotService operationSnapshotService;
 
-  public BuildingController(BuildingRepository buildingRepository, OperationSnapshotService operationSnapshotService) {
+  public BuildingController(BuildingRepository buildingRepository,
+      RoomRepository roomRepository,
+      OperationSnapshotService operationSnapshotService) {
     this.buildingRepository = buildingRepository;
+    this.roomRepository = roomRepository;
     this.operationSnapshotService = operationSnapshotService;
   }
 
@@ -58,6 +63,9 @@ public class BuildingController {
     Building before = buildingRepository.findById(id).orElse(null);
     if (before == null)
       return ResponseEntity.notFound().build();
+    if (!roomRepository.findByBuildingId(id).isEmpty()) {
+      return ResponseEntity.badRequest().body("该楼栋下仍有房间，无法删除。请先删除或迁移房间。");
+    }
     OperationSnapshot snapshot = operationSnapshotService.capture(
         "房屋管理", "delete", "building", id, before.getName(), before);
     buildingRepository.deleteById(id);
