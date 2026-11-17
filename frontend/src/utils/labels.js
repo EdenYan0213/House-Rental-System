@@ -93,6 +93,23 @@ export const APPLIANCE_STATUS = {
   丢失: '丢失'
 }
 
+// ---------------- 投诉状态 ----------------
+export const COMPLAINT_STATUS = {
+  pending: '待受理',
+  processing: '处理中',
+  pending_confirm: '待确认',
+  completed: '已完成',
+  closed: '已关闭'
+}
+
+export const COMPLAINT_STATUS_TAG = {
+  pending: 'info',
+  processing: 'warning',
+  pending_confirm: 'primary',
+  completed: 'success',
+  closed: 'danger'
+}
+
 // ---------------- 用户角色 ----------------
 export const USER_ROLE = {
   SUPER_ADMIN: '超级管理员',
@@ -135,3 +152,5 @@ export const paymentCycleText = (v) => label(PAYMENT_CYCLE, v)
 export const paymentMethodText = (v) => label(PAYMENT_METHOD, v)
 export const applianceStatusText = (v) => label(APPLIANCE_STATUS, v)
 export const userRoleText = (v) => label(USER_ROLE, v)
+export const complaintStatusText = (v) => label(COMPLAINT_STATUS, v)
+export const complaintStatusTag = (v) => label(COMPLAINT_STATUS_TAG, v, 'info')

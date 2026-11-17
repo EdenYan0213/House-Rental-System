@@ -1,5 +1,6 @@
 package com.house.controller;
 
+import com.house.dto.BillGenerationResult;
 import com.house.dto.PaymentRequest;
 import com.house.model.Bill;
 import com.house.model.BillDetail;
@@ -45,6 +46,8 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/bills")
 public class BillController {
 
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(BillController.class);
+
   private final BillService billService;
   private final PaymentService paymentService;
   private final BillRepository billRepository;
@@ -87,18 +90,19 @@ public class BillController {
   // 手动生成账单，参数 month 可选，格式 yyyy-MM；若不传，生成上月账单
   @PostMapping("/generate")
   public ResponseEntity<?> generate(@RequestParam(required = false) String month) {
+    String targetMonth = month;
     try {
-      String targetMonth = month;
       if (targetMonth == null || targetMonth.isBlank()) {
         // 上月
         java.time.YearMonth ym = java.time.YearMonth.now().minusMonths(1);
         targetMonth = ym.toString();
       }
-      int created = billService.generateBillsForMonth(targetMonth);
-      return ResponseEntity.ok(Collections.singletonMap("created", created));
+      // 返回结构化结果：成功数 + 失败明细，前端可展示失败清单并支持单条重试
+      BillGenerationResult result = billService.generateBillsForMonthDetailed(targetMonth);
+      return ResponseEntity.ok(result);
     } catch (Exception e) {
-      e.printStackTrace();
-      return ResponseEntity.badRequest().body(e.getMessage());
+      log.error("批量生成账单失败 month={}", targetMonth, e);
+      return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
     }
   }
 

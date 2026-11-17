@@ -221,6 +221,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { complaintStatusText, complaintStatusTag } from '../utils/labels'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   acceptComplaint,
@@ -288,24 +289,11 @@ const showReassignDialog = ref(false)
 const reassignForm = ref({ assignedTo: null, note: '' })
 
 function statusText(status) {
-  const map = {
-    pending: '待受理',
-    processing: '处理中',
-    pending_confirm: '待确认',
-    completed: '已完成',
-    closed: '已关闭'
-  }
-  return map[status] || status
+  return complaintStatusText(status)
 }
 
 function statusTagType(status) {
-  return {
-    pending: 'info',
-    processing: 'warning',
-    pending_confirm: 'primary',
-    completed: 'success',
-    closed: 'danger'
-  }[status] || 'info'
+  return complaintStatusTag(status)
 }
 
 function actionText(action) {

@@ -138,17 +138,51 @@ body,
   border: 1px solid var(--border-color);
 }
 
-.el-alert--info.is-light {
+/* 所有语义色的浅色变体在深色主题下都要显式给背景与文字色，
+ * 否则 Element Plus 默认的白底 + 浅色文字会变成不可读。 */
+.el-alert.is-light {
   background: var(--el-fill-color-light);
   color: var(--text-main);
 }
 
-.el-alert--info.is-light .el-alert__title {
+.el-alert.is-light .el-alert__title,
+.el-alert.is-light .el-alert__description {
   color: var(--text-main);
 }
 
-.el-alert--info.is-light .el-alert__description {
-  color: var(--text-muted);
+.el-alert--info.is-light {
+  background: var(--el-fill-color-light);
+  border-color: var(--border-color);
+}
+
+.el-alert--warning.is-light {
+  background: rgba(217, 119, 6, 0.12);
+  border-color: rgba(217, 119, 6, 0.35);
+}
+
+.el-alert--warning.is-light .el-alert__title,
+.el-alert--warning.is-light .el-alert__description {
+  color: #f0b429;
+}
+
+.el-alert--success.is-light {
+  background: rgba(104, 211, 145, 0.12);
+  border-color: rgba(104, 211, 145, 0.3);
+}
+
+.el-alert--success.is-light .el-alert__title,
+.el-alert--success.is-light .el-alert__description {
+  color: var(--success-color);
+}
+
+.el-alert--error.is-light {
+  background: rgba(252, 129, 129, 0.12);
+  border-color: rgba(252, 129, 129, 0.35);
+}
+
+.el-alert--error.is-light .el-alert__title,
+.el-alert--error.is-light .el-alert__description {
+  color: var(--danger-color);
 }
 
 .el-alert__title {

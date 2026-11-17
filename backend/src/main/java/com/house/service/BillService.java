@@ -1,8 +1,11 @@
 package com.house.service;
 
+import com.house.dto.BillGenerationResult;
 import com.house.model.*;
 import com.house.repo.*;
 import com.house.model.Tenant;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -12,11 +15,14 @@ import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.Optional;
 
 @Service
 public class BillService {
+
+  private static final Logger log = LoggerFactory.getLogger(BillService.class);
 
   private final ContractRepository contractRepository;
   private final MeterReadingRepository meterReadingRepository;
@@ -26,10 +32,12 @@ public class BillService {
   private final RoomService roomService;
   private final TenantService tenantService;
   private final BuildingRepository buildingRepository;
+  private final RoomRepository roomRepository;
 
   public BillService(ContractRepository contractRepository, MeterReadingRepository meterReadingRepository,
       FeeItemRepository feeItemRepository, BillRepository billRepository, BillDetailRepository billDetailRepository,
-      RoomService roomService, TenantService tenantService, BuildingRepository buildingRepository) {
+      RoomService roomService, TenantService tenantService, BuildingRepository buildingRepository,
+      RoomRepository roomRepository) {
     this.contractRepository = contractRepository;
     this.meterReadingRepository = meterReadingRepository;
     this.feeItemRepository = feeItemRepository;
@@ -38,6 +46,7 @@ public class BillService {
     this.roomService = roomService;
     this.tenantService = tenantService;
     this.buildingRepository = buildingRepository;
+    this.roomRepository = roomRepository;
   }
 
   // 每月1号凌晨1点执行（示例）
@@ -72,22 +81,54 @@ public class BillService {
     LocalDate end = ym.atEndOfMonth();
     String billMonth = ym.toString();
 
+    return generateBillsForMonthDetailed(month).successCount();
+  }
+
+  /**
+   * 批量生成账单，返回结构化的成功/失败明细。
+   *
+   * <p>此前失败会整体抛异常，前端只能拿到一句拼接文本，无法定位是哪几个房间、
+   * 也无法只重试失败项。现在逐个合同收集结果，交给前端展示失败清单并支持重试。
+   */
+  @Transactional
+  public BillGenerationResult generateBillsForMonthDetailed(String month) {
+    String targetMonth = month;
+    if (targetMonth == null || targetMonth.isBlank()) {
+      targetMonth = YearMonth.now().minusMonths(1).toString();
+    }
+    YearMonth ym = YearMonth.parse(targetMonth);
+    LocalDate start = ym.atDay(1);
+    LocalDate end = ym.atEndOfMonth();
+    String billMonth = ym.toString();
+
     List<Contract> active = contractRepository.findByStatus("ACTIVE");
-    int count = 0;
-    StringBuilder errors = new StringBuilder();
+    int successCount = 0;
+    List<Map<String, Object>> failures = new ArrayList<>();
+
     for (Contract c : active) {
       try {
         createBillForContract(c, start, end, billMonth);
-        count++;
+        successCount++;
       } catch (Exception e) {
-        errors.append("合同 ").append(c.getContractNo()).append(": ").append(e.getMessage()).append("; ");
-        e.printStackTrace();
+        Map<String, Object> failure = new LinkedHashMap<>();
+        failure.put("contractId", c.getId());
+        failure.put("contractNo", c.getContractNo());
+        failure.put("roomId", c.getRoomId());
+        failure.put("roomNumber", resolveRoomNumber(c.getRoomId()));
+        failure.put("reason", e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+        failures.add(failure);
+        log.warn("账单生成失败 contractNo={} reason={}", c.getContractNo(), e.getMessage());
       }
     }
-    if (errors.length() > 0) {
-      throw new RuntimeException("部分账单生成失败: " + errors.toString());
+
+    return new BillGenerationResult(billMonth, successCount, active.size(), failures);
+  }
+
+  private String resolveRoomNumber(Long roomId) {
+    if (roomId == null) {
+      return null;
     }
-    return count;
+    return roomRepository.findById(roomId).map(Room::getRoomNumber).orElse(null);
   }
 
   // 按合同ID生成账单

@@ -23,7 +23,9 @@
             <el-descriptions-item label="楼层">{{ room?.floor ?? '-' }}</el-descriptions-item>
             <el-descriptions-item label="户型">{{ room?.layout || '-' }}</el-descriptions-item>
             <el-descriptions-item label="面积">{{ room?.area != null ? `${room.area} m²` : '-' }}</el-descriptions-item>
-            <el-descriptions-item label="状态">{{ room?.status || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="状态">
+              <el-tag :type="roomStatusTag(room?.status)" size="small">{{ roomStatusText(room?.status) }}</el-tag>
+            </el-descriptions-item>
           </el-descriptions>
         </el-card>
       </el-col>
@@ -38,7 +40,11 @@
               </el-button>
               <span v-else>-</span>
             </el-descriptions-item>
-            <el-descriptions-item label="租约状态">{{ activeContract?.status || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="租约状态">
+              <el-tag :type="contractStatusTag(activeContract?.status)" size="small">
+                {{ contractStatusText(activeContract?.status) }}
+              </el-tag>
+            </el-descriptions-item>
             <el-descriptions-item label="租户姓名">
               <el-button v-if="tenant?.id" type="primary" link @click="goTenantDetail">
                 {{ tenant?.name || `租户#${tenant?.id}` }}
@@ -54,17 +60,35 @@
     <el-row :gutter="16" style="margin-top: 16px">
       <el-col :span="12">
         <el-card>
-          <template #header>费用配置</template>
-          <el-form label-width="120px">
-            <el-form-item label="水费单价">
-              <el-input :model-value="waterUnitPriceText" disabled />
-            </el-form-item>
-            <el-form-item label="电费单价">
-              <el-input :model-value="electricUnitPriceText" disabled />
-            </el-form-item>
-          </el-form>
+          <template #header>
+            <div class="fee-header">
+              <span>费用配置</span>
+              <el-button link type="primary" size="small" @click="goFeeItems">管理全部费用项</el-button>
+            </div>
+          </template>
 
-          <div style="font-weight: 600; margin: 8px 0">其他费用（可自行设置）</div>
+          <!-- 说明水/电单价的实际来源，避免管理员误以为在改本房间专属价格 -->
+          <el-alert type="info" :closable="false" show-icon class="fee-alert">
+            <template #title>
+              水/电单价优先取<b>所在楼栋</b>的配置；楼栋未配置时才用<b>全局费用项</b>兜底。
+              下方「其他费用」是全局配置，对所有房间生效。
+            </template>
+          </el-alert>
+
+          <el-descriptions :column="2" border size="small" style="margin-bottom: 14px">
+            <el-descriptions-item label="水费单价">{{ waterUnitPriceText }}</el-descriptions-item>
+            <el-descriptions-item label="电费单价">{{ electricUnitPriceText }}</el-descriptions-item>
+            <el-descriptions-item label="取值来源" :span="2">
+              <el-tag :type="priceSourceFromBuilding ? 'success' : 'warning'" size="small">
+                {{ priceSourceFromBuilding ? '楼栋配置' : '全局费用项兜底' }}
+              </el-tag>
+            </el-descriptions-item>
+          </el-descriptions>
+
+          <div class="fee-subtitle">
+            <span>其他费用</span>
+            <el-tag size="small" type="info" effect="plain">全局生效</el-tag>
+          </div>
           <el-table :data="otherFees" border size="small" max-height="300">
             <el-table-column prop="name" label="名称" min-width="120" />
             <el-table-column prop="unitPrice" label="单价" width="120">
@@ -95,7 +119,9 @@
             <el-table-column prop="applianceName" label="器具" min-width="140" />
             <el-table-column prop="brand" label="品牌" min-width="120" />
             <el-table-column prop="quantity" label="数量" width="80" />
-            <el-table-column prop="status" label="状态" width="110" />
+            <el-table-column label="状态" width="110">
+              <template #default="{ row }">{{ applianceStatusText(row.status) }}</template>
+            </el-table-column>
           </el-table>
         </el-card>
       </el-col>
@@ -127,6 +153,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { roomStatusText, roomStatusTag, contractStatusText, contractStatusTag, applianceStatusText } from '../utils/labels'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getRoomDetail,
@@ -161,6 +188,17 @@ const waterUnitPriceText = computed(() => {
   if (waterUnitPrice.value == null) return '-'
   return `¥${Number(waterUnitPrice.value).toFixed(2)}`
 })
+
+// 单价是否来自楼栋配置（否则是全局费用项兜底），用于给管理员明确提示
+const priceSourceFromBuilding = computed(() => {
+  const b = building.value
+  if (!b) return false
+  return b.waterUnitPrice != null || b.electricUnitPrice != null
+})
+
+function goFeeItems() {
+  router.push('/fee-items')
+}
 
 const electricUnitPriceText = computed(() => {
   if (electricUnitPrice.value == null) return '-'
@@ -305,3 +343,25 @@ function goBack() {
 
 onMounted(loadDetail)
 </script>
+
+<style scoped>
+.fee-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.fee-alert {
+  margin-bottom: 14px;
+  line-height: 1.6;
+}
+
+.fee-subtitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  margin: 4px 0 8px 0;
+  color: var(--text-main);
+}
+</style>

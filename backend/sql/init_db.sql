@@ -108,7 +108,7 @@ CREATE TABLE IF NOT EXISTS `fee_item` (
   `name` varchar(100) NOT NULL COMMENT '费用名称',
   `unit_price` decimal(10,2) NOT NULL COMMENT '单价',
   `unit` varchar(20) DEFAULT '元/月' COMMENT '单位',
-  `category` varchar(20) DEFAULT 'BASE' COMMENT '类别',
+  `category` varchar(20) DEFAULT 'OTHER' COMMENT '类别',
   `enabled` tinyint(1) DEFAULT 1 COMMENT '是否启用',
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   PRIMARY KEY (`id`)

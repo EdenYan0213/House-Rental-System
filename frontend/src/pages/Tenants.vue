@@ -201,9 +201,11 @@
           <el-table-column prop="complaintNo" label="编号" width="170" />
           <el-table-column prop="createdAt" label="时间" width="170" />
           <el-table-column prop="type" label="类型" width="120" />
-          <el-table-column prop="status" label="状态" width="110">
+          <el-table-column label="状态" width="110">
             <template #default="{ row }">
-              <el-tag size="small">{{ row.status }}</el-tag>
+              <el-tag size="small" :type="complaintStatusTag(row.status)">
+                {{ complaintStatusText(row.status) }}
+              </el-tag>
             </template>
           </el-table-column>
           <el-table-column prop="title" label="标题" min-width="180" />

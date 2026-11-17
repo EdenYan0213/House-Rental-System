@@ -1,11 +1,11 @@
 <template>
   <div class="dashboard">
-    <el-row :gutter="20">
+    <el-row :gutter="20" class="stat-row">
       <el-col v-for="card in statCards" :key="card.label" :xs="12" :sm="12" :md="6">
         <el-card shadow="hover" class="stat-card" v-loading="loading">
           <div class="stat-label">{{ card.label }}</div>
           <div class="stat-value" :class="card.tone">{{ card.value }}</div>
-          <div class="stat-hint" v-if="card.hint">{{ card.hint }}</div>
+          <div class="stat-hint">{{ card.hint || '\u00a0' }}</div>
         </el-card>
       </el-col>
     </el-row>
@@ -364,6 +364,19 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.stat-row {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.stat-row > .el-col {
+  display: flex;
+}
+
+.stat-row > .el-col > .stat-card {
+  width: 100%;
+}
+
 .dashboard {
   padding: 20px;
 }
@@ -373,9 +386,17 @@ onBeforeUnmount(() => {
 .stat-card {
   text-align: center;
   margin-bottom: 16px;
+  /* 让同一行的卡片等高，不随提示文案有无而变化 */
+  height: 100%;
 }
+
 .stat-card :deep(.el-card__body) {
   padding: 18px 12px;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 .stat-label {
   color: var(--text-muted);
@@ -403,6 +424,9 @@ onBeforeUnmount(() => {
 .stat-hint {
   margin-top: 6px;
   font-size: 12px;
+  line-height: 18px;
+  /* 固定高度占位，有无提示都保持一致 */
+  min-height: 18px;
   color: var(--text-muted);
 }
 .chart {
