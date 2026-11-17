@@ -659,8 +659,17 @@ function handleUploadError(error) {
 async function customUpload(options) {
   try {
     const res = await uploadFile(options.file)
+    // 直接把返回的 URL 加入图片列表，不依赖 el-upload 的 on-success 回调
+    const url = res.data?.url || res.data?.data?.url
+    if (url) {
+      addImage(url)
+      ElMessage.success('图片上传成功')
+    } else {
+      ElMessage.error(res.data?.message || '图片上传失败')
+    }
     options.onSuccess(res.data)
   } catch (error) {
+    ElMessage.error(error?.response?.data?.message || error?.message || '图片上传失败')
     options.onError(error)
   }
 }
