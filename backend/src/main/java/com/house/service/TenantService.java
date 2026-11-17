@@ -1,5 +1,6 @@
 package com.house.service;
 
+import com.house.model.Contract;
 import com.house.model.Tenant;
 import com.house.repo.TenantRepository;
 import com.house.repo.ContractRepository;
@@ -9,6 +10,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class TenantService {
@@ -37,11 +40,16 @@ public class TenantService {
     List<Tenant> tenants = tenantRepository.findByNameContainingOrPhoneContaining(q, q).stream()
         .filter(t -> t.getDeleted() == null || t.getDeleted() == 0)
         .toList();
+    if (tenants.isEmpty()) {
+      return tenants;
+    }
+    // 一次性取出在租合同的租户ID，避免每个租户都全表扫描一次
+    Set<Long> tenantIdsWithActiveContract = contractRepository.findAll().stream()
+        .filter(c -> c.getTenantId() != null && "ACTIVE".equals(c.getStatus()))
+        .map(Contract::getTenantId)
+        .collect(Collectors.toSet());
     for (Tenant tenant : tenants) {
-      boolean hasActiveContract = contractRepository.findAll().stream()
-          .anyMatch(c -> c.getTenantId() != null && c.getTenantId().equals(tenant.getId())
-              && "ACTIVE".equals(c.getStatus()));
-      tenant.setActiveContract(hasActiveContract);
+      tenant.setActiveContract(tenantIdsWithActiveContract.contains(tenant.getId()));
     }
     return tenants;
   }

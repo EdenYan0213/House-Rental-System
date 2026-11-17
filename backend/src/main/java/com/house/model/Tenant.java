@@ -225,4 +225,14 @@ public class Tenant {
   public void setActiveContract(Boolean activeContract) {
     this.activeContract = activeContract;
   }
+
+  @PrePersist
+  void prePersist() {
+    if (deleted == null) {
+      deleted = 0;
+    }
+    if (isBlacklisted == null) {
+      isBlacklisted = Boolean.FALSE;
+    }
+  }
 }

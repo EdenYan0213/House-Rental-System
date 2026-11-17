@@ -1,0 +1,6 @@
+{
+  "appId": "com.house.staff",
+  "appName": "房屋租赁工作台",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}

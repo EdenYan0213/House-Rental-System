@@ -1,8 +1,10 @@
 import axios from 'axios'
+import { ElMessage } from 'element-plus'
 
 const api = axios.create({
   baseURL: '/api',
-  timeout: 5000,
+  // 导入/导出接口耗时较长，默认 5s 不够用；单次请求可通过 config.timeout 覆盖
+  timeout: 15000,
 })
 
 const TOKEN_KEY = 'token'
@@ -58,13 +60,42 @@ api.interceptors.request.use(config => {
   return config
 })
 
+/**
+ * 后端错误响应结构不统一：可能是裸字符串、{message} 或 {error}，
+ * 这里统一抽取成一句可读文案，避免各页面自行拼装。
+ */
+export function getErrorMessage(error, fallback = '操作失败') {
+  if (!error) return fallback
+  if (error.code === 'ECONNABORTED') return '请求超时，请稍后重试'
+  if (!error.response) return '网络异常，请检查网络连接'
+
+  const { data, status } = error.response
+  if (typeof data === 'string' && data.trim()) return data
+  if (data && typeof data === 'object') {
+    if (data.message) return data.message
+    if (data.error) return data.error
+  }
+  if (status === 403) return '无权限执行该操作，请联系管理员'
+  if (status === 404) return '请求的资源不存在'
+  if (status >= 500) return '服务端异常，请稍后重试'
+  return error.message || fallback
+}
+
 api.interceptors.response.use(
   response => response,
   error => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status
+    if (status === 401) {
       localStorage.removeItem(TOKEN_KEY)
       localStorage.removeItem(USER_KEY)
-      window.location.href = '/login'
+      // 移动端（Capacitor）下仍用前端路由跳转，保留 redirect 便于登录后回跳
+      const redirect = encodeURIComponent(window.location.pathname + window.location.search)
+      window.location.href = `/login?redirect=${redirect}`
+    } else if (status === 403) {
+      // 403 不跳转，只提示原因，避免用户被莫名踢出当前页面
+      ElMessage.warning(getErrorMessage(error, '无权限执行该操作'))
+    } else if (status === 413) {
+      ElMessage.warning('文件过大，请压缩后重新上传')
     }
     return Promise.reject(error)
   }
@@ -91,6 +122,9 @@ export const batchDeleteRooms = (roomIds) => api.post('/rooms/batch-delete', { r
 export const createRoomsBatch = (data) => api.post('/rooms/batch', data)
 export const createRoomsBatchOverride = (data) => api.post('/rooms/batch/override', data)
 export const batchAdjustRoomRent = (data) => api.post('/rooms/batch-adjust-rent', data)
+export const getRoomQrLink = (roomId) => api.get(`/qr/rooms/${roomId}/link`)
+export const getRoomQrPng = (roomId, params) => api.get(`/qr/rooms/${roomId}/png`, { params, responseType: 'blob', timeout: 60000 })
+export const exportRoomQrsPdf = (data) => api.post('/qr/rooms/batch-pdf', data, { responseType: 'blob', timeout: 60000 })
 
 export const getApplianceTemplates = () => api.get('/appliance-templates')
 export const createApplianceTemplate = (data) => api.post('/appliance-templates', data)
@@ -191,15 +225,45 @@ export const getMeterReadings = (params) => api.get('/meter-readings', { params 
 export const exportMeterReadingsCsv = (params) => api.get('/meter-readings/export-csv', { params, responseType: 'blob' })
 export const saveMeterReadings = (data) => api.post('/meter-readings', data)
 export const deleteMeterReading = (id) => api.delete(`/meter-readings/${id}`)
-export const downloadMeterReadingImportTemplate = () => api.get('/meter-readings/import-template', { responseType: 'blob' })
+export const downloadMeterReadingImportTemplate = () => api.get('/meter-readings/import-template', { responseType: 'blob', timeout: 60000 })
 export const parseMeterReadingImportFile = (file) => {
   const formData = new FormData()
   formData.append('file', file)
   return api.post('/meter-readings/import/parse', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 60000
   })
 }
-export const confirmMeterReadingImport = (records) => api.post('/meter-readings/import/confirm', { records })
+export const confirmMeterReadingImport = (records) =>
+  api.post('/meter-readings/import/confirm', { records }, { timeout: 60000 })
+
+// ---------- 账单与收款 ----------
+export const getBills = (params) => api.get('/bills', { params })
+export const exportBillsCsv = (params) => api.get('/bills/export-csv', { params, responseType: 'blob', timeout: 60000 })
+export const getBill = (id) => api.get(`/bills/${id}`)
+export const generateBill = (month) => {
+  if (month) {
+    return api.post(`/bills/generate?month=${month}`, null, { timeout: 60000 })
+  }
+  return api.post('/bills/generate', null, { timeout: 60000 })
+}
+export const generateBillForRoom = (roomId, month) => {
+  if (month) {
+    return api.post(`/bills/generate/room/${roomId}?month=${month}`, null, { timeout: 60000 })
+  }
+  return api.post(`/bills/generate/room/${roomId}`, null, { timeout: 60000 })
+}
+export const regenerateBill = (id) => api.post(`/bills/regenerate/${id}`, null, { timeout: 60000 })
+export const regenerateBillByContract = (contractId) => api.post(`/bills/regenerate/contract/${contractId}`, null, { timeout: 60000 })
+export const voidBill = (id) => api.put(`/bills/${id}/void`)
+export const sendBillSms = (id) => api.post(`/bills/${id}/send-sms`)
+export const recordPayment = (id, data) => api.post(`/bills/${id}/payments`, data)
+
+export const exportModuleData = (module, data) =>
+  api.post(`/export/${module}`, data || {}, { responseType: 'blob', timeout: 60000 })
+
+export const exportRoomApplianceChecklistPdf = (roomId, type) =>
+  api.get('/export/room-appliance-checklist-pdf', { params: { roomId, type }, responseType: 'blob', timeout: 60000 })
 
 export const getDeposits = (params) => api.get('/deposits', { params })
 export const createDeposit = (data) => api.post('/deposits', data)
@@ -234,47 +298,24 @@ export const handleAlertRecord = (id) => api.put(`/alerts/records/${id}/handle`)
 export const getOperationSnapshots = (params) => api.get('/operation-snapshots', { params })
 export const getOperationSnapshotDetail = (id) => api.get(`/operation-snapshots/${id}`)
 export const recoverOperationSnapshot = (id) => api.post(`/operation-snapshots/${id}/recover`)
+
+// ---------- 数据备份与恢复 ----------
 export const getBackupRecords = (params) => api.get('/backup/records', { params })
-export const createManualBackup = () => api.post('/backup/manual')
+export const createManualBackup = () => api.post('/backup/manual', null, { timeout: 300000 })
 export const deleteBackup = (id) => api.delete(`/backup/records/${id}`)
-export const downloadBackup = (id) => api.get(`/backup/download/${id}`, { responseType: 'blob' })
-export const restoreBackup = (id) => api.post(`/backup/restore/${id}`)
+export const downloadBackup = (id) => api.get(`/backup/download/${id}`, { responseType: 'blob', timeout: 300000 })
+export const restoreBackup = (id) => api.post(`/backup/restore/${id}`, null, { timeout: 300000 })
 export const uploadAndRestoreBackup = (file) => {
   const formData = new FormData()
   formData.append('file', file)
   return api.post('/backup/upload-and-restore', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data'
-    }
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 300000
   })
 }
 export const getBackupConfig = () => api.get('/backup/config')
 export const updateBackupConfig = (data) => api.put('/backup/config', data)
-export const exportModuleData = (module, data) => api.post(`/export/${module}`, data || {}, { responseType: 'blob' })
-export const exportRoomApplianceChecklistPdf = (roomId, type) =>
-  api.get('/export/room-appliance-checklist-pdf', { params: { roomId, type }, responseType: 'blob' })
-
-export const getBills = (params) => api.get('/bills', { params })
-export const exportBillsCsv = (params) => api.get('/bills/export-csv', { params, responseType: 'blob' })
-export const getBill = (id) => api.get(`/bills/${id}`)
-export const generateBill = (month) => {
-  if (month) {
-    return api.post(`/bills/generate?month=${month}`)
-  }
-  return api.post('/bills/generate')
-}
-export const generateBillForRoom = (roomId, month) => {
-  if (month) {
-    return api.post(`/bills/generate/room/${roomId}?month=${month}`)
-  }
-  return api.post(`/bills/generate/room/${roomId}`)
-}
-export const regenerateBill = (id) => api.post(`/bills/regenerate/${id}`)
-export const regenerateBillByContract = (contractId) => api.post(`/bills/regenerate/contract/${contractId}`)
-export const voidBill = (id) => api.put(`/bills/${id}/void`)
-export const sendBillSms = (id) => api.post(`/bills/${id}/send-sms`)
-export const recordPayment = (id, data) => api.post(`/bills/${id}/payments`, data)
-
+// ---------- 认证态与本地存储 ----------
 export const getToken = () => localStorage.getItem(TOKEN_KEY)
 export const setToken = (token) => localStorage.setItem(TOKEN_KEY, token)
 export const removeToken = () => {
@@ -283,10 +324,16 @@ export const removeToken = () => {
 }
 export const getUser = () => {
   const userStr = localStorage.getItem(USER_KEY)
-  return userStr ? JSON.parse(userStr) : null
+  if (!userStr) return null
+  try {
+    return JSON.parse(userStr)
+  } catch {
+    return null
+  }
 }
 export const setUser = (user) => localStorage.setItem(USER_KEY, JSON.stringify(user))
 
+// ---------- 用户管理 ----------
 export const getUsers = (params) => api.get('/users', { params })
 export const getAllUsers = () => api.get('/users/all')
 export const getUserById = (id) => api.get(`/users/${id}`)
@@ -297,10 +344,13 @@ export const enableUser = (id) => api.put(`/users/${id}/enable`)
 export const disableUser = (id) => api.put(`/users/${id}/disable`)
 export const resetUserPassword = (id, newPassword) => api.put(`/users/${id}/reset-password`, { newPassword })
 export const updateProfile = (data) => api.put('/users/profile', data)
+
+// ---------- 新手引导 ----------
 export const dismissGuide = (key) => api.post('/guide/dismiss', { key })
 export const resetGuide = () => api.post('/guide/reset')
 export const getGuideTaskProgress = () => api.get('/guide/task-progress')
 
+// ---------- 角色与按钮级权限 ----------
 export const hasRole = (role) => {
   const user = getUser()
   if (!user) return false
@@ -329,7 +379,6 @@ export const canTerminateContract = () => hasRole('ADMIN') || hasRole('SUPER_ADM
 export const canUploadContract = () => hasRole('ADMIN') || hasRole('SUPER_ADMIN')
 
 export const canManageFeeItems = () => hasRole('ADMIN') || hasRole('SUPER_ADMIN')
-
 export const canInputMeterReadings = () => hasRole('ADMIN') || hasRole('SUPER_ADMIN')
 
 export const canGenerateBill = () => hasRole('ADMIN') || hasRole('SUPER_ADMIN')
@@ -338,7 +387,6 @@ export const canVoidBill = () => hasRole('ADMIN') || hasRole('SUPER_ADMIN')
 export const canExportBill = () => hasRole('ADMIN') || hasRole('SUPER_ADMIN')
 
 export const canRefundDeposit = () => hasRole('ADMIN') || hasRole('SUPER_ADMIN')
-
 export const canManageUsers = () => hasRole('SUPER_ADMIN')
 
 export default api

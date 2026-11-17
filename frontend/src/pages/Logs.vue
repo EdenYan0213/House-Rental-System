@@ -141,7 +141,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { exportLogs, getLogFilters, getOperationLogs } from '../api'
+import { exportLogs, getLogFilters, getOperationLogs, getErrorMessage } from '../api'
 
 const logs = ref([])
 const loading = ref(false)
@@ -198,7 +198,7 @@ async function loadLogs() {
     logs.value = res.data.content || []
     total.value = res.data.totalElements || 0
   } catch (e) {
-    ElMessage.error('加载日志失败')
+    ElMessage.error(getErrorMessage(e, '加载日志失败'))
   } finally {
     loading.value = false
   }

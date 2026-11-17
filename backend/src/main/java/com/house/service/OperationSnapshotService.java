@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.house.model.Bill;
+import com.house.model.BillStatus;
 import com.house.model.Contract;
 import com.house.model.Building;
 import com.house.model.MeterReading;
@@ -229,9 +230,8 @@ public class OperationSnapshotService {
       if (current == null) {
         throw new IllegalStateException("目标数据不存在，无法恢复");
       }
-      String currentStatus = current.getStatus() == null ? "" : current.getStatus().toUpperCase();
-      boolean inVoidState = "VOID".equals(currentStatus) || "OBSOLETE".equals(currentStatus)
-          || "作废".equals(current.getStatus());
+      String currentStatus = current.getStatus();
+      boolean inVoidState = BillStatus.isVoid(currentStatus);
       if (!inVoidState) {
         throw new IllegalStateException("账单状态已变化，无法恢复");
       }

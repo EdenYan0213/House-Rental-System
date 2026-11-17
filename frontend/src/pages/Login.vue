@@ -33,14 +33,14 @@
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Capacitor } from '@capacitor/core'
 import {
   login,
   setToken,
   setUser,
   setThemePreference,
   getApiBaseUrl,
-  setApiBaseUrl
+  setApiBaseUrl,
+  getErrorMessage
 } from '@/api'
 import { applyThemePreference } from '@/utils/theme'
 
@@ -77,7 +77,7 @@ async function handleLogin() {
       try {
         res = await doLoginRequest()
       } catch (err) {
-        const isNative = Capacitor.isNativePlatform()
+        const isNative = window.navigator.userAgent.includes('house-staff')
         const isNetworkError = !err.response
         const base = getApiBaseUrl()
 
@@ -111,7 +111,7 @@ async function handleLogin() {
         applyThemePreference(res.data.themePreference || 'system')
         ElMessage.success('登录成功')
 
-        const isNative = Capacitor.isNativePlatform()
+        const isNative = window.navigator.userAgent.includes('house-staff')
         if (isNative) {
           // Native app should always enter mobile pages after login.
           router.push('/mobile/home')
@@ -131,7 +131,9 @@ async function handleLogin() {
         }
       }
     } catch (err) {
-      ElMessage.error(err.response?.data?.message || err.message || `登录失败（当前后端：${getApiBaseUrl()}）`)
+      // 移动端保留当前后端地址提示，便于排查连不上服务的问题
+      const hint = window.navigator.userAgent.includes('house-staff') ? `（当前后端：${getApiBaseUrl()}）` : ''
+      ElMessage.error(getErrorMessage(err, '登录失败') + hint)
     } finally {
       loading.value = false
     }
@@ -169,12 +171,13 @@ function resetApiBase() {
 .title {
   text-align: center;
   margin-bottom: 30px;
-  color: #333;
+  /* 跟随主题，深色下不能继续用近黑 #333 */
+  color: var(--text-main);
 }
 
 .tips {
   text-align: center;
-  color: #999;
+  color: var(--text-muted);
   font-size: 12px;
   margin-top: 10px;
 }

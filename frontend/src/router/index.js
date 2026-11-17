@@ -1,153 +1,157 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import Login from '../pages/Login.vue'
-import Dashboard from '../pages/Dashboard.vue'
-import Buildings from '../pages/Buildings.vue'
-import Rooms from '../pages/Rooms.vue'
-import RoomMeters from '../pages/RoomMeters.vue'
-import RoomDetail from '../pages/RoomDetail.vue'
-import Tenants from '../pages/Tenants.vue'
-import Contracts from '../pages/Contracts.vue'
-import ContractCreate from '../pages/ContractCreate.vue'
-import Bills from '../pages/Bills.vue'
-import BillDetail from '../pages/BillDetail.vue'
-import MeterReadings from '../pages/MeterReadings.vue'
-import FeeItems from '../pages/FeeItems.vue'
-import Deposits from '../pages/Deposits.vue'
-import Settings from '../pages/Settings.vue'
-import Messages from '../pages/Messages.vue'
-import Blacklist from '../pages/Blacklist.vue'
-import Users from '../pages/Users.vue'
-import Logs from '../pages/Logs.vue'
-import AlertRules from '../pages/AlertRules.vue'
-import OperationAnalysis from '../pages/OperationAnalysis.vue'
-import Remind from '../pages/Remind.vue'
-import RepairOrders from '../pages/RepairOrders.vue'
-import RepairWorkers from '../pages/RepairWorkers.vue'
-import Complaints from '../pages/Complaints.vue'
-import RoomAssets from '../pages/RoomAssets.vue'
-import Backup from '../pages/Backup.vue'
-import MobileRoom from '../pages/mobile/MobileRoom.vue'
-import MobileMeter from '../pages/mobile/MobileMeter.vue'
-import MobileRepair from '../pages/mobile/MobileRepair.vue'
-import MobileBills from '../pages/mobile/MobileBills.vue'
-import MobileLayout from '../pages/mobile/MobileLayout.vue'
-import MobileHome from '../pages/mobile/MobileHome.vue'
-import MobileMeterTasks from '../pages/mobile/MobileMeterTasks.vue'
-import MobileRepairCenter from '../pages/mobile/MobileRepairCenter.vue'
-import MobileTenantLookup from '../pages/mobile/MobileTenantLookup.vue'
-import MobileMe from '../pages/mobile/MobileMe.vue'
-import MobileSettings from '../pages/mobile/MobileSettings.vue'
-import MobileAiAssistant from '../pages/mobile/MobileAiAssistant.vue'
-import MobileScan from '../pages/mobile/MobileScan.vue'
-import MobileBillsCenter from '../pages/mobile/MobileBillsCenter.vue'
-import MobileMessagesCenter from '../pages/mobile/MobileMessagesCenter.vue'
-import MobileBuildings from '../pages/mobile/MobileBuildings.vue'
-import MobileBuildingRooms from '../pages/mobile/MobileBuildingRooms.vue'
 import { getToken, getUser } from '../api'
-import { Capacitor } from '@capacitor/core'
 
+/**
+ * 管理端（桌面）路由。
+ *
+ * 移动端（staff-mobile）已拆为独立前端包 `staff-mobile/`，它有自己的 router。
+ * 这里只保留桌面后台页面。
+ */
 const routes = [
   { path: '/', redirect: '/dashboard' },
-  { path: '/login', component: Login },
-  { path: '/dashboard', component: Dashboard },
-  { path: '/buildings', component: Buildings },
-  { path: '/buildings/:id/rooms', component: Rooms },
-  { path: '/buildings/:buildingId/rooms/:roomId/detail', component: RoomDetail },
-  { path: '/buildings/:buildingId/rooms/:roomId/meter', component: RoomMeters },
-  { path: '/tenants', component: Tenants },
-  { path: '/tenants/blacklist', component: Blacklist },
-  { path: '/contracts', component: Contracts },
-  { path: '/contracts/new', component: ContractCreate },
-  { path: '/meter-readings', component: MeterReadings },
-  { path: '/fee-items', component: FeeItems },
-  { path: '/bills', component: Bills },
-  { path: '/bills/:id', component: BillDetail },
-  { path: '/deposits', component: Deposits },
-  { path: '/settings', component: Settings },
-  { path: '/messages', component: Messages },
-  { path: '/users', component: Users },
-  { path: '/logs', component: Logs },
-  { path: '/alert-rules', component: AlertRules },
-  { path: '/operation-analysis', component: OperationAnalysis },
-  { path: '/remind', component: Remind },
-  { path: '/repairs/orders', component: RepairOrders },
-  { path: '/repairs/workers', component: RepairWorkers },
-  { path: '/complaints', component: Complaints },
-  { path: '/buildings/:buildingId/rooms/:roomId/assets', component: RoomAssets },
-  { path: '/backup', component: Backup },
+  { path: '/login', component: () => import('../pages/Login.vue'), meta: { title: '登录' } },
+
+  { path: '/dashboard', component: () => import('../pages/Dashboard.vue'), meta: { title: '仪表盘' } },
+
+  { path: '/buildings', component: () => import('../pages/Buildings.vue'), meta: { title: '房屋管理' } },
   {
-    path: '/mobile',
-    component: MobileLayout,
-    redirect: '/mobile/home',
-    children: [
-      { path: 'home', component: MobileHome },
-      { path: 'meter-tasks', component: MobileMeterTasks },
-      { path: 'repairs', component: MobileRepairCenter },
-      { path: 'bills', component: MobileBillsCenter },
-      { path: 'messages', component: MobileMessagesCenter },
-      { path: 'buildings', component: MobileBuildings },
-      { path: 'buildings/:id/rooms', component: MobileBuildingRooms },
-      { path: 'tenants', component: MobileTenantLookup },
-      { path: 'scan', component: MobileScan },
-      { path: 'ai-assistant', component: MobileAiAssistant },
-      { path: 'me', component: MobileMe },
-      { path: 'settings', component: MobileSettings }
-    ]
+    path: '/buildings/:id/rooms',
+    component: () => import('../pages/Rooms.vue'),
+    meta: { title: '房间管理', breadcrumb: true }
   },
-  { path: '/qr/room/:id', redirect: to => `/mobile/room/${to.params.id}` },
-  { path: '/mobile/room/:id', component: MobileRoom },
-  { path: '/mobile/meter/:roomId', component: MobileMeter },
-  { path: '/mobile/repair/:roomId', component: MobileRepair },
-  { path: '/mobile/bills/:roomId', component: MobileBills }
+  {
+    path: '/buildings/:buildingId/rooms/:roomId/detail',
+    component: () => import('../pages/RoomDetail.vue'),
+    meta: { title: '房间详情', breadcrumb: true }
+  },
+  {
+    path: '/buildings/:buildingId/rooms/:roomId/meter',
+    component: () => import('../pages/RoomMeters.vue'),
+    meta: { title: '水电录入', breadcrumb: true }
+  },
+  {
+    path: '/buildings/:buildingId/rooms/:roomId/assets',
+    component: () => import('../pages/RoomAssets.vue'),
+    meta: { title: '房间器具档案', breadcrumb: true }
+  },
+
+  { path: '/tenants', component: () => import('../pages/Tenants.vue'), meta: { title: '租户管理' } },
+  {
+    path: '/tenants/blacklist',
+    component: () => import('../pages/Blacklist.vue'),
+    meta: { title: '租户黑名单', roles: ['SUPER_ADMIN', 'ADMIN'] }
+  },
+
+  { path: '/contracts', component: () => import('../pages/Contracts.vue'), meta: { title: '合同管理' } },
+  {
+    path: '/contracts/new',
+    component: () => import('../pages/ContractCreate.vue'),
+    meta: { title: '新建合同', breadcrumb: true }
+  },
+
+  {
+    path: '/meter-readings',
+    component: () => import('../pages/MeterReadings.vue'),
+    meta: { title: '水电录入', roles: ['SUPER_ADMIN', 'ADMIN'] }
+  },
+  {
+    path: '/fee-items',
+    component: () => import('../pages/FeeItems.vue'),
+    meta: { title: '费用项配置', roles: ['SUPER_ADMIN', 'ADMIN'] }
+  },
+
+  { path: '/bills', component: () => import('../pages/Bills.vue'), meta: { title: '账单管理' } },
+  {
+    path: '/bills/:id',
+    component: () => import('../pages/BillDetail.vue'),
+    meta: { title: '账单详情', breadcrumb: true }
+  },
+  { path: '/deposits', component: () => import('../pages/Deposits.vue'), meta: { title: '押金管理' } },
+
+  { path: '/messages', component: () => import('../pages/Messages.vue'), meta: { title: '消息中心' } },
+  { path: '/settings', component: () => import('../pages/Settings.vue'), meta: { title: '个人设置' } },
+  {
+    path: '/users',
+    component: () => import('../pages/Users.vue'),
+    meta: { title: '用户管理', roles: ['SUPER_ADMIN', 'ADMIN'] }
+  },
+  {
+    path: '/logs',
+    component: () => import('../pages/Logs.vue'),
+    meta: { title: '操作日志', roles: ['SUPER_ADMIN', 'ADMIN'] }
+  },
+  {
+    path: '/alert-rules',
+    component: () => import('../pages/AlertRules.vue'),
+    meta: { title: '操作预警', roles: ['SUPER_ADMIN', 'ADMIN'] }
+  },
+  {
+    path: '/operation-analysis',
+    component: () => import('../pages/OperationAnalysis.vue'),
+    meta: { title: '操作分析', roles: ['SUPER_ADMIN', 'ADMIN'] }
+  },
+  {
+    path: '/remind',
+    component: () => import('../pages/Remind.vue'),
+    meta: { title: '提醒设置', roles: ['SUPER_ADMIN', 'ADMIN'] }
+  },
+
+  {
+    path: '/repairs/orders',
+    component: () => import('../pages/RepairOrders.vue'),
+    meta: { title: '维修工单', roles: ['SUPER_ADMIN', 'ADMIN'] }
+  },
+  {
+    path: '/repairs/workers',
+    component: () => import('../pages/RepairWorkers.vue'),
+    meta: { title: '维修工与模板', roles: ['SUPER_ADMIN', 'ADMIN'] }
+  },
+  {
+    path: '/complaints',
+    component: () => import('../pages/Complaints.vue'),
+    meta: { title: '投诉管理', roles: ['SUPER_ADMIN', 'ADMIN'] }
+  },
+
+  {
+    path: '/backup',
+    component: () => import('../pages/Backup.vue'),
+    meta: { title: '数据备份与恢复', roles: ['SUPER_ADMIN', 'ADMIN'] }
+  },
+
+  // 兜底：未匹配的地址不再白屏
+  { path: '/:pathMatch(.*)*', component: () => import('../pages/NotFound.vue'), meta: { title: '页面不存在' } }
 ]
 
 const router = createRouter({
   history: createWebHistory(),
   routes,
+  scrollBehavior: () => ({ top: 0 })
 })
 
 router.beforeEach((to, from, next) => {
   const token = getToken()
   const user = getUser()
+  const role = user?.role?.toUpperCase()
 
   if (to.path !== '/login' && !token) {
-    next({ path: '/login', query: { redirect: to.fullPath } })
-  } else if (to.path === '/login' && token) {
-    if (Capacitor.isNativePlatform()) {
-      next('/mobile/home')
-    } else {
-      next(to.query.redirect || '/dashboard')
-    }
-  } else if (
-    ['/mobile/meter/', '/mobile/repair/', '/mobile/bills/'].some(prefix => to.path.startsWith(prefix)) &&
-    user?.role?.toUpperCase() === 'USER'
-  ) {
-    next(`/mobile/room/${to.params.roomId}`)
-  } else if (
-    ['/mobile/meter-tasks', '/mobile/repairs'].some(prefix => to.path.startsWith(prefix)) &&
-    user?.role?.toUpperCase() === 'USER'
-  ) {
-    next('/mobile/home')
-  } else if (
-    ['/mobile/bills', '/mobile/messages'].some(prefix => to.path.startsWith(prefix)) &&
-    user?.role?.toUpperCase() === 'USER'
-  ) {
-    next('/mobile/home')
-  } else if (to.path === '/logs' && user?.role?.toUpperCase() !== 'SUPER_ADMIN') {
-    next('/dashboard')
-  } else if (['/alert-rules', '/operation-analysis'].includes(to.path) && user?.role?.toUpperCase() !== 'SUPER_ADMIN') {
-    next('/dashboard')
-  } else if (to.path === '/remind' && !['SUPER_ADMIN', 'ADMIN'].includes(user?.role?.toUpperCase())) {
-    next('/dashboard')
-  } else if (to.path.startsWith('/repairs') && !['SUPER_ADMIN', 'ADMIN'].includes(user?.role?.toUpperCase())) {
-    next('/dashboard')
-  } else if (to.path.startsWith('/complaints') && !['SUPER_ADMIN', 'ADMIN'].includes(user?.role?.toUpperCase())) {
-    next('/dashboard')
-  } else if (to.path === '/backup' && !['SUPER_ADMIN', 'ADMIN'].includes(user?.role?.toUpperCase())) {
-    next('/dashboard')
-  } else {
-    next()
+    return next({ path: '/login', query: { redirect: to.fullPath } })
   }
+  if (to.path === '/login' && token) {
+    return next(to.query.redirect || '/dashboard')
+  }
+
+  // 统一按路由 meta.roles 做权限校验，避免新增页面时遗漏
+  const requiredRoles = to.meta?.roles
+  if (requiredRoles && !requiredRoles.includes(role)) {
+    return next('/dashboard')
+  }
+
+  next()
+})
+
+router.afterEach(to => {
+  const base = '房屋租赁管理系统'
+  document.title = to.meta?.title ? `${to.meta.title} - ${base}` : base
 })
 
 export default router

@@ -4,8 +4,12 @@
       <h2>租户管理</h2>
       <div>
         <el-button @click="exportCurrent">导出</el-button>
-        <el-button type="danger" @click="$router.push('/tenants/blacklist')">黑名单列表</el-button>
-        <el-button type="primary" @click="openCreate" v-if="canAdd">新增租户</el-button>
+        <el-button v-if="canManageBlacklist" type="danger" @click="$router.push('/tenants/blacklist')"
+          >黑名单列表</el-button
+        >
+        <el-button type="primary" @click="openCreate" v-if="canAdd"
+          >新增租户</el-button
+        >
       </div>
     </el-row>
 
@@ -15,8 +19,18 @@
     </el-row>
 
     <el-row style="margin-top: 16px">
-      <el-input v-model="searchQuery" placeholder="按姓名或手机号搜索" clearable style="width: 300px" @change="loadTenants">
-        <el-button slot="append" icon="Search" @click="loadTenants" />
+      <el-input
+        v-model="searchQuery"
+        placeholder="按姓名或手机号搜索"
+        clearable
+        style="width: 300px"
+        @input="onSearchInput"
+        @clear="loadTenants"
+        @keyup.enter="loadTenants"
+      >
+        <template #append>
+          <el-button :icon="Search" @click="loadTenants" />
+        </template>
       </el-input>
     </el-row>
 
@@ -28,6 +42,7 @@
       :row-class-name="tenantRowClassName"
       style="width: 100%; margin-top: 16px"
       v-loading="loading"
+      empty-text="暂无租户，点击「新增租户」开始"
       @selection-change="onSelectionChange"
     >
       <el-table-column type="selection" width="50" />
@@ -49,7 +64,9 @@
       </el-table-column>
       <el-table-column label="紧急联系人/电话" min-width="260">
         <template #default="{ row }">
-          {{ row.emergencyContact || '-' }} / {{ row.emergencyPhone || '-' }}
+          <span>{{ row.emergencyContact || "-" }}</span>
+          <span style="margin: 0 8px; color: var(--border-color)">|</span>
+          <span>{{ row.emergencyPhone || "-" }}</span>
         </template>
       </el-table-column>
       <el-table-column label="合同" width="110" align="center">
@@ -132,7 +149,9 @@
           <el-table-column prop="endDate" label="结束日期" />
           <el-table-column prop="status" label="状态">
             <template #default="{ row }">
-              <el-tag :type="getContractStatusType(row.status)">{{ row.statusText }}</el-tag>
+              <el-tag :type="getContractStatusType(row.status)">{{
+                contractStatusText(row.status)
+              }}</el-tag>
             </template>
           </el-table-column>
         </el-table>
@@ -143,7 +162,9 @@
           <el-table-column prop="orderNo" label="工单号" width="160" />
           <el-table-column prop="roomNumber" label="房间号" width="90" />
           <el-table-column prop="faultType" label="故障类型" width="90" />
-          <el-table-column prop="status" label="状态" width="90" />
+          <el-table-column label="状态" width="90">
+            <template #default="{ row }">{{ repairStatusText(row.status) }}</template>
+          </el-table-column>
           <el-table-column prop="totalFee" label="费用" width="80" />
           <el-table-column prop="createdAt" label="报修时间" />
         </el-table>
@@ -205,7 +226,9 @@
         </el-form-item>
         <el-form-item label="内容" required>
           <el-input v-model="notifyForm.content" type="textarea" :rows="6" />
-          <div style="color:#909399;font-size:12px;margin-top:4px">可用变量：{租户姓名}、{房间号}</div>
+          <div style="color: var(--text-muted); font-size: 12px; margin-top: 4px">
+            可用变量：{租户姓名}、{房间号}
+          </div>
         </el-form-item>
         <el-form-item label="附加链接">
           <el-input v-model="notifyForm.link" placeholder="可选" />
@@ -221,7 +244,7 @@
 
 <style scoped>
 .text-gray {
-  color: #909399;
+  color: var(--text-muted);
   font-size: 13px;
 }
 </style>
@@ -229,6 +252,7 @@
 <script setup>
 import { ref, onMounted, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { Search } from '@element-plus/icons-vue'
 import {
   addToBlacklist as apiAddToBlacklist,
   batchSendMessages,
@@ -239,21 +263,24 @@ import {
   deleteTenant,
   exportModuleData,
   getTenant,
+  getErrorMessage,
   getTenants,
   getTenantComplaints,
   getTenantRepairOrders,
   removeFromBlacklist as apiRemoveFromBlacklist,
-  updateTenant
-} from '../api'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { showUndoToast } from '../utils/undo'
+  updateTenant,
+} from "../api";
+import { ElMessage, ElMessageBox } from "element-plus";
+import { showUndoToast } from "../utils/undo";
+import { debounce } from "../utils/debounce";
+import { repairStatusText, contractStatusText, contractStatusTag } from "../utils/labels";
 
-const canAdd = computed(() => canAddTenant())
-const canEdit = computed(() => canEditTenant())
-const canDelete = computed(() => canDeleteTenant())
-const router = useRouter()
-const route = useRoute()
-const tenantsTableRef = ref(null)
+const canAdd = computed(() => canAddTenant());
+const canEdit = computed(() => canEditTenant());
+const canDelete = computed(() => canDeleteTenant());
+// 黑名单管理接口仅对管理员开放，普通用户不展示入口
+const canManageBlacklist = computed(() => canEditTenant());
+const router = useRouter();
 
 const tenants = ref([])
 const loading = ref(false)
@@ -298,8 +325,7 @@ function maskIdCard(idCard) {
 }
 
 function getContractStatusType(status) {
-  const map = { ACTIVE: 'success', EXPIRED: 'info', TERMINATED: 'danger', PENDING: 'warning' }
-  return map[status] || 'info'
+  return contractStatusTag(status);
 }
 
 function formatDate(dateStr) {
@@ -314,11 +340,25 @@ async function loadTenants() {
     tenants.value = res.data.content || res.data || []
     total.value = res.data.totalElements || tenants.value.length
   } catch (e) {
-    ElMessage.error('加载失败')
+    ElMessage.error(getErrorMessage(e, "租户加载失败"));
   } finally {
     loading.value = false
   }
 }
+
+// 输入即搜，300ms 防抖避免每次按键都请求后端
+const debouncedSearch = debounce(() => {
+  page.value = 1;
+  loadTenants();
+}, 300);
+
+function onSearchInput() {
+  debouncedSearch();
+}
+
+onBeforeUnmount(() => {
+  debouncedSearch.cancel();
+});
 
 function onSelectionChange(rows) {
   selectedTenantIds.value = (rows || []).map(r => r.id)
@@ -431,7 +471,7 @@ async function save() {
     showDialog.value = false
     loadTenants()
   } catch (e) {
-    ElMessage.error('操作失败: ' + (e.response?.data?.message || e.message))
+    ElMessage.error(getErrorMessage(e, "操作失败"));
   } finally {
     saving.value = false
   }
@@ -445,7 +485,7 @@ async function remove(row) {
     showUndoToast(res?.data, loadTenants)
     loadTenants()
   } catch (e) {
-    if (e !== 'cancel') ElMessage.error('删除失败')
+    if (e !== "cancel") ElMessage.error(getErrorMessage(e, "删除失败"));
   }
 }
 
@@ -478,7 +518,7 @@ async function confirmAddToBlacklist() {
     showBlacklistDialog.value = false
     loadTenants()
   } catch (e) {
-    ElMessage.error(e.response?.data || e.message)
+    ElMessage.error(getErrorMessage(e, "操作失败"));
   } finally {
     addingBlacklist.value = false
   }
@@ -493,7 +533,7 @@ async function removeFromBlacklist(row) {
     showDetail.value = false
     loadTenants()
   } catch (e) {
-    if (e !== 'cancel') ElMessage.error('操作失败')
+    if (e !== "cancel") ElMessage.error(getErrorMessage(e, "操作失败"));
   }
 }
 
@@ -523,7 +563,7 @@ async function submitBatchNotify() {
     showBatchNotify.value = false
     selectedTenantIds.value = []
   } catch (e) {
-    ElMessage.error(e.response?.data || e.message)
+    ElMessage.error(getErrorMessage(e, "操作失败"));
   } finally {
     notifySending.value = false
   }
@@ -541,7 +581,7 @@ async function exportCurrent() {
     a.click()
     URL.revokeObjectURL(url)
   } catch (e) {
-    ElMessage.error('导出失败')
+    ElMessage.error(getErrorMessage(e, "导出失败"));
   }
 }
 

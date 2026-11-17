@@ -176,4 +176,12 @@ public class Bill {
   public Integer getDeleted() {
     return deleted;
   }
+
+  @PrePersist
+  void prePersist() {
+    if (deleted == null) {
+      deleted = 0;
+    }
+    status = BillStatus.normalize(status);
+  }
 }

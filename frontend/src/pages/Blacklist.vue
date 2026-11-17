@@ -115,6 +115,7 @@ import {
   addToBlacklist,
   removeFromBlacklist as apiRemoveFromBlacklist,
   getTenants,
+  getErrorMessage,
 } from "../api";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { showUndoToast } from "../utils/undo";
@@ -147,7 +148,7 @@ async function loadBlacklist() {
     });
     blacklist.value = res.data || [];
   } catch (e) {
-    ElMessage.error("加载失败");
+    ElMessage.error(getErrorMessage(e, "加载失败"));
   } finally {
     loading.value = false;
   }
@@ -197,7 +198,7 @@ async function confirmAdd() {
     showAddDialog.value = false;
     loadBlacklist();
   } catch (e) {
-    ElMessage.error(e.response?.data || e.message);
+    ElMessage.error(getErrorMessage(e, "操作失败"));
   } finally {
     adding.value = false;
   }
@@ -213,7 +214,7 @@ async function removeFromBlacklist(row) {
     showUndoToast(res?.data, loadBlacklist);
     loadBlacklist();
   } catch (e) {
-    if (e !== "cancel") ElMessage.error("操作失败");
+    if (e !== "cancel") ElMessage.error(getErrorMessage(e, "操作失败"));
   }
 }
 

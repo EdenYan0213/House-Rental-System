@@ -8,7 +8,7 @@
     <el-card class="section" v-if="summary.room">
       <div class="room-main">
         <div>{{ summary.room.buildingName }} {{ summary.room.roomNumber }}</div>
-        <el-tag size="small">{{ summary.room.status || '未知状态' }}</el-tag>
+        <el-tag size="small" :type="roomStatusTag(summary.room.status)">{{ roomStatusText(summary.room.status) }}</el-tag>
       </div>
       <div class="muted">{{ summary.room.layout }} · {{ summary.room.area }}m² · {{ summary.room.floor }}层</div>
     </el-card>
@@ -57,7 +57,7 @@
       <template #header>最近维修记录</template>
       <el-empty v-if="(summary.repairHistory || []).length === 0" description="暂无维修记录" />
       <div v-for="item in (summary.repairHistory || [])" :key="item.id" class="repair-item">
-        <div>{{ item.faultType }} · {{ item.status }}</div>
+        <div>{{ item.faultType }} · {{ repairStatusText(item.status) }}</div>
         <div class="muted">{{ item.createdAt || '-' }}</div>
       </div>
     </el-card>
@@ -65,7 +65,9 @@
     <el-drawer v-model="showAllRepair" title="维修历史" size="100%">
       <el-table :data="allRepairHistory" style="width: 100%">
         <el-table-column prop="faultType" label="故障类型" />
-        <el-table-column prop="status" label="状态" />
+        <el-table-column label="状态">
+          <template #default="{ row }">{{ repairStatusText(row.status) }}</template>
+        </el-table-column>
         <el-table-column prop="createdAt" label="时间" />
       </el-table>
     </el-drawer>
@@ -77,6 +79,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getMobileRoomSummary, getRoomRepairOrders } from '@/api'
+import { roomStatusText, roomStatusTag, repairStatusText } from '@/utils/labels'
 
 const route = useRoute()
 const router = useRouter()

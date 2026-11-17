@@ -1,0 +1,31 @@
+{
+  "name": "house-staff-mobile",
+  "version": "0.1.0",
+  "private": true,
+  "description": "房屋租赁系统 - 员工移动端（扫码录入水电/报修，Capacitor 打包 Android）",
+  "scripts": {
+    "dev": "vite --port 5180",
+    "build": "vite build",
+    "preview": "vite preview --port 5181",
+    "android:sync": "npx cap sync android",
+    "android:copy": "npx cap copy android",
+    "android:open": "npx cap open android",
+    "android:apk:debug": "cd android && ./gradlew assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^4.8.2",
+    "@capacitor/app": "^4.1.1",
+    "@capacitor/core": "^4.8.2",
+    "@capacitor/push-notifications": "^4.1.2",
+    "@element-plus/icons-vue": "^2.1.0",
+    "axios": "^1.4.0",
+    "element-plus": "^2.3.7",
+    "vue": "^3.3.4",
+    "vue-router": "^4.2.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^4.8.2",
+    "@vitejs/plugin-vue": "^4.2.3",
+    "vite": "^4.3.9"
+  }
+}

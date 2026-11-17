@@ -1,4 +1,4 @@
-package com.house.mobile;
+package com.house.staff;
 
 import com.getcapacitor.BridgeActivity;
 

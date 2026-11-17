@@ -1,9 +1,18 @@
 <template>
   <div>
-    <el-container style="height: 100vh" v-if="!isLoginPage">
-      <el-aside width="220px" class="sidebar">
-        <div class="logo">房屋租赁系统</div>
-        <el-menu :default-active="currentPath" router class="sidebar-menu">
+    <el-container class="app-shell" v-if="!isLoginPage">
+      <el-aside :width="sidebarCollapsed ? '64px' : '220px'" class="sidebar">
+        <div class="logo" :class="{ collapsed: sidebarCollapsed }">
+          <span v-if="!sidebarCollapsed">房屋租赁系统</span>
+          <span v-else>租</span>
+        </div>
+        <el-menu
+          :default-active="currentPath"
+          :collapse="sidebarCollapsed"
+          :collapse-transition="false"
+          router
+          class="sidebar-menu"
+        >
         <el-menu-item index="/dashboard">
           <el-icon><Odometer /></el-icon>
           <span>仪表盘</span>
@@ -68,7 +77,21 @@
       </el-aside>
       <el-container>
         <el-header class="header">
-          <div class="header-title">{{ pageTitle }}</div>
+          <div class="header-left">
+            <el-button text class="collapse-trigger" @click="toggleSidebar">
+              <el-icon>
+                <Expand v-if="sidebarCollapsed" />
+                <Fold v-else />
+              </el-icon>
+            </el-button>
+            <!-- 二级页面用面包屑提供回退路径，一级页面直接显示标题 -->
+            <el-breadcrumb v-if="breadcrumbs.length > 1" separator="/" class="breadcrumb">
+              <el-breadcrumb-item v-for="(item, idx) in breadcrumbs" :key="idx" :to="item.to">
+                {{ item.label }}
+              </el-breadcrumb-item>
+            </el-breadcrumb>
+            <div v-else class="header-title">{{ pageTitle }}</div>
+          </div>
           <div class="header-right">
           <el-dropdown @command="handleThemeCommand" trigger="click">
             <el-button text class="theme-trigger">
@@ -86,9 +109,6 @@
           </el-dropdown>
           <el-button text class="theme-trigger" @click="openHelpCenter">
             <el-icon><QuestionFilled /></el-icon>
-          </el-button>
-          <el-button v-if="canUseAiAssistant" text class="theme-trigger" @click="showAiDrawer = true">
-            <el-icon><ChatDotRound /></el-icon>
           </el-button>
           <el-tag size="small" :type="roleTagType">{{ roleName }}</el-tag>
           <span class="username">{{ user?.realName || user?.username }}</span>
@@ -117,7 +137,6 @@
       </el-container>
     </el-container>
     <router-view v-else />
-    <AiAssistantDrawer v-if="!isLoginPage && canUseAiAssistant" v-model="showAiDrawer" />
     <el-dialog v-model="showWelcomeDialog" title="欢迎使用" width="520px" :close-on-click-modal="false">
       <p class="welcome-text">这是你的首次登录。建议按顺序完成关键功能，系统会在页面中提供上下文提示。</p>
       <template #footer>
@@ -172,9 +191,10 @@ import {
   MoonNight,
   Sunny,
   Monitor,
-  QuestionFilled
+  QuestionFilled,
+  Expand,
+  Fold
 } from '@element-plus/icons-vue'
-import AiAssistantDrawer from '@/components/AiAssistantDrawer.vue'
 import {
   getUser,
   removeToken,
@@ -193,9 +213,8 @@ const router = useRouter()
 const currentUser = ref(getUser())
 const user = computed(() => currentUser.value)
 const currentPath = computed(() => route.path)
-const isLoginPage = computed(() => route.path === '/login' || route.path.startsWith('/mobile') || route.path.startsWith('/qr/'))
+const isLoginPage = computed(() => route.path === '/login')
 const themePreference = ref(getThemePreference())
-const showAiDrawer = ref(false)
 const showWelcomeDialog = ref(false)
 const showHelpCenter = ref(false)
 const helpTab = ref('article')
@@ -279,7 +298,6 @@ const canAccessLogs = computed(() => hasAnyRole(['SUPER_ADMIN']))
 const canAccessRepairs = computed(() => hasAnyRole(['ADMIN', 'SUPER_ADMIN']))
 const canAccessSettings = computed(() => true)
 const canManageBackup = computed(() => hasAnyRole(['ADMIN', 'SUPER_ADMIN']))
-const canUseAiAssistant = computed(() => hasAnyRole(['ADMIN', 'SUPER_ADMIN']))
 
 const pageTitleMap = {
   '/dashboard': '仪表盘',
@@ -305,11 +323,45 @@ const pageTitleMap = {
 const pageTitle = computed(() => {
   const path = route.path
   if (path.startsWith('/buildings/') && path.endsWith('/assets')) return '房间器具档案'
+  if (path.startsWith('/buildings/') && path.endsWith('/meter')) return '水电录入'
   if (path.startsWith('/buildings/')) return '房间管理'
-  if (path.startsWith('/contracts/')) return '合同详情'
+  if (path === '/contracts/new') return '新建合同'
   if (path.startsWith('/bills/')) return '账单详情'
-  return pageTitleMap[path] || '房屋租赁系统'
+  return pageTitleMap[path] || route.meta?.title || '房屋租赁系统'
 })
+
+/**
+ * 二级页面面包屑：给出「模块 → 当前页」的回退路径。
+ * 只有 meta.breadcrumb 为真的路由才展开，一级页面保持简洁。
+ */
+const breadcrumbs = computed(() => {
+  const path = route.path
+  const trail = [{ label: '首页', to: '/dashboard' }]
+  if (!route.meta?.breadcrumb) {
+    return trail
+  }
+  if (path.startsWith('/buildings/')) {
+    trail.push({ label: '房屋管理', to: '/buildings' })
+    trail.push({ label: pageTitle.value })
+  } else if (path.startsWith('/contracts/')) {
+    trail.push({ label: '合同管理', to: '/contracts' })
+    trail.push({ label: pageTitle.value })
+  } else if (path.startsWith('/bills/')) {
+    trail.push({ label: '账单管理', to: '/bills' })
+    trail.push({ label: pageTitle.value })
+  } else {
+    trail.push({ label: pageTitle.value })
+  }
+  return trail
+})
+
+const SIDEBAR_KEY = 'sidebarCollapsed'
+const sidebarCollapsed = ref(localStorage.getItem(SIDEBAR_KEY) === '1')
+
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  localStorage.setItem(SIDEBAR_KEY, sidebarCollapsed.value ? '1' : '0')
+}
 
 function handleLogout() {
   removeToken()
@@ -461,6 +513,8 @@ body {
 
 .sidebar {
   background: var(--bg-sidebar);
+  transition: width 0.2s ease;
+  overflow-x: hidden;
 }
 
 .logo {
@@ -470,11 +524,20 @@ body {
   color: var(--text-main);
   font-size: 18px;
   font-weight: 700;
+  white-space: nowrap;
+}
+
+.logo.collapsed {
+  font-size: 16px;
 }
 
 .sidebar-menu {
   border-right: none;
   background: var(--bg-sidebar);
+}
+
+.sidebar-menu:not(.el-menu--collapse) {
+  width: 100%;
 }
 
 .sidebar-menu .el-menu-item,
@@ -500,22 +563,54 @@ body {
   padding: 0 20px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
   border-bottom: 1px solid var(--border-color);
+  gap: 12px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.collapse-trigger {
+  color: var(--text-main);
+  padding: 4px;
+}
+
+.breadcrumb {
+  font-size: 14px;
+}
+
+.breadcrumb .el-breadcrumb__inner {
+  color: var(--text-muted);
+}
+
+.breadcrumb .el-breadcrumb__item:last-child .el-breadcrumb__inner {
+  color: var(--text-main);
+  font-weight: 600;
 }
 
 .header-title {
   font-size: 16px;
   font-weight: 600;
   color: var(--text-main);
+  white-space: nowrap;
 }
 
 .header-right {
   display: flex;
   align-items: center;
   gap: 15px;
+  flex-shrink: 0;
 }
 
 .username {
   color: var(--text-main);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .theme-trigger {
@@ -527,6 +622,7 @@ body {
   font-weight: 600;
 }
 
+/* 上下文提示条 */
 .context-tip {
   margin-bottom: 12px;
 }
@@ -543,13 +639,20 @@ body {
 }
 
 .welcome-text {
-  color: #4b5563;
+  color: var(--text-muted);
   line-height: 1.7;
 }
 
 .help-list {
   padding-left: 18px;
-  color: #374151;
+  color: var(--text-main);
   line-height: 1.9;
+}
+
+/* 窄屏下隐藏用户名，避免头部拥挤 */
+@media (max-width: 900px) {
+  .header .username {
+    display: none;
+  }
 }
 </style>

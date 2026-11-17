@@ -98,3 +98,14 @@ junit*.xml
 *.log
 .idea/
 dist/
+
+# staff-mobile build artifacts
+staff-mobile/node_modules/
+staff-mobile/dist/
+staff-mobile/android/.gradle/
+staff-mobile/android/build/
+staff-mobile/android/app/build/
+
+# runtime backup files
+backend/backups/
+backups/

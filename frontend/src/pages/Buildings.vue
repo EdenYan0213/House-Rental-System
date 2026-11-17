@@ -104,7 +104,8 @@ import {
   getBuildings,
   uploadFile,
   updateBuilding,
-  uploadFileByUrl
+  uploadFileByUrl,
+  getErrorMessage
 } from '../api'
 import { showUndoToast } from '../utils/undo'
 
@@ -287,7 +288,7 @@ onMounted(load)
 
 .building-cover {
   height: 160px;
-  background: #f4f6f8;
+  background: var(--bg-main);
   cursor: pointer;
 }
 
@@ -304,7 +305,7 @@ onMounted(load)
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #8c939d;
+  color: var(--text-muted);
   gap: 8px;
 }
 
@@ -319,7 +320,7 @@ onMounted(load)
 
 .building-body p {
   margin: 0 0 6px 0;
-  color: #606266;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
@@ -330,7 +331,7 @@ onMounted(load)
 }
 
 .cover-uploader {
-  border: 1px dashed #dcdfe6;
+  border: 1px dashed var(--border-color);
   border-radius: 6px;
   width: 220px;
   height: 140px;
@@ -349,7 +350,7 @@ onMounted(load)
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #909399;
+  color: var(--text-muted);
 }
 
 .url-upload {

@@ -67,7 +67,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { getFeeItems, createFeeItem, updateFeeItem, deleteFeeItem } from '../api'
+import { getFeeItems, createFeeItem, updateFeeItem, deleteFeeItem, getErrorMessage } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const feeItems = ref([])
@@ -94,7 +94,7 @@ async function loadFeeItems() {
     const res = await getFeeItems()
     feeItems.value = res.data || []
   } catch (e) {
-    ElMessage.error('加载失败')
+    ElMessage.error(getErrorMessage(e, '加载失败'))
   } finally {
     loading.value = false
   }
@@ -125,7 +125,7 @@ async function save() {
     showDialog.value = false
     loadFeeItems()
   } catch (e) {
-    ElMessage.error('操作失败')
+    ElMessage.error(getErrorMessage(e, '操作失败'))
   } finally {
     saving.value = false
   }
@@ -137,7 +137,7 @@ async function toggleEnabled(row) {
     ElMessage.success('状态已更新')
   } catch (e) {
     row.enabled = !row.enabled
-    ElMessage.error('更新失败')
+    ElMessage.error(getErrorMessage(e, '更新失败'))
   }
 }
 
@@ -148,7 +148,7 @@ async function remove(row) {
     ElMessage.success('删除成功')
     loadFeeItems()
   } catch (e) {
-    if (e !== 'cancel') ElMessage.error('删除失败')
+    if (e !== 'cancel') ElMessage.error(getErrorMessage(e, '删除失败'))
   }
 }
 

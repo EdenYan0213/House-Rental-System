@@ -98,7 +98,7 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getUsers, createUser, updateUser, deleteUser, enableUser, disableUser, resetUserPassword, getUser } from '@/api'
+import { getUsers, createUser, updateUser, deleteUser, enableUser, disableUser, resetUserPassword, getUser, getErrorMessage } from '@/api'
 
 const isSuperAdmin = computed(() => getUser()?.role === 'SUPER_ADMIN')
 
@@ -168,7 +168,7 @@ async function loadData() {
     tableData.value = res.data.records || res.data || []
     pagination.total = res.data.total || 0
   } catch (err) {
-    ElMessage.error('加载失败')
+    ElMessage.error(getErrorMessage(err, '加载失败'))
   } finally {
     loading.value = false
   }
@@ -203,7 +203,7 @@ async function handleSubmit() {
       dialogVisible.value = false
       loadData()
     } catch (err) {
-      ElMessage.error(err.response?.data?.message || '操作失败')
+      ElMessage.error(getErrorMessage(err, '操作失败'))
     }
   })
 }
@@ -216,7 +216,7 @@ async function handleDelete(row) {
     loadData()
   } catch (err) {
     if (err !== 'cancel') {
-      ElMessage.error(err.response?.data?.message || '删除失败')
+      ElMessage.error(getErrorMessage(err, '删除失败'))
     }
   }
 }
@@ -232,7 +232,7 @@ async function handleToggleStatus(row) {
     }
     loadData()
   } catch (err) {
-    ElMessage.error(err.response?.data?.message || '操作失败')
+    ElMessage.error(getErrorMessage(err, '操作失败'))
   }
 }
 
@@ -248,7 +248,7 @@ async function handleResetPassword(row) {
     ElMessage.success('密码重置成功')
   } catch (err) {
     if (err !== 'cancel') {
-      ElMessage.error(err.response?.data?.message || '操作失败')
+      ElMessage.error(getErrorMessage(err, '操作失败'))
     }
   }
 }

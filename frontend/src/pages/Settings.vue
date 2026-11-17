@@ -122,7 +122,7 @@
                   </el-tag>
                 </div>
               </div>
-              <div style="color: #909399; font-size: 12px; margin-top: 5px">
+              <div style="color: var(--text-muted); font-size: 12px; margin-top: 5px">
                 提前天数最多5个
               </div>
             </el-form-item>
@@ -138,7 +138,7 @@
             </el-form-item>
             <el-form-item label="逾期提醒">
               <el-switch v-model="reminderForm.overdueReminderEnabled" />
-              <div style="color: #909399; font-size: 12px; margin-left: 10px">
+              <div style="color: var(--text-muted); font-size: 12px; margin-left: 10px">
                 （预留功能）
               </div>
             </el-form-item>
@@ -177,6 +177,7 @@ import {
   getUser,
   setUser,
   hasRole,
+  getErrorMessage,
 } from "../api";
 import { ElMessage } from "element-plus";
 import Logs from "./Logs.vue";
@@ -305,7 +306,7 @@ async function saveProfile() {
     setUser({ ...getUser(), ...profileForm.value });
     ElMessage.success("保存成功");
   } catch (e) {
-    ElMessage.error("保存失败: " + (e.response?.data?.message || e.message));
+    ElMessage.error(getErrorMessage(e, "保存失败"));
   } finally {
     saving.value = false;
   }
@@ -331,7 +332,7 @@ async function changePassword() {
       confirmPassword: "",
     };
   } catch (e) {
-    ElMessage.error("修改失败: " + (e.response?.data?.message || e.message));
+    ElMessage.error(getErrorMessage(e, "修改失败"));
   } finally {
     changingPwd.value = false;
   }
@@ -377,7 +378,7 @@ async function saveReminderSettings() {
     await updateReminderSettings(reminderForm.value);
     ElMessage.success("保存成功");
   } catch (e) {
-    ElMessage.error("保存失败");
+    ElMessage.error(getErrorMessage(e, "保存失败"));
   } finally {
     savingReminder.value = false;
   }

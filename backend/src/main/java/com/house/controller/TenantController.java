@@ -8,6 +8,7 @@ import com.house.service.OperationSnapshotService;
 import com.house.service.TenantService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -84,12 +85,13 @@ public class TenantController {
   }
 
   @GetMapping("/blacklist")
-  // @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')") // TODO: 启用权限控制
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public List<Tenant> blacklist(@RequestParam(required = false) String q,
       @RequestParam(required = false) String reason) {
     return tenantService.getBlacklistedTenants(q, reason);
   }
 
+  // 只读查询：签约向导中对普通用户也要展示黑名单警告，故仅要求登录
   @GetMapping("/{id}/blacklist-check")
   public Map<String, Object> checkBlacklist(@PathVariable Long id) {
     boolean blacklisted = tenantService.isBlacklisted(id);
@@ -98,7 +100,7 @@ public class TenantController {
   }
 
   @PostMapping("/{id}/blacklist")
-  // @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')") // TODO: 启用权限控制
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public ResponseEntity<?> addToBlacklist(@PathVariable Long id, @RequestBody Map<String, Object> body) {
     try {
       String reason = (String) body.get("reason");
@@ -123,7 +125,7 @@ public class TenantController {
   }
 
   @DeleteMapping("/{id}/blacklist")
-  // @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')") // TODO: 启用权限控制
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public ResponseEntity<?> removeFromBlacklist(@PathVariable Long id, HttpServletRequest request) {
     try {
       Tenant before = tenantRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("租户不存在"));

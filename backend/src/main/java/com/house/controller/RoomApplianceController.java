@@ -77,7 +77,7 @@ public class RoomApplianceController {
           .brand(t.getBrand())
           .quantity(t.getDefaultQuantity() == null ? 1 : t.getDefaultQuantity())
           .unit(t.getUnit() == null ? "个" : t.getUnit())
-          .status("正常")
+          .status("NORMAL")
           .photos("[]")
           .remark("")
           .build();

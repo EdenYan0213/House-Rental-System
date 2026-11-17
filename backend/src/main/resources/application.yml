@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: ${SERVER_PORT:8081}
 
 spring:
   ai:
@@ -78,6 +78,9 @@ app:
     base-url: ${QR_BASE_URL:http://localhost:5173}
   backup:
     storage-path: ${BACKUP_STORAGE_PATH:./backups}
+    # 命令行工具路径，留默认值则从 PATH 查找
+    mysqldump-path: ${MYSQLDUMP_PATH:mysqldump}
+    mysql-path: ${MYSQL_PATH:mysql}
   complaint:
     require-confirm: ${COMPLAINT_REQUIRE_CONFIRM:true}
   ai-assistant:
@@ -94,7 +97,8 @@ app:
         timeout-millis: ${AI_PRIMARY_TIMEOUT_MS:2500}
       - name: siliconflow
         base-url: ${AI_SILICONFLOW_BASE_URL:https://api.siliconflow.cn}
-        api-key: ${AI_SILICONFLOW_API_KEY:sk-aempgvopllpgbqzikljzdwmngiyrhsfrbdoiexcsirnwgxhj}
+        # 密钥只从环境变量读取，不要写死进仓库
+        api-key: ${AI_SILICONFLOW_API_KEY:}
         model: ${AI_SILICONFLOW_MODEL:Qwen/Qwen3-8B}
         temperature: ${AI_SILICONFLOW_TEMPERATURE:0}
         timeout-millis: ${AI_SILICONFLOW_TIMEOUT_MS:4000}

@@ -2,6 +2,7 @@ package com.house.service;
 
 import com.house.dto.PaymentRequest;
 import com.house.model.Bill;
+import com.house.model.BillStatus;
 import com.house.model.PaymentRecord;
 import com.house.repo.BillRepository;
 import com.house.repo.PaymentRecordRepository;
@@ -24,6 +25,11 @@ public class PaymentService {
   @Transactional
   public PaymentRecord recordPayment(Long billId, PaymentRequest req) {
     Bill bill = billRepository.findById(billId).orElseThrow(() -> new IllegalArgumentException("账单不存在"));
+    if (BillStatus.isPaid(bill.getStatus()))
+      throw new IllegalStateException("账单已付清，不能重复收款");
+    if (BillStatus.isVoid(bill.getStatus()))
+      throw new IllegalStateException("账单已作废，不能收款");
+
     double amount = req.getPaidAmount() == null ? 0.0 : req.getPaidAmount();
     if (amount <= 0)
       throw new IllegalArgumentException("支付金额需大于0");
@@ -44,9 +50,9 @@ public class PaymentService {
     double paidTotal = payments.stream().mapToDouble(p -> p.getPaidAmount() == null ? 0.0 : p.getPaidAmount()).sum();
 
     if (paidTotal >= (bill.getTotalAmount() == null ? 0.0 : bill.getTotalAmount())) {
-      bill.setStatus("已支付");
+      bill.setStatus(BillStatus.PAID);
     } else {
-      bill.setStatus("部分支付");
+      bill.setStatus(BillStatus.PARTIAL);
     }
     billRepository.save(bill);
 

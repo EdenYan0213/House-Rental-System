@@ -30,7 +30,7 @@
           <el-table-column prop="unit" label="单位" width="80" />
           <el-table-column label="状态" width="110">
             <template #default="{ row }">
-              <el-tag :type="statusTag(row.status)">{{ row.status }}</el-tag>
+              <el-tag :type="statusTag(row.status)">{{ applianceStatusText(row.status) }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column prop="remark" label="备注" />
@@ -75,9 +75,9 @@
         <el-form-item label="单位"><el-input v-model="form.unit" /></el-form-item>
         <el-form-item label="状态">
           <el-select v-model="form.status" style="width: 100%">
-            <el-option label="正常" value="正常" />
-            <el-option label="损坏" value="损坏" />
-            <el-option label="待维修" value="待维修" />
+            <el-option label="正常" value="NORMAL" />
+            <el-option label="损坏" value="DAMAGED" />
+            <el-option label="丢失" value="LOST" />
           </el-select>
         </el-form-item>
         <el-form-item label="备注"><el-input v-model="form.remark" type="textarea" :rows="3" /></el-form-item>
@@ -123,8 +123,10 @@ import {
   uploadFile,
   getRoomRepairOrders,
   exportRoomApplianceChecklistPdf,
-  generateBillForRoom
+  generateBillForRoom,
+  getErrorMessage,
 } from '../api'
+import { applianceStatusText, repairStatusText } from '../utils/labels'
 
 const route = useRoute()
 const router = useRouter()
@@ -138,7 +140,7 @@ const templates = ref([])
 
 const showDialog = ref(false)
 const editId = ref(null)
-const form = ref({ roomId, applianceName: '', brand: '', quantity: 1, unit: '个', status: '正常', remark: '', photos: [] })
+const form = ref({ roomId, applianceName: '', brand: '', quantity: 1, unit: '个', status: 'NORMAL', remark: '', photos: [] })
 
 const showTemplateDialog = ref(false)
 const selectedTemplateIds = ref([])
@@ -148,13 +150,13 @@ const isRentedRoom = computed(() => {
 })
 
 function statusTag(status) {
-  if (status === '正常') return 'success'
-  if (status === '损坏') return 'danger'
+  if (status === 'NORMAL') return 'success'
+  if (status === 'DAMAGED') return 'danger'
   return 'warning'
 }
 
 function statusText(s) {
-  return { pending: '待分配', processing: '维修中', pending_accept: '待验收', completed: '已完成', cancelled: '已取消' }[s] || s
+  return repairStatusText(s)
 }
 
 function resolveImageUrl(url) {
@@ -203,7 +205,7 @@ async function load() {
 
 function openCreate() {
   editId.value = null
-  form.value = { roomId, applianceName: '', brand: '', quantity: 1, unit: '个', status: '正常', remark: '', photos: [] }
+  form.value = { roomId, applianceName: '', brand: '', quantity: 1, unit: '个', status: 'NORMAL', remark: '', photos: [] }
   showDialog.value = true
 }
 
@@ -268,7 +270,7 @@ async function exportChecklist(type) {
     URL.revokeObjectURL(url)
     ElMessage.success('PDF导出成功')
   } catch (e) {
-    ElMessage.error(e.response?.data || 'PDF导出失败')
+    ElMessage.error(getErrorMessage(e, 'PDF导出失败'))
   }
 }
 

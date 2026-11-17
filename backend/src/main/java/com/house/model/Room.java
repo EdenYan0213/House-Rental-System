@@ -60,4 +60,12 @@ public class Room {
   public String getImageUrl() { return imageUrl; }
   public void setDeleted(Integer deleted) { this.deleted = deleted; }
   public Integer getDeleted() { return deleted; }
+
+  @PrePersist
+  void prePersist() {
+    if (deleted == null) {
+      deleted = 0;
+    }
+    status = RoomStatus.normalize(status);
+  }
 }

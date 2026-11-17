@@ -240,8 +240,10 @@ import {
   getContract,
   getContracts,
   renewContract,
-  terminateContract
+  terminateContract,
+  getErrorMessage
 } from '../api'
+import { contractStatusText, contractStatusTag, paymentCycleText } from '../utils/labels'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { showUndoToast } from '../utils/undo'
 
@@ -285,13 +287,11 @@ const batchRenewForm = ref({
 const batchTerminateForm = ref({ terminateDate: '', reason: '' })
 
 function getStatusType(status) {
-  const map = { PENDING: 'warning', ACTIVE: 'success', EXPIRED: 'info', TERMINATED: 'danger' }
-  return map[status] || 'info'
+  return contractStatusTag(status)
 }
 
 function getStatusText(status) {
-  const map = { PENDING: '待生效', ACTIVE: '进行中', EXPIRED: '已到期', TERMINATED: '已解约' }
-  return map[status] || status
+  return contractStatusText(status)
 }
 
 function getDaysLeft(endDate) {
@@ -473,7 +473,7 @@ async function submitBatchRenew() {
     selectedContractIds.value = []
     await loadContracts()
   } catch (e) {
-    ElMessage.error(e.response?.data || e.message)
+    ElMessage.error(getErrorMessage(e, '操作失败'))
   } finally {
     batchLoading.value = false
   }
@@ -498,7 +498,7 @@ async function submitBatchTerminate() {
     selectedContractIds.value = []
     await loadContracts()
   } catch (e) {
-    ElMessage.error(e.response?.data || e.message)
+    ElMessage.error(getErrorMessage(e, '操作失败'))
   } finally {
     batchLoading.value = false
   }

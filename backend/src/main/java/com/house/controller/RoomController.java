@@ -150,10 +150,7 @@ public class RoomController {
   @GetMapping
   public List<Room> list(@RequestParam(required = false) Long buildingId, @RequestParam(required = false) Integer floor,
       @RequestParam(required = false) String status) {
-    if (buildingId == null)
-      return roomService.listByBuildingAndFloor(null, null);
-    if (floor == null)
-      return roomService.listByBuildingAndFloor(buildingId, null, status);
+    // 三个筛选条件都可选，统一交给 service 处理（含状态归一化）
     return roomService.listByBuildingAndFloor(buildingId, floor, status);
   }
 

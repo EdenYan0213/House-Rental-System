@@ -18,16 +18,38 @@
       <el-tag type="info">已选择 {{ selectedRoomIds.length }} 个房间</el-tag>
     </el-row>
 
-    <el-row :gutter="20" style="margin-top:20px">
-      <el-col v-for="room in rooms" :key="room.id" :span="6">
+    <el-empty
+      v-if="rooms.length === 0"
+      description="该楼栋还没有房间"
+      style="margin-top: 40px"
+    >
+      <el-button type="primary" @click="openCreate">新建房间</el-button>
+      <el-button @click="openBatch">批量生成</el-button>
+    </el-empty>
+
+    <el-row v-else :gutter="20" style="margin-top: 20px">
+      <el-col v-for="room in rooms" :key="room.id" :span="8">
         <el-card class="room-card" shadow="hover">
-          <div style="position:absolute;z-index:2;left:10px;top:10px;background:#fff;border-radius:4px;padding:2px 6px">
-            <el-checkbox :model-value="selectedRoomIds.includes(room.id)" @change="(v) => toggleRoomSelection(room.id, v)" />
+          <div
+            style="
+              position: absolute;
+              z-index: 2;
+              left: 10px;
+              top: 10px;
+              background: var(--bg-surface);
+              border-radius: 4px;
+              padding: 2px 6px;
+            "
+          >
+            <el-checkbox
+              :model-value="selectedRoomIds.includes(room.id)"
+              @change="(v) => toggleRoomSelection(room.id, v)"
+            />
           </div>
           <div class="room-image">
             <img :src="getRoomImage(room)" alt="房间图片" />
             <div class="room-status" :class="room.status">
-              {{ room.status }}
+              {{ roomStatusText(room.status) }}
             </div>
           </div>
           <div class="room-info">
@@ -89,9 +111,9 @@
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="form.status">
-            <el-option label="空闲" value="空闲" />
-            <el-option label="已租" value="已租" />
-            <el-option label="维修中" value="维修中" />
+            <el-option label="空闲" value="IDLE" />
+            <el-option label="已租" value="RENTED" />
+            <el-option label="维修中" value="MAINTENANCE" />
           </el-select>
         </el-form-item>
       </el-form>
@@ -155,10 +177,10 @@
           <el-input v-model="batchForm.layout" placeholder="如：2室1厅" />
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="batchForm.status" style="width:100%">
-            <el-option label="空闲" value="空闲" />
-            <el-option label="已租" value="已租" />
-            <el-option label="维修中" value="维修中" />
+          <el-select v-model="batchForm.status" style="width: 100%">
+            <el-option label="空闲" value="IDLE" />
+            <el-option label="已租" value="RENTED" />
+            <el-option label="维修中" value="MAINTENANCE" />
           </el-select>
         </el-form-item>
       </el-form>
@@ -232,9 +254,13 @@ import {
   createRoomsBatchOverride,
   uploadFile,
   uploadFileByUrl,
-  batchAdjustRoomRent
+  batchAdjustRoomRent,
+  getRoomQrPng,
+  exportRoomQrsPdf,
+  getErrorMessage
 } from '../api'
 import { showUndoToast } from '../utils/undo'
+import { roomStatusText } from '../utils/labels'
 
 const route = useRoute()
 const router = useRouter()
@@ -243,12 +269,28 @@ const rooms = ref([])
 const buildingName = ref('')
 const showDialog = ref(false)
 const editId = ref(null)
-const form = ref({ buildingId: buildingId, floor: 1, roomNumber: '', layout: '', area: 0, status: '空闲', imageUrl: '' })
+const form = ref({
+  buildingId: buildingId,
+  floor: 1,
+  roomNumber: '',
+  layout: '',
+  area: 0,
+  status: 'IDLE',
+  imageUrl: ''
+})
 const uploadType = ref('local')
 const imageUrlInput = ref('')
 const urlUploading = ref(false)
 const showBatchDialog = ref(false)
-const batchForm = ref({ buildingId: buildingId, floor: 1, startNumber: 1, endNumber: 10, layout: '', area: 0, status: '空闲' })
+const batchForm = ref({
+  buildingId: buildingId,
+  floor: 1,
+  startNumber: 1,
+  endNumber: 10,
+  layout: '',
+  area: 0,
+  status: 'IDLE'
+})
 
 const showConflictDialog = ref(false)
 const conflicts = ref([])
@@ -329,7 +371,7 @@ async function submitBatchRent() {
     ElMessage.success(`调整完成：房间${res.data.affectedRooms}个，合同${res.data.affectedContracts}份`)
     showBatchRentDialog.value = false
   } catch (e) {
-    ElMessage.error(e.response?.data || e.message)
+    ElMessage.error(getErrorMessage(e, '操作失败'))
   } finally {
     batchRentLoading.value = false
   }
@@ -337,7 +379,15 @@ async function submitBatchRent() {
 
 function openCreate() {
   editId.value = null
-  form.value = { buildingId: buildingId, floor: 1, roomNumber: '', layout: '', area: 0, status: '空闲', imageUrl: '' }
+  form.value = {
+    buildingId: buildingId,
+    floor: 1,
+    roomNumber: '',
+    layout: '',
+    area: 0,
+    status: 'IDLE',
+    imageUrl: ''
+  }
   uploadType.value = 'local'
   imageUrlInput.value = ''
   showDialog.value = true
@@ -345,7 +395,94 @@ function openCreate() {
 
 function openBatch() {
   showBatchDialog.value = true
-  batchForm.value = { buildingId: buildingId, floor: 1, startNumber: 1, endNumber: 10, layout: '', area: 0, status: '空闲' }
+  batchForm.value = {
+    buildingId: buildingId,
+    floor: 1,
+    startNumber: 1,
+    endNumber: 10,
+    layout: '',
+    area: 0,
+    status: 'IDLE'
+  }
+}
+
+function openQrBatchDialog() {
+  qrBatchForm.value.useSelectedOnly = selectedRoomIds.value.length > 0;
+  showQrBatchDialog.value = true;
+}
+
+async function showRoomQr(room) {
+  currentQrRoom.value = room;
+  try {
+    const res = await getRoomQrPng(room.id, { showLogo: false });
+    if (qrImageUrl.value) {
+      URL.revokeObjectURL(qrImageUrl.value);
+    }
+    qrImageUrl.value = URL.createObjectURL(res.data);
+    showQrDialog.value = true;
+  } catch (_) {
+    ElMessage.error("二维码生成失败");
+  }
+}
+
+async function downloadQrPng() {
+  if (!currentQrRoom.value) return;
+  try {
+    const res = await getRoomQrPng(currentQrRoom.value.id, { showLogo: true });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(res.data);
+    link.download = `${buildingName.value}_${currentQrRoom.value.roomNumber}_二维码.png`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+  } catch (_) {
+    ElMessage.error("下载失败");
+  }
+}
+
+function printQr() {
+  if (!qrImageUrl.value) return;
+  const win = window.open("", "_blank");
+  if (!win) return;
+  win.document.write(`<img src="${qrImageUrl.value}" style="width:320px;display:block;margin:20px auto;"/>`);
+  win.document.close();
+  win.print();
+}
+
+async function exportQrBatchPdf() {
+  qrBatchLoading.value = true;
+  try {
+    let targetRooms = qrBatchForm.value.useSelectedOnly
+      ? rooms.value.filter((room) => selectedRoomIds.value.includes(room.id))
+      : rooms.value;
+
+    if (qrBatchForm.value.floor !== null && qrBatchForm.value.floor !== undefined) {
+      targetRooms = targetRooms.filter((r) => Number(r.floor) === Number(qrBatchForm.value.floor));
+    }
+    if (targetRooms.length === 0) {
+      ElMessage.warning("没有可导出的房间");
+      return;
+    }
+    const roomIds = targetRooms.map((r) => r.id);
+    const res = await exportRoomQrsPdf({
+      roomIds,
+      paperSize: qrBatchForm.value.paperSize,
+      qrPerPage: qrBatchForm.value.qrPerPage,
+      showLogo: qrBatchForm.value.showLogo,
+    });
+
+    const fileName = `${buildingName.value || "房间"}二维码_${new Date().toISOString().slice(0, 10).replace(/-/g, "")}.pdf`;
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(res.data);
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    ElMessage.success("导出成功");
+    showQrBatchDialog.value = false;
+  } catch (_) {
+    ElMessage.error("导出失败");
+  } finally {
+    qrBatchLoading.value = false;
+  }
 }
 
 function editRoom(r) {
@@ -471,7 +608,7 @@ async function batchCreate() {
       }
     }
   } catch (e) {
-    ElMessage.error('批量生成失败：' + (e?.response?.data || e.message))
+    ElMessage.error(getErrorMessage(e, '批量生成失败'))
   }
 }
 
@@ -519,8 +656,8 @@ async function overrideAll() {
 }
 
 function tagType(status) {
-  if (status === '已租') return 'danger'
-  if (status === '维修中') return 'warning'
+  if (status === 'RENTED') return 'danger'
+  if (status === 'MAINTENANCE') return 'warning'
   return 'success'
 }
 
@@ -582,7 +719,7 @@ onMounted(load)
   width: 100%;
   height: 160px;
   overflow: hidden;
-  background: #f5f5f5;
+  background: var(--bg-main);
   position: relative;
 }
 
@@ -602,15 +739,15 @@ onMounted(load)
   color: #fff;
 }
 
-.room-status.已租 {
+.room-status.RENTED {
   background: #f56c6c;
 }
 
-.room-status.空闲 {
+.room-status.IDLE {
   background: #67c23a;
 }
 
-.room-status.维修中 {
+.room-status.MAINTENANCE {
   background: #e6a23c;
 }
 
@@ -620,12 +757,12 @@ onMounted(load)
 
 .room-info h3 {
   margin: 0 0 8px 0;
-  font-size: 18px;
-  color: #333;
+  font-size: 20px;
+  color: var(--text-main);
 }
 
 .room-info .detail {
-  color: #666;
+  color: var(--text-muted);
   font-size: 14px;
   margin: 0 0 12px 0;
 }

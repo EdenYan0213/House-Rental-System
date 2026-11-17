@@ -57,6 +57,12 @@ public class BackupService {
     @Value("${app.backup.storage-path:./backups}")
     private String backupStoragePath;
 
+    @Value("${app.backup.mysqldump-path:mysqldump}")
+    private String mysqldumpPath;
+
+    @Value("${app.backup.mysql-path:mysql}")
+    private String mysqlPath;
+
     public List<BackupRecord> getAllBackups() {
         return backupRecordRepository.findAllByOrderByBackupTimeDesc();
     }
@@ -152,7 +158,7 @@ public class BackupService {
     private boolean backupDatabase(String dbName, String outputFile) {
         try {
             ProcessBuilder pb = new ProcessBuilder(
-                    "mysqldump",
+                    mysqldumpPath,
                     "-u" + dbUsername,
                     "-p" + dbPassword,
                     "--single-transaction",
@@ -403,7 +409,7 @@ public class BackupService {
     private boolean restoreDatabase(String dbName, String sqlFile) {
         try {
             ProcessBuilder pb = new ProcessBuilder(
-                    "mysql",
+                    mysqlPath,
                     "-u" + dbUsername,
                     "-p" + dbPassword,
                     dbName);

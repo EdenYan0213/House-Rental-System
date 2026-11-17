@@ -10,7 +10,7 @@
           <el-icon><Download /></el-icon>
           导出PDF
         </el-button>
-        <el-button type="warning" @click="openPayment" v-if="bill?.status !== 'PAID'">
+        <el-button type="warning" @click="openPayment" v-if="canPayBill">
           <el-icon><Wallet /></el-icon>
           收款
         </el-button>
@@ -172,11 +172,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Printer, Download, Wallet } from '@element-plus/icons-vue'
-import { getBill, recordPayment } from '@/api'
+import { getBill, recordPayment, getErrorMessage } from '@/api'
+import { billStatusText, billStatusTag, paymentMethodText } from '@/utils/labels'
 import html2pdf from 'html2pdf.js'
 
 const router = useRouter()
@@ -204,18 +205,21 @@ const paymentRules = {
 }
 
 function getStatusType(status) {
-  const map = { PENDING: 'danger', PARTIAL: 'warning', PAID: 'success' }
-  return map[status] || 'info'
+  return billStatusTag(status)
 }
 
 function getStatusText(status) {
-  const map = { PENDING: '待付款', PARTIAL: '部分付款', PAID: '已付清' }
-  return map[status] || status
+  return billStatusText(status)
 }
 
+// 已付清或已作废的账单不可再收款
+const canPayBill = computed(() => {
+  const s = String(bill.value?.status || '').trim().toUpperCase()
+  return !['PAID', 'VOID', 'OBSOLETE'].includes(s)
+})
+
 function getPaymentMethodText(method) {
-  const map = { CASH: '现金', ALIPAY: '支付宝', WECHAT: '微信', BANK: '银行转账' }
-  return map[method] || method
+  return paymentMethodText(method)
 }
 
 function goBack() {
@@ -231,7 +235,7 @@ async function loadBill() {
     details.value = data.details || []
     payments.value = data.payments || []
   } catch (err) {
-    ElMessage.error('加载失败')
+    ElMessage.error(getErrorMessage(err, '账单加载失败'))
   } finally {
     loading.value = false
   }
@@ -257,7 +261,7 @@ async function submitPayment() {
       paymentVisible.value = false
       loadBill()
     } catch (err) {
-      ElMessage.error(err.response?.data || '收款失败')
+      ElMessage.error(getErrorMessage(err, '收款失败'))
     } finally {
       paying.value = false
     }
@@ -368,7 +372,7 @@ onMounted(() => {
   margin-top: 20px;
   text-align: right;
   padding: 15px;
-  background: #f5f7fa;
+  background: var(--bg-main);
   border-radius: 4px;
 }
 
@@ -380,23 +384,23 @@ onMounted(() => {
 .amount {
   font-size: 20px;
   font-weight: bold;
-  color: #409eff;
+  color: var(--el-color-primary);
 }
 
 .paid {
-  color: #67c23a;
+  color: var(--success-color);
 }
 
 .unpaid {
   font-size: 20px;
   font-weight: bold;
-  color: #f56c6c;
+  color: var(--danger-color);
 }
 
 .amount-large {
   font-size: 24px;
   font-weight: bold;
-  color: #409eff;
+  color: var(--el-color-primary);
 }
 
 .sign-section {
@@ -414,7 +418,7 @@ onMounted(() => {
 
 .sign-line {
   width: 160px;
-  border-bottom: 1px solid #999;
+  border-bottom: 1px solid var(--border-color);
   margin-left: 8px;
 }
 

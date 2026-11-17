@@ -152,8 +152,10 @@ import {
   rejectRepairOrder,
   cancelRepairOrder,
   generateRepairBill,
-  uploadFile
+  uploadFile,
+  getErrorMessage
 } from '../api'
+import { repairStatusText, repairStatusTag } from '../utils/labels'
 
 const route = useRoute()
 const loading = ref(false)
@@ -184,11 +186,11 @@ const filteredRooms = computed(() => {
 })
 
 function statusText(s) {
-  return { pending: '待分配', processing: '维修中', pending_accept: '待验收', completed: '已完成', cancelled: '已取消' }[s] || s
+  return repairStatusText(s)
 }
 
 function statusType(s) {
-  return { pending: 'info', processing: 'warning', pending_accept: 'primary', completed: 'success', cancelled: 'danger' }[s] || 'info'
+  return repairStatusTag(s)
 }
 
 function beforeUpload(file) {
