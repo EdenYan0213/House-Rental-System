@@ -177,7 +177,11 @@ public class OperationLogService {
     Map<String, Object> out = new HashMap<>();
     out.put("operators", operationLogRepository.findDistinctOperators());
     out.put("modules", operationLogRepository.findDistinctModules());
-    out.put("actions", operationLogRepository.findDistinctActions());
+    // 动作在库内是英文常量（add/edit/delete…），对外返回中文便于筛选下拉直接展示
+    out.put("actions", operationLogRepository.findDistinctActions().stream()
+        .map(this::actionText)
+        .distinct()
+        .toList());
     return out;
   }
 
@@ -227,6 +231,28 @@ public class OperationLogService {
       list.add(item);
     }
     return list;
+  }
+
+  /** 动作英文字面量 → 中文展示名（与前端 labels.js 保持一致）。 */
+  private String actionText(String action) {
+    if (action == null) {
+      return "其他操作";
+    }
+    return switch (action.toLowerCase(Locale.ROOT)) {
+      case "login" -> "登录";
+      case "logout" -> "登出";
+      case "add" -> "新增";
+      case "edit" -> "编辑";
+      case "delete" -> "删除";
+      case "void" -> "作废";
+      case "import" -> "导入";
+      case "export" -> "导出";
+      case "pay" -> "收款";
+      case "renew" -> "续租";
+      case "terminate" -> "解约";
+      case "move_out" -> "退租";
+      default -> "其他操作";
+    };
   }
 
   private String normalizeAction(String action) {
