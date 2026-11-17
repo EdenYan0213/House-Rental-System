@@ -40,18 +40,18 @@
       <el-table-column prop="electricReading" label="电表读数(度)" width="120" />
       <el-table-column label="用水量(m³)" width="120">
         <template #default="{ row, $index }">
-          <span v-if="$index < meterReadings.length - 1" :style="{ color: (row.waterReading - meterReadings[$index + 1].waterReading) < 0 ? '#F56C6C' : '#67C23A' }">
+          <span v-if="$index < meterReadings.length - 1" :style="{ color: (row.waterReading - meterReadings[$index + 1].waterReading) < 0 ? 'var(--danger-color)' : 'var(--success-color)' }">
             {{ (row.waterReading - meterReadings[$index + 1].waterReading).toFixed(2) }}
           </span>
-          <span v-else style="color: #909399">-</span>
+          <span v-else style="color: var(--text-muted)">-</span>
         </template>
       </el-table-column>
       <el-table-column label="用电量(度)" width="120">
         <template #default="{ row, $index }">
-          <span v-if="$index < meterReadings.length - 1" :style="{ color: (row.electricReading - meterReadings[$index + 1].electricReading) < 0 ? '#F56C6C' : '#67C23A' }">
+          <span v-if="$index < meterReadings.length - 1" :style="{ color: (row.electricReading - meterReadings[$index + 1].electricReading) < 0 ? 'var(--danger-color)' : 'var(--success-color)' }">
             {{ (row.electricReading - meterReadings[$index + 1].electricReading).toFixed(2) }}
           </span>
-          <span v-else style="color: #909399">-</span>
+          <span v-else style="color: var(--text-muted)">-</span>
         </template>
       </el-table-column>
       <el-table-column prop="createTime" label="操作时间" />
@@ -87,7 +87,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { getRoom, getMeterReadings, saveMeterReadings, getBuilding, deleteMeterReading } from '../api'
+import { getRoom, getMeterReadings, saveMeterReadings, getBuilding, deleteMeterReading, getErrorMessage } from '../api'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const router = useRouter()
@@ -125,7 +125,7 @@ async function loadRoom() {
       roomData.value.buildingName = b.data.name
     }
   } catch (e) {
-    ElMessage.error('加载房间信息失败')
+    ElMessage.error(getErrorMessage(e, '加载房间信息失败'))
   }
 }
 
@@ -136,7 +136,7 @@ async function loadMeterReadings() {
     allReadings.value = (res.data || []).sort((a, b) => new Date(b.recordDate) - new Date(a.recordDate))
     filterReadings()
   } catch (e) {
-    ElMessage.error('加载水电记录失败')
+    ElMessage.error(getErrorMessage(e, '加载水电记录失败'))
   } finally {
     loading.value = false
   }
@@ -183,7 +183,7 @@ async function submit() {
     }
     await loadMeterReadings()
   } catch (e) {
-    ElMessage.error('保存失败')
+    ElMessage.error(getErrorMessage(e, '保存失败'))
   } finally {
     saving.value = false
   }
@@ -196,7 +196,7 @@ async function deleteRecord(row) {
     ElMessage.success('删除成功')
     await loadMeterReadings()
   } catch (e) {
-    if (e !== 'cancel') ElMessage.error('删除失败')
+    if (e !== 'cancel') ElMessage.error(getErrorMessage(e, '删除失败'))
   }
 }
 

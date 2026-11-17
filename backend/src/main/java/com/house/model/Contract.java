@@ -94,4 +94,14 @@ public class Contract {
   public String getTenantPhone() { return this.tenantPhone; }
   public void setDeleted(Integer deleted) { this.deleted = deleted; }
   public Integer getDeleted() { return deleted; }
+
+  @PrePersist
+  void prePersist() {
+    if (deleted == null) {
+      deleted = 0;
+    }
+    if (reminderSent == null) {
+      reminderSent = "0";
+    }
+  }
 }

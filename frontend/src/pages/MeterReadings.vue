@@ -36,7 +36,7 @@
         <template #default="{ row }">
           <span v-if="row.lastWater">水: {{ row.lastWater }}</span>
           <span v-if="row.lastElectric" style="margin-left: 10px">电: {{ row.lastElectric }}</span>
-          <span v-if="!row.lastWater && !row.lastElectric" style="color: #909399">无记录</span>
+          <span v-if="!row.lastWater && !row.lastElectric" style="color: var(--text-muted)">无记录</span>
         </template>
       </el-table-column>
       <el-table-column label="水表读数" width="150">
@@ -77,13 +77,13 @@
           <el-icon style="font-size: 28px"><UploadFilled /></el-icon>
           <div style="margin-top: 8px">将 Excel 文件拖到此处，或点击上传</div>
           <template #tip>
-            <div style="margin-top: 8px; color: #606266">
+            <div style="margin-top: 8px; color: var(--text-muted)">
               仅支持 .xlsx / .xls，大小不超过 10MB
               <el-link type="primary" :underline="false" style="margin-left: 12px" @click="downloadTemplate">下载模板</el-link>
             </div>
           </template>
         </el-upload>
-        <div v-if="importUploadError" style="color: #f56c6c; margin-top: 10px">{{ importUploadError }}</div>
+        <div v-if="importUploadError" style="color: var(--danger-color); margin-top: 10px">{{ importUploadError }}</div>
       </div>
 
       <div v-else-if="importStep === 'parsed'">
@@ -117,7 +117,7 @@
           :title="`共 ${importSummary.buildingCount || 0} 栋楼，${importSummary.successCount || 0} 条记录，覆盖 ${importSummary.dateCount || 0} 个日期。`"
           style="margin-bottom: 14px"
         />
-        <div style="margin-bottom: 10px; color: #606266">
+        <div style="margin-bottom: 10px; color: var(--text-muted)">
           导入规则：按“房间 + 日期”唯一确定记录，已存在则覆盖，不存在则新增。
         </div>
         <el-table :data="importPreviewRows" max-height="360" border>

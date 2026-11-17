@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS `room_appliance` (
   `brand` varchar(100) DEFAULT NULL,
   `quantity` int DEFAULT 1,
   `unit` varchar(20) DEFAULT '个',
-  `status` varchar(20) DEFAULT '正常',
+  `status` varchar(20) DEFAULT 'NORMAL',
   `remark` text,
   `photos` json DEFAULT NULL,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,

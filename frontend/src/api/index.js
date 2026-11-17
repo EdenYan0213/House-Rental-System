@@ -1,8 +1,10 @@
 import axios from 'axios'
+import { ElMessage } from 'element-plus'
 
 const api = axios.create({
   baseURL: '/api',
-  timeout: 5000,
+  // 导入/导出接口耗时较长，默认 5s 不够用；单次请求可通过 config.timeout 覆盖
+  timeout: 15000,
 })
 
 const TOKEN_KEY = 'token'
@@ -16,14 +18,41 @@ api.interceptors.request.use(config => {
   return config
 })
 
+/**
+ * 后端错误响应结构不统一：可能是裸字符串、{message} 或 {error}，
+ * 这里统一抽取成一句可读文案，避免各页面自行拼装。
+ */
+export function getErrorMessage(error, fallback = '操作失败') {
+  if (!error) return fallback
+  if (error.code === 'ECONNABORTED') return '请求超时，请稍后重试'
+  if (!error.response) return '网络异常，请检查网络连接'
+
+  const { data, status } = error.response
+  if (typeof data === 'string' && data.trim()) return data
+  if (data && typeof data === 'object') {
+    if (data.message) return data.message
+    if (data.error) return data.error
+  }
+  if (status === 403) return '无权限执行该操作，请联系管理员'
+  if (status === 404) return '请求的资源不存在'
+  if (status >= 500) return '服务端异常，请稍后重试'
+  return error.message || fallback
+}
+
 api.interceptors.response.use(
   response => response,
   error => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status
+    if (status === 401) {
       localStorage.removeItem(TOKEN_KEY)
       localStorage.removeItem(USER_KEY)
       const redirect = encodeURIComponent(window.location.pathname + window.location.search)
       window.location.href = `/login?redirect=${redirect}`
+    } else if (status === 403) {
+      // 403 不跳转，只提示原因，避免用户被莫名踢出当前页面
+      ElMessage.warning(getErrorMessage(error, '无权限执行该操作'))
+    } else if (status === 413) {
+      ElMessage.warning('文件过大，请压缩后重新上传')
     }
     return Promise.reject(error)
   }
@@ -49,8 +78,8 @@ export const createRoomsBatch = (data) => api.post('/rooms/batch', data)
 export const createRoomsBatchOverride = (data) => api.post('/rooms/batch/override', data)
 export const batchAdjustRoomRent = (data) => api.post('/rooms/batch-adjust-rent', data)
 export const getRoomQrLink = (roomId) => api.get(`/qr/rooms/${roomId}/link`)
-export const getRoomQrPng = (roomId, params) => api.get(`/qr/rooms/${roomId}/png`, { params, responseType: 'blob' })
-export const exportRoomQrsPdf = (data) => api.post('/qr/rooms/batch-pdf', data, { responseType: 'blob' })
+export const getRoomQrPng = (roomId, params) => api.get(`/qr/rooms/${roomId}/png`, { params, responseType: 'blob', timeout: 60000 })
+export const exportRoomQrsPdf = (data) => api.post('/qr/rooms/batch-pdf', data, { responseType: 'blob', timeout: 60000 })
 
 export const getApplianceTemplates = () => api.get('/appliance-templates')
 export const createApplianceTemplate = (data) => api.post('/appliance-templates', data)
@@ -128,15 +157,17 @@ export const deleteFeeItem = (id) => api.delete(`/fee-items/${id}`)
 export const getMeterReadings = (params) => api.get('/meter-readings', { params })
 export const saveMeterReadings = (data) => api.post('/meter-readings', data)
 export const deleteMeterReading = (id) => api.delete(`/meter-readings/${id}`)
-export const downloadMeterReadingImportTemplate = () => api.get('/meter-readings/import-template', { responseType: 'blob' })
+export const downloadMeterReadingImportTemplate = () => api.get('/meter-readings/import-template', { responseType: 'blob', timeout: 60000 })
 export const parseMeterReadingImportFile = (file) => {
   const formData = new FormData()
   formData.append('file', file)
   return api.post('/meter-readings/import/parse', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 60000
   })
 }
-export const confirmMeterReadingImport = (records) => api.post('/meter-readings/import/confirm', { records })
+export const confirmMeterReadingImport = (records) =>
+  api.post('/meter-readings/import/confirm', { records }, { timeout: 60000 })
 
 export const getDeposits = (params) => api.get('/deposits', { params })
 export const createDeposit = (data) => api.post('/deposits', data)
@@ -160,9 +191,9 @@ export const exportLogs = (params) => api.get('/logs/export', { params })
 export const getOperationSnapshots = (params) => api.get('/operation-snapshots', { params })
 export const getOperationSnapshotDetail = (id) => api.get(`/operation-snapshots/${id}`)
 export const recoverOperationSnapshot = (id) => api.post(`/operation-snapshots/${id}/recover`)
-export const exportModuleData = (module, data) => api.post(`/export/${module}`, data || {}, { responseType: 'blob' })
+export const exportModuleData = (module, data) => api.post(`/export/${module}`, data || {}, { responseType: 'blob', timeout: 60000 })
 export const exportRoomApplianceChecklistPdf = (roomId, type) =>
-  api.get('/export/room-appliance-checklist-pdf', { params: { roomId, type }, responseType: 'blob' })
+  api.get('/export/room-appliance-checklist-pdf', { params: { roomId, type }, responseType: 'blob', timeout: 60000 })
 
 export const getBills = (params) => api.get('/bills', { params })
 export const getBill = (id) => api.get(`/bills/${id}`)

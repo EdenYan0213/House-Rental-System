@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: ${SERVER_PORT:8081}
 
 spring:
   jpa:
@@ -60,3 +60,9 @@ app:
     cleanup-cron: ${SNAPSHOT_CLEANUP_CRON:0 0 */6 * * *}
   qr:
     base-url: ${QR_BASE_URL:http://localhost:5173}
+  backup:
+    # 备份 zip 存放目录（含 mysqldump 导出与上传文件）
+    storage-path: ${BACKUP_DIR:./backups}
+    # 命令行工具路径，留默认值则从 PATH 查找
+    mysqldump-path: ${MYSQLDUMP_PATH:mysqldump}
+    mysql-path: ${MYSQL_PATH:mysql}

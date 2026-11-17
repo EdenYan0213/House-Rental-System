@@ -69,6 +69,16 @@ public class Tenant {
   public Long getBlacklistedBy() { return blacklistedBy; }
   public void setDeleted(Integer deleted) { this.deleted = deleted; }
   public Integer getDeleted() { return deleted; }
+
+  @PrePersist
+  void prePersist() {
+    if (deleted == null) {
+      deleted = 0;
+    }
+    if (isBlacklisted == null) {
+      isBlacklisted = Boolean.FALSE;
+    }
+  }
   public Boolean getActiveContract() { return activeContract; }
   public void setActiveContract(Boolean activeContract) { this.activeContract = activeContract; }
 }

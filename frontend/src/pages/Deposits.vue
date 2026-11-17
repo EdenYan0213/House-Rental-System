@@ -48,7 +48,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getDeposits } from '../api'
+import { getDeposits, getErrorMessage } from '../api'
 import { ElMessage } from 'element-plus'
 
 const router = useRouter()

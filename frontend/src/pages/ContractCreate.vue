@@ -10,7 +10,7 @@
     </el-steps>
 
     <el-card v-show="step === 0">
-      <div slot="header">步骤1: 选择空闲房间</div>
+      <template #header>步骤1: 选择空闲房间</template>
       <el-row :gutter="10" style="margin-bottom: 15px">
         <el-select v-model="buildingFilter" placeholder="选择楼栋" clearable @change="loadRooms">
           <el-option v-for="b in buildings" :key="b.id" :label="b.name" :value="b.id" />
@@ -27,14 +27,14 @@
         <el-table-column prop="layout" label="户型" />
         <el-table-column prop="status" label="状态">
           <template #default="{ row }">
-            <el-tag :type="row.status === '空闲' ? 'success' : 'info'">{{ row.status }}</el-tag>
+            <el-tag :type="roomStatusTag(row.status)">{{ roomStatusText(row.status) }}</el-tag>
           </template>
         </el-table-column>
       </el-table>
     </el-card>
 
     <el-card v-show="step === 1">
-      <div slot="header">步骤2: 选择/新增租户</div>
+      <template #header>步骤2: 选择/新增租户</template>
       <el-row style="margin-bottom: 15px">
         <el-input v-model="tenantSearch" placeholder="搜索租户姓名或手机号" clearable style="width: 300px" @change="searchTenants">
           <el-button slot="append" icon="Search" @click="searchTenants" />
@@ -62,7 +62,7 @@
     </el-card>
 
     <el-card v-show="step === 2">
-      <div slot="header">步骤3: 填写合同信息</div>
+      <template #header>步骤3: 填写合同信息</template>
       <el-form :model="contractForm" label-width="120px" style="max-width: 600px">
         <el-form-item label="起租日期" required>
           <el-date-picker v-model="contractForm.startDate" type="date" value-format="YYYY-MM-DD" format="YYYY-MM-DD" style="width: 100%" />
@@ -97,7 +97,7 @@
     </el-card>
 
     <el-card v-show="step === 3">
-      <div slot="header">步骤4: 确认提交</div>
+      <template #header>步骤4: 确认提交</template>
       <el-descriptions :column="1" border>
         <el-descriptions-item label="房间">{{ selectedRoom?.buildingName }} - {{ selectedRoom?.roomNumber }}</el-descriptions-item>
         <el-descriptions-item label="租户">{{ selectedTenant?.name }} ({{ selectedTenant?.phone }})</el-descriptions-item>
@@ -145,7 +145,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { getBuildings, getRooms, getTenants, createTenant, createContract, uploadFile } from '../api'
+import { getBuildings, getRooms, getTenants, createTenant, createContract, uploadFile, getErrorMessage } from '../api'
+import { roomStatusText, roomStatusTag, paymentCycleText } from '../utils/labels'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const router = useRouter()
@@ -186,8 +187,7 @@ const canProceed = computed(() => {
 })
 
 function getPaymentMethodText(method) {
-  const map = { MONTHLY: '月付', QUARTERLY: '季付', HALF_YEAR: '半年付', YEARLY: '年付' }
-  return map[method] || method
+  return paymentCycleText(method)
 }
 
 function goBack() {
@@ -210,7 +210,7 @@ async function loadRooms() {
     floors.value = []
     for (let i = 1; i <= building.totalFloors; i++) floors.value.push(i)
     
-    const res = await getRooms({ buildingId: buildingFilter.value, floor: floorFilter.value, status: '空闲' })
+    const res = await getRooms({ buildingId: buildingFilter.value, floor: floorFilter.value, status: 'IDLE' })
     rooms.value = (res.data.content || res.data).map(r => ({ ...r, buildingName: building.name }))
   } finally {
     loadingRooms.value = false
@@ -268,7 +268,7 @@ async function createNewTenant() {
     showNewTenant.value = false
     ElMessage.success('租户创建成功')
   } catch (e) {
-    ElMessage.error('创建失败')
+    ElMessage.error(getErrorMessage(e, '创建失败'))
   } finally {
     creatingTenant.value = false
   }
@@ -283,6 +283,21 @@ function nextStep() {
 }
 
 async function submit() {
+  // 提交前做一次业务校验，避免把明显非法的合同发给后端
+  const form = contractForm.value
+  if (!form.startDate || !form.endDate) {
+    return ElMessage.warning('请填写起租日期和结束日期')
+  }
+  if (new Date(form.endDate) <= new Date(form.startDate)) {
+    return ElMessage.warning('结束日期必须晚于起租日期')
+  }
+  if (!(Number(form.monthlyRent) > 0)) {
+    return ElMessage.warning('月租金必须大于 0')
+  }
+  if (form.deposit == null || Number(form.deposit) < 0) {
+    return ElMessage.warning('押金不能为负数')
+  }
+
   submitting.value = true
   try {
     let attachmentUrl = ''
@@ -306,7 +321,7 @@ async function submit() {
     ElMessage.success('合同创建成功')
     router.push('/contracts')
   } catch (e) {
-    ElMessage.error('创建失败: ' + (e.response?.data?.message || e.message))
+    ElMessage.error(getErrorMessage(e, '创建失败'))
   } finally {
     submitting.value = false
   }
@@ -321,12 +336,12 @@ onMounted(async () => {
 
 <style>
 .selected-row {
-  background-color: #e6f7ff !important;
+  background-color: var(--el-color-primary-light-9) !important;
 }
 .clickable-row {
   cursor: pointer;
 }
 .clickable-row:hover {
-  background-color: #f5f7fa;
+  background-color: var(--el-fill-color-light);
 }
 </style>

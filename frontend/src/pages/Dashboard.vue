@@ -1,91 +1,82 @@
 <template>
-  <div style="padding: 24px">
-    <h2>仪表盘</h2>
-    <el-row :gutter="20" style="margin-top: 16px">
-      <el-col :span="6">
-        <el-card shadow="hover">
-          <div class="stat-card">
-            <div class="stat-label">今日收款</div>
-            <div class="stat-value">¥{{ formatMoney(stats.todayPayment) }}</div>
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :span="6">
-        <el-card shadow="hover">
-          <div class="stat-card">
-            <div class="stat-label">待收租金</div>
-            <div class="stat-value">¥{{ formatMoney(stats.pendingAmount) }}</div>
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :span="6">
-        <el-card shadow="hover">
-          <div class="stat-card">
-            <div class="stat-label">在租房间数</div>
-            <div class="stat-value">{{ stats.rentedRooms }} / {{ stats.totalRooms }}</div>
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :span="6">
-        <el-card shadow="hover">
-          <div class="stat-card">
-            <div class="stat-label">空闲房间数</div>
-            <div class="stat-value">{{ stats.idleRooms }}</div>
-          </div>
+  <div class="dashboard">
+    <el-row :gutter="20">
+      <el-col v-for="card in statCards" :key="card.label" :xs="12" :sm="12" :md="6">
+        <el-card shadow="hover" class="stat-card" v-loading="loading">
+          <div class="stat-label">{{ card.label }}</div>
+          <div class="stat-value" :class="card.tone">{{ card.value }}</div>
+          <div class="stat-hint" v-if="card.hint">{{ card.hint }}</div>
         </el-card>
       </el-col>
     </el-row>
 
-    <el-row :gutter="20" style="margin-top: 20px">
-      <el-col :span="8">
-        <el-card>
-          <div slot="header">月度收支趋势</div>
-          <div ref="trendChart" style="height: 250px"></div>
+    <el-row :gutter="20" class="section-row">
+      <el-col :xs="24" :md="8">
+        <el-card v-loading="loading">
+          <template #header>月度收支趋势</template>
+          <div v-if="hasTrendData" ref="trendChart" class="chart"></div>
+          <el-empty v-else description="暂无账单数据" :image-size="70" />
         </el-card>
       </el-col>
-      <el-col :span="8">
-        <el-card>
-          <div slot="header">房间出租率</div>
-          <div ref="rentChart" style="height: 250px"></div>
+      <el-col :xs="24" :md="8">
+        <el-card v-loading="loading">
+          <template #header>房间出租率</template>
+          <div v-if="stats.totalRooms > 0" ref="rentChart" class="chart"></div>
+          <el-empty v-else description="还没有房间，请先创建楼栋与房间" :image-size="70">
+            <el-button type="primary" size="small" @click="$router.push('/buildings')">去创建</el-button>
+          </el-empty>
         </el-card>
       </el-col>
-      <el-col :span="8">
-        <el-card>
-          <div slot="header">楼栋出租率</div>
-          <div ref="buildingChart" style="height: 250px"></div>
+      <el-col :xs="24" :md="8">
+        <el-card v-loading="loading">
+          <template #header>楼栋出租率</template>
+          <div v-if="chartData.buildingNames.length > 0" ref="buildingChart" class="chart"></div>
+          <el-empty v-else description="暂无楼栋数据" :image-size="70">
+            <el-button type="primary" size="small" @click="$router.push('/buildings')">去创建</el-button>
+          </el-empty>
         </el-card>
       </el-col>
     </el-row>
 
-    <el-row :gutter="20" style="margin-top: 20px">
-      <el-col :span="12">
+    <el-row :gutter="20" class="section-row">
+      <el-col :xs="24" :md="12">
         <el-card>
-          <div slot="header">
-            <span>快捷入口</span>
+          <template #header>快捷入口</template>
+          <div class="quick-actions">
+            <el-button type="primary" @click="$router.push('/contracts/new')">
+              <el-icon><Plus /></el-icon>新建合同
+            </el-button>
+            <el-button type="success" @click="$router.push('/meter-readings')">
+              <el-icon><Edit /></el-icon>录入水电
+            </el-button>
+            <el-button type="warning" @click="$router.push('/bills')">
+              <el-icon><Document /></el-icon>账单管理
+            </el-button>
+            <el-button @click="$router.push('/messages')">
+              <el-icon><Bell /></el-icon>消息中心
+            </el-button>
           </div>
-          <el-button type="primary" icon="Plus" @click="$router.push('/contracts/new')">新建合同</el-button>
-          <el-button type="success" icon="Edit" @click="$router.push('/meter-readings')">录入水电</el-button>
-          <el-button type="warning" icon="Document" @click="$router.push('/bills')">账单管理</el-button>
-          <el-button type="info" icon="Bell" @click="$router.push('/messages')">消息中心</el-button>
         </el-card>
       </el-col>
-      <el-col :span="12">
+      <el-col :xs="24" :md="12">
         <el-card>
-          <div slot="header">
-            <span>合同到期提醒（3天内）</span>
-            <el-link type="primary" style="margin-left: 10px" @click="$router.push('/contracts?expiring=true')">查看更多</el-link>
-            <el-badge :value="expiringCount" class="badge" />
-          </div>
-          <div v-if="expiringContracts.length === 0" class="empty-tip">暂无即将到期合同</div>
+          <template #header>
+            <div class="card-header">
+              <span>
+                合同到期提醒（{{ expiringDays }}天内）
+                <el-badge v-if="expiringCount > 0" :value="expiringCount" class="badge" />
+              </span>
+              <el-link type="primary" @click="$router.push('/contracts?expiring=true')">查看更多</el-link>
+            </div>
+          </template>
+          <el-empty v-if="expiringContracts.length === 0" description="暂无即将到期合同" :image-size="70" />
           <el-table v-else :data="expiringContracts" size="small" @row-click="viewContract">
             <el-table-column prop="roomNumber" label="房间号" width="100" />
             <el-table-column prop="tenantName" label="租户" />
             <el-table-column prop="endDate" label="到期日期" width="120" />
-            <el-table-column label="剩余天数">
+            <el-table-column label="剩余天数" width="100">
               <template #default="{ row }">
-                <el-tag :type="getDaysLeftType(row.endDate)">
-                  {{ getDaysLeft(row.endDate) }}天
-                </el-tag>
+                <el-tag :type="getDaysLeftType(row.endDate)">{{ getDaysLeft(row.endDate) }}天</el-tag>
               </template>
             </el-table-column>
           </el-table>
@@ -96,30 +87,83 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
-import { getExpiringContracts } from '../api'
+import { ElMessage } from 'element-plus'
+import { Plus, Edit, Document, Bell } from '@element-plus/icons-vue'
+import { getDashboardStats, getDashboardCharts, getExpiringContracts, getErrorMessage } from '@/api'
 
 const router = useRouter()
-const stats = ref({
+
+const loading = ref(false)
+const expiringDays = ref(3)
+const stats = reactive({
   todayPayment: 0,
   pendingAmount: 0,
   rentedRooms: 0,
   idleRooms: 0,
-  totalRooms: 0
+  totalRooms: 0,
+  overdueCount: 0
+})
+const chartData = reactive({
+  trendMonths: [],
+  trendIncome: [],
+  trendExpense: [],
+  buildingNames: [],
+  buildingRates: []
 })
 const expiringContracts = ref([])
 const expiringCount = ref(0)
+
 const trendChart = ref(null)
 const rentChart = ref(null)
 const buildingChart = ref(null)
+// 统一持有实例，卸载时 dispose，避免路由切换后内存泄漏
+const chartInstances = []
+
+const hasTrendData = computed(
+  () => chartData.trendMonths.length > 0 && chartData.trendIncome.some(v => Number(v) > 0)
+)
+
+const rentRate = computed(() =>
+  stats.totalRooms > 0 ? Math.round((stats.rentedRooms / stats.totalRooms) * 100) : 0
+)
+
+const statCards = computed(() => [
+  {
+    label: '今日收款',
+    value: `¥${formatMoney(stats.todayPayment)}`,
+    tone: 'tone-primary',
+    hint: null
+  },
+  {
+    label: '待收租金',
+    value: `¥${formatMoney(stats.pendingAmount)}`,
+    tone: 'tone-warning',
+    hint: stats.overdueCount > 0 ? `共 ${stats.overdueCount} 张未结清账单` : null
+  },
+  {
+    label: '在租房间数',
+    value: `${stats.rentedRooms} / ${stats.totalRooms}`,
+    tone: 'tone-success',
+    hint: stats.totalRooms > 0 ? `出租率 ${rentRate.value}%` : null
+  },
+  {
+    label: '空闲房间数',
+    value: String(stats.idleRooms),
+    tone: 'tone-info',
+    hint: null
+  }
+])
 
 function formatMoney(val) {
-  return val ? val.toLocaleString() : '0'
+  const num = Number(val || 0)
+  return num.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
 }
 
 function getDaysLeft(endDate) {
+  if (!endDate) return '-'
   const end = new Date(endDate)
   const today = new Date()
   return Math.ceil((end - today) / (1000 * 60 * 60 * 24))
@@ -137,107 +181,172 @@ function viewContract(row) {
 }
 
 async function loadStats() {
-  try {
-    const res = await fetch('/api/dashboard/stats', {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-    })
-    if (res.ok) {
-      stats.value = await res.json()
-    }
-  } catch (e) {
-    console.error('Failed to load stats', e)
-  }
+  const res = await getDashboardStats()
+  Object.assign(stats, res.data || {})
 }
 
 async function loadCharts() {
-  try {
-    const res = await fetch('/api/dashboard/charts', {
-      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-    })
-    if (res.ok) {
-      const data = await res.json()
-      initCharts(data)
-    }
-  } catch (e) {
-    initCharts({})
-  }
+  const res = await getDashboardCharts()
+  const data = res.data || {}
+  Object.assign(chartData, {
+    trendMonths: data.trendMonths || [],
+    trendIncome: data.trendIncome || [],
+    trendExpense: data.trendExpense || [],
+    buildingNames: data.buildingNames || [],
+    buildingRates: data.buildingRates || []
+  })
 }
 
 async function loadExpiringContracts() {
-  try {
-    const res = await getExpiringContracts(3)
-    expiringContracts.value = res.data.contracts || []
-    expiringCount.value = res.data.count || 0
-  } catch (e) {
-    console.error('Failed to load expiring contracts', e)
+  const res = await getExpiringContracts(expiringDays.value)
+  expiringContracts.value = res.data?.contracts || []
+  expiringCount.value = res.data?.count || 0
+}
+
+function disposeCharts() {
+  while (chartInstances.length) {
+    chartInstances.pop().dispose()
   }
 }
 
-function initCharts(data) {
-  const trendChartEl = echarts.init(trendChart.value)
-  trendChartEl.setOption({
-    tooltip: { trigger: 'axis' },
-    legend: { data: ['收入', '支出'] },
-    xAxis: { type: 'category', data: data.trendMonths || ['1月','2月','3月','4月','5月','6月'] },
-    yAxis: { type: 'value' },
-    series: [
-      { name: '收入', type: 'line', data: data.trendIncome || [12000, 15000, 14000, 18000, 16000, 20000] },
-      { name: '支出', type: 'line', data: data.trendExpense || [3000, 3500, 3200, 4000, 3800, 4500] }
-    ]
-  })
+function renderCharts() {
+  disposeCharts()
 
-  const rentChartEl = echarts.init(rentChart.value)
-  rentChartEl.setOption({
-    tooltip: { trigger: 'item' },
-    series: [{
-      type: 'pie',
-      radius: ['40%', '70%'],
-      data: [
-        { value: data.rentedRooms || 15, name: '已租' },
-        { value: data.idleRooms || 5, name: '空闲' }
+  if (hasTrendData.value && trendChart.value) {
+    const instance = echarts.init(trendChart.value)
+    instance.setOption({
+      tooltip: { trigger: 'axis' },
+      legend: { data: ['收入', '支出'] },
+      grid: { left: 48, right: 16, top: 40, bottom: 28 },
+      xAxis: { type: 'category', data: chartData.trendMonths },
+      yAxis: { type: 'value' },
+      series: [
+        { name: '收入', type: 'line', smooth: true, data: chartData.trendIncome },
+        { name: '支出', type: 'line', smooth: true, data: chartData.trendExpense }
       ]
-    }]
-  })
+    })
+    chartInstances.push(instance)
+  }
 
-  const buildingChartEl = echarts.init(buildingChart.value)
-  buildingChartEl.setOption({
-    tooltip: { trigger: 'axis' },
-    xAxis: { type: 'category', data: data.buildingNames || ['A栋', 'B栋', 'C栋'] },
-    yAxis: { type: 'value' },
-    series: [{
-      type: 'bar',
-      data: data.buildingRates || [80, 65, 90]
-    }]
-  })
+  if (stats.totalRooms > 0 && rentChart.value) {
+    const instance = echarts.init(rentChart.value)
+    const other = Math.max(stats.totalRooms - stats.rentedRooms - stats.idleRooms, 0)
+    instance.setOption({
+      tooltip: { trigger: 'item', formatter: '{b}: {c} 间 ({d}%)' },
+      series: [{
+        type: 'pie',
+        radius: ['40%', '70%'],
+        data: [
+          { value: stats.rentedRooms, name: '已租' },
+          { value: stats.idleRooms, name: '空闲' },
+          { value: other, name: '维修/其他' }
+        ].filter(item => item.value > 0)
+      }]
+    })
+    chartInstances.push(instance)
+  }
+
+  if (chartData.buildingNames.length > 0 && buildingChart.value) {
+    const instance = echarts.init(buildingChart.value)
+    instance.setOption({
+      tooltip: { trigger: 'axis', formatter: '{b}: 出租率 {c}%' },
+      grid: { left: 48, right: 16, top: 24, bottom: 40 },
+      xAxis: { type: 'category', data: chartData.buildingNames },
+      yAxis: { type: 'value', max: 100, axisLabel: { formatter: '{value}%' } },
+      series: [{ type: 'bar', barMaxWidth: 48, data: chartData.buildingRates }]
+    })
+    chartInstances.push(instance)
+  }
+}
+
+function handleResize() {
+  chartInstances.forEach(instance => instance.resize())
+}
+
+async function loadAll() {
+  loading.value = true
+  try {
+    await Promise.all([loadStats(), loadCharts(), loadExpiringContracts()])
+    await nextTick()
+    renderCharts()
+  } catch (e) {
+    ElMessage.error(getErrorMessage(e, '仪表盘数据加载失败'))
+  } finally {
+    loading.value = false
+  }
 }
 
 onMounted(() => {
-  loadStats()
-  loadCharts()
-  loadExpiringContracts()
+  loadAll()
+  window.addEventListener('resize', handleResize)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleResize)
+  disposeCharts()
 })
 </script>
 
 <style scoped>
+.dashboard {
+  padding: 20px;
+}
+.section-row {
+  margin-top: 20px;
+}
 .stat-card {
   text-align: center;
+  margin-bottom: 16px;
+}
+.stat-card :deep(.el-card__body) {
+  padding: 18px 12px;
 }
 .stat-label {
-  color: #909399;
-  font-size: 14px;
+  color: var(--text-muted);
+  font-size: 13px;
   margin-bottom: 8px;
 }
 .stat-value {
-  color: #303133;
+  color: var(--text-main);
   font-size: 24px;
-  font-weight: bold;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.tone-primary {
+  color: var(--accent-color);
+}
+.tone-warning {
+  color: #d97706;
+}
+.tone-success {
+  color: var(--success-color);
+}
+.tone-info {
+  color: var(--text-main);
+}
+.stat-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.chart {
+  height: 250px;
+  width: 100%;
+}
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 .badge {
-  margin-left: 10px;
+  margin-left: 8px;
 }
-.empty-tip {
-  text-align: center;
-  color: #909399;
-  padding: 20px;
+.quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.quick-actions .el-button {
+  margin-left: 0;
 }
 </style>

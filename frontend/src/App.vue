@@ -1,8 +1,17 @@
 <template>
-  <el-container style="height: 100vh" v-if="!isLoginPage">
-    <el-aside width="220px" class="sidebar">
-      <div class="logo">房屋租赁系统</div>
-      <el-menu :default-active="currentPath" router class="sidebar-menu">
+  <el-container class="app-shell" v-if="!isLoginPage">
+    <el-aside :width="sidebarCollapsed ? '64px' : '220px'" class="sidebar">
+      <div class="logo" :class="{ collapsed: sidebarCollapsed }">
+        <span v-if="!sidebarCollapsed">房屋租赁系统</span>
+        <span v-else>租</span>
+      </div>
+      <el-menu
+        :default-active="currentPath"
+        :collapse="sidebarCollapsed"
+        :collapse-transition="false"
+        router
+        class="sidebar-menu"
+      >
         <el-menu-item index="/dashboard">
           <el-icon><Odometer /></el-icon>
           <span>仪表盘</span>
@@ -60,7 +69,21 @@
     </el-aside>
     <el-container>
       <el-header class="header">
-        <div class="header-title">{{ pageTitle }}</div>
+        <div class="header-left">
+          <el-button text class="collapse-trigger" @click="toggleSidebar">
+            <el-icon>
+              <Expand v-if="sidebarCollapsed" />
+              <Fold v-else />
+            </el-icon>
+          </el-button>
+          <!-- 二级页面用面包屑提供回退路径，一级页面直接显示标题 -->
+          <el-breadcrumb v-if="breadcrumbs.length > 1" separator="/" class="breadcrumb">
+            <el-breadcrumb-item v-for="(item, idx) in breadcrumbs" :key="idx" :to="item.to">
+              {{ item.label }}
+            </el-breadcrumb-item>
+          </el-breadcrumb>
+          <div v-else class="header-title">{{ pageTitle }}</div>
+        </div>
         <div class="header-right">
           <el-dropdown @command="handleThemeCommand" trigger="click">
             <el-button text class="theme-trigger">
@@ -106,7 +129,9 @@ import {
   Tools,
   MoonNight,
   Sunny,
-  Monitor
+  Monitor,
+  Expand,
+  Fold
 } from '@element-plus/icons-vue'
 import {
   getUser,
@@ -172,11 +197,45 @@ const pageTitleMap = {
 const pageTitle = computed(() => {
   const path = route.path
   if (path.startsWith('/buildings/') && path.endsWith('/assets')) return '房间器具档案'
+  if (path.startsWith('/buildings/') && path.endsWith('/meter')) return '水电录入'
   if (path.startsWith('/buildings/')) return '房间管理'
-  if (path.startsWith('/contracts/')) return '合同详情'
+  if (path === '/contracts/new') return '新建合同'
   if (path.startsWith('/bills/')) return '账单详情'
-  return pageTitleMap[path] || '房屋租赁系统'
+  return pageTitleMap[path] || route.meta?.title || '房屋租赁系统'
 })
+
+/**
+ * 二级页面面包屑：给出「模块 → 当前页」的回退路径。
+ * 只有 meta.breadcrumb 为真的路由才展开，一级页面保持简洁。
+ */
+const breadcrumbs = computed(() => {
+  const path = route.path
+  const trail = [{ label: '首页', to: '/dashboard' }]
+  if (!route.meta?.breadcrumb) {
+    return trail
+  }
+  if (path.startsWith('/buildings/')) {
+    trail.push({ label: '房屋管理', to: '/buildings' })
+    trail.push({ label: pageTitle.value })
+  } else if (path.startsWith('/contracts/')) {
+    trail.push({ label: '合同管理', to: '/contracts' })
+    trail.push({ label: pageTitle.value })
+  } else if (path.startsWith('/bills/')) {
+    trail.push({ label: '账单管理', to: '/bills' })
+    trail.push({ label: pageTitle.value })
+  } else {
+    trail.push({ label: pageTitle.value })
+  }
+  return trail
+})
+
+const SIDEBAR_KEY = 'sidebarCollapsed'
+const sidebarCollapsed = ref(localStorage.getItem(SIDEBAR_KEY) === '1')
+
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  localStorage.setItem(SIDEBAR_KEY, sidebarCollapsed.value ? '1' : '0')
+}
 
 function handleLogout() {
   removeToken()
@@ -221,6 +280,8 @@ body {
 
 .sidebar {
   background: var(--bg-sidebar);
+  transition: width 0.2s ease;
+  overflow-x: hidden;
 }
 
 .logo {
@@ -230,11 +291,20 @@ body {
   color: var(--text-main);
   font-size: 18px;
   font-weight: 700;
+  white-space: nowrap;
+}
+
+.logo.collapsed {
+  font-size: 16px;
 }
 
 .sidebar-menu {
   border-right: none;
   background: var(--bg-sidebar);
+}
+
+.sidebar-menu:not(.el-menu--collapse) {
+  width: 100%;
 }
 
 .sidebar-menu .el-menu-item,
@@ -260,22 +330,54 @@ body {
   padding: 0 20px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
   border-bottom: 1px solid var(--border-color);
+  gap: 12px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.collapse-trigger {
+  color: var(--text-main);
+  padding: 4px;
+}
+
+.breadcrumb {
+  font-size: 14px;
+}
+
+.breadcrumb .el-breadcrumb__inner {
+  color: var(--text-muted);
+}
+
+.breadcrumb .el-breadcrumb__item:last-child .el-breadcrumb__inner {
+  color: var(--text-main);
+  font-weight: 600;
 }
 
 .header-title {
   font-size: 16px;
   font-weight: 600;
   color: var(--text-main);
+  white-space: nowrap;
 }
 
 .header-right {
   display: flex;
   align-items: center;
   gap: 15px;
+  flex-shrink: 0;
 }
 
 .username {
   color: var(--text-main);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .theme-trigger {
@@ -285,5 +387,12 @@ body {
 .el-dropdown-menu__item.active {
   color: var(--accent-color);
   font-weight: 600;
+}
+
+/* 窄屏下侧边栏自动收起，避免挤压内容区 */
+@media (max-width: 900px) {
+  .header .username {
+    display: none;
+  }
 }
 </style>

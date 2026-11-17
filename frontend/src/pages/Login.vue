@@ -24,7 +24,7 @@
 import { reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { login, setToken, setUser, setThemePreference } from '@/api'
+import { login, setToken, setUser, setThemePreference, getErrorMessage } from '@/api'
 import { applyThemePreference } from '@/utils/theme'
 
 const router = useRouter()
@@ -67,7 +67,7 @@ async function handleLogin() {
         router.push(route.query.redirect || '/dashboard')
       }
     } catch (err) {
-      ElMessage.error(err.response?.data?.message || '登录失败')
+      ElMessage.error(getErrorMessage(err, '登录失败'))
     } finally {
       loading.value = false
     }
@@ -92,12 +92,13 @@ async function handleLogin() {
 .title {
   text-align: center;
   margin-bottom: 30px;
-  color: #333;
+  /* 跟随主题，深色下不能继续用近黑 #333 */
+  color: var(--text-main);
 }
 
 .tips {
   text-align: center;
-  color: #999;
+  color: var(--text-muted);
   font-size: 12px;
   margin-top: 10px;
 }

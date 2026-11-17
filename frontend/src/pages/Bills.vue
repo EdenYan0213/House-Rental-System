@@ -38,9 +38,16 @@
         </el-form-item>
       </el-form>
 
-      <el-table :data="bills" border stripe v-loading="loading">
+      <el-table
+        :data="bills"
+        border
+        stripe
+        v-loading="loading"
+        empty-text="当前筛选条件下没有账单，可调整月份或状态后重试"
+        style="width: 100%"
+      >
         <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="billMonth" label="账单月份" width="120" />
+        <el-table-column prop="billMonth" label="账单月份" width="120" sortable />
         <el-table-column label="房间" width="120">
           <template #default="{ row }">
             {{ row.roomNumber || '-' }}
@@ -51,13 +58,13 @@
             {{ row.buildingName || '-' }}
           </template>
         </el-table-column>
-        <el-table-column prop="tenantName" label="租户" width="120" />
-        <el-table-column prop="totalAmount" label="总金额" width="100">
+        <el-table-column prop="tenantName" label="租户" width="120" sortable />
+        <el-table-column prop="totalAmount" label="总金额" width="110" sortable>
           <template #default="{ row }">
             ¥{{ row.totalAmount?.toFixed(2) }}
           </template>
         </el-table-column>
-        <el-table-column prop="paidAmount" label="已付" width="100">
+        <el-table-column prop="paidAmount" label="已付" width="110" sortable>
           <template #default="{ row }">
             ¥{{ row.paidAmount?.toFixed(2) || '0.00' }}
           </template>
@@ -89,6 +96,16 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <el-pagination
+        v-if="allBills.length > pageSize"
+        class="pager"
+        layout="total, prev, pager, next, jumper"
+        :total="allBills.length"
+        :page-size="pageSize"
+        :current-page="currentPage"
+        @current-change="handlePageChange"
+      />
     </el-card>
 
     <!-- 收款弹窗 -->
@@ -141,7 +158,8 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getBills, generateBill, regenerateBill, voidBill, recordPayment, canGenerateBill, canRecordPayment, canVoidBill } from '@/api'
+import { getBills, generateBill, regenerateBill, voidBill, recordPayment, canGenerateBill, canRecordPayment, canVoidBill, getErrorMessage } from '@/api'
+import { billStatusText, billStatusTag, paymentMethodText } from '@/utils/labels'
 import { showUndoToast } from '../utils/undo'
 
 const router = useRouter()
@@ -154,6 +172,10 @@ const loading = ref(false)
 const paying = ref(false)
 const regenerating = ref(false)
 const bills = ref([])
+// 后端 /api/bills 返回全量列表（不分页），这里做前端分页保证大月份数据也能浏览
+const allBills = ref([])
+const currentPage = ref(1)
+const pageSize = ref(20)
 const queryForm = reactive({ month: '', status: '' })
 const paymentVisible = ref(false)
 const paymentRef = ref(null)
@@ -188,19 +210,19 @@ const paymentRules = {
   paymentMethod: [{ required: true, message: '请选择收款方式', trigger: 'change' }]
 }
 
+// 状态展示统一走 utils/labels，避免各页面各自维护映射
 function getStatusType(status) {
-  const map = { PENDING: 'danger', PARTIAL: 'warning', PAID: 'success', VOID: 'info', OBSOLETE: 'info' }
-  return map[status] || 'info'
+  return billStatusTag(status)
 }
 
 function getStatusText(status) {
-  const map = { PENDING: '待付款', PARTIAL: '部分付款', PAID: '已付清', VOID: '已作废', OBSOLETE: '已作废' }
-  return map[status] || status
+  return billStatusText(status)
 }
 
+// 终态账单不可再收款/作废/重新生成
 function isBillFinal(row) {
-  const s = String(row?.status || '').toUpperCase()
-  return s === 'PAID' || s === 'VOID' || s === 'OBSOLETE'
+  const s = String(row?.status || '').trim().toUpperCase()
+  return ['PAID', 'VOID', 'OBSOLETE'].includes(s)
 }
 
 async function loadBills() {
@@ -210,12 +232,24 @@ async function loadBills() {
     if (queryForm.month) params.month = queryForm.month
     if (queryForm.status) params.status = queryForm.status
     const res = await getBills(params)
-    bills.value = res.data || []
+    allBills.value = res.data || []
+    currentPage.value = 1
+    applyPaging()
   } catch (err) {
-    ElMessage.error('加载失败')
+    ElMessage.error(getErrorMessage(err, '账单加载失败'))
   } finally {
     loading.value = false
   }
+}
+
+function applyPaging() {
+  const start = (currentPage.value - 1) * pageSize.value
+  bills.value = allBills.value.slice(start, start + pageSize.value)
+}
+
+function handlePageChange(page) {
+  currentPage.value = page
+  applyPaging()
 }
 
 function resetQuery() {
@@ -230,7 +264,7 @@ async function handleGenerate() {
     ElMessage.success('账单生成成功')
     loadBills()
   } catch (err) {
-    ElMessage.error('生成失败')
+    ElMessage.error(getErrorMessage(err, '账单生成失败'))
   }
 }
 
@@ -258,7 +292,7 @@ async function submitRegenerate() {
     regenerateVisible.value = false
     loadBills()
   } catch (err) {
-    ElMessage.error(err.response?.data || '重新生成失败')
+    ElMessage.error(getErrorMessage(err, '重新生成失败'))
   }
 }
 
@@ -273,7 +307,7 @@ async function handleVoid(row) {
     await loadBills()
   } catch (err) {
     if (err !== 'cancel') {
-      ElMessage.error(err?.response?.data || err?.message || '作废失败')
+      ElMessage.error(getErrorMessage(err, '作废失败'))
     }
   }
 }
@@ -291,7 +325,7 @@ async function submitPayment() {
       paymentVisible.value = false
       loadBills()
     } catch (err) {
-      ElMessage.error(err.response?.data || '收款失败')
+      ElMessage.error(getErrorMessage(err, '收款失败'))
     } finally {
       paying.value = false
     }
@@ -309,6 +343,11 @@ onMounted(() => {
   padding: 20px;
 }
 
+.pager {
+  margin-top: 16px;
+  justify-content: flex-end;
+}
+
 .card-header {
   display: flex;
   justify-content: space-between;
@@ -318,7 +357,7 @@ onMounted(() => {
 .amount {
   font-size: 18px;
   font-weight: bold;
-  color: #409eff;
+  color: var(--el-color-primary);
 }
 
 /* keep table cells single-line and actions inline */

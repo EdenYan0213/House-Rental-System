@@ -3,6 +3,7 @@ package com.house.service;
 import com.house.dto.ContractCreateRequest;
 import com.house.model.Contract;
 import com.house.model.Room;
+import com.house.model.RoomStatus;
 import com.house.model.Tenant;
 import com.house.model.Building;
 import com.house.model.Bill;
@@ -46,8 +47,8 @@ public class ContractService {
     if (or.isEmpty())
       throw new IllegalArgumentException("房间不存在");
     Room room = or.get();
-    if (!"空闲".equals(room.getStatus())) {
-      throw new IllegalStateException("房间当前不可租（非空闲状态）");
+    if (!RoomStatus.isIdle(room.getStatus())) {
+      throw new IllegalStateException("房间当前不可租（当前状态：" + RoomStatus.normalize(room.getStatus()) + "）");
     }
 
     Tenant tenant = null;
@@ -85,7 +86,7 @@ public class ContractService {
 
     Contract saved = contractRepository.save(c);
 
-    room.setStatus("已租");
+    room.setStatus(RoomStatus.RENTED);
     roomService.update(room);
 
     return saved;
@@ -189,7 +190,7 @@ public class ContractService {
       Optional<Room> or = roomRepository.findById(c.getRoomId());
       if (or.isPresent()) {
         Room room = or.get();
-        room.setStatus("空闲");
+        room.setStatus(RoomStatus.IDLE);
         roomRepository.save(room);
       }
     }
@@ -336,7 +337,7 @@ public class ContractService {
 
       Room room = roomRepository.findById(c.getRoomId()).orElse(null);
       if (room != null) {
-        room.setStatus("空闲");
+        room.setStatus(RoomStatus.IDLE);
         roomRepository.save(room);
       }
       terminated.add(c);

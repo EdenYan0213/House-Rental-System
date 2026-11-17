@@ -29,7 +29,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { getOperationLogs, exportLogs as apiExportLogs } from '../api'
+import { getOperationLogs, exportLogs as apiExportLogs, getErrorMessage } from '../api'
 import { ElMessage } from 'element-plus'
 
 const logs = ref([])

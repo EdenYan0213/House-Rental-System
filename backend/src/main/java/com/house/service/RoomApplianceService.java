@@ -31,7 +31,7 @@ public class RoomApplianceService {
     }
     appliance.setUpdatedAt(now);
     if (appliance.getStatus() == null || appliance.getStatus().isBlank()) {
-      appliance.setStatus("正常");
+      appliance.setStatus("NORMAL");
     }
     if (appliance.getQuantity() == null || appliance.getQuantity() < 1) {
       appliance.setQuantity(1);

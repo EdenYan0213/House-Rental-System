@@ -2,6 +2,7 @@ package com.house.controller;
 
 import com.house.model.Bill;
 import com.house.model.BillDetail;
+import com.house.model.BillStatus;
 import com.house.model.Contract;
 import com.house.model.PaymentRecord;
 import com.house.repo.BillDetailRepository;
@@ -94,7 +95,10 @@ public class BillController {
       list = billRepository.findAll();
     }
     if (status != null && !status.isBlank()) {
-      list = list.stream().filter(b -> status.equals(b.getStatus())).collect(Collectors.toList());
+      String wanted = BillStatus.normalize(status);
+      list = list.stream()
+          .filter(b -> wanted.equals(BillStatus.normalize(b.getStatus())))
+          .collect(Collectors.toList());
     }
     if (roomId != null) {
       list = list.stream().filter(b -> roomId.equals(b.getRoomId())).collect(Collectors.toList());
@@ -102,6 +106,8 @@ public class BillController {
     // 为每个账单填充水电用量（来自 BillDetail）
     if (list != null) {
       for (Bill b : list) {
+        // 归一化历史数据的中文状态，保证前端映射表能命中
+        b.setStatus(BillStatus.normalize(b.getStatus()));
         List<BillDetail> details = billDetailRepository.findByBillId(b.getId());
         double waterUsage = 0.0;
         double electricUsage = 0.0;
@@ -126,6 +132,7 @@ public class BillController {
   @GetMapping("/{id}")
   public ResponseEntity<?> get(@PathVariable Long id) {
     return billRepository.findById(id).map(bill -> {
+      bill.setStatus(BillStatus.normalize(bill.getStatus()));
       List<BillDetail> details = billDetailRepository.findByBillId(bill.getId());
       List<PaymentRecord> payments = paymentRecordRepository.findByBillId(bill.getId());
 
@@ -238,7 +245,7 @@ public class BillController {
       }
 
       Bill bill = billOpt.get();
-      if ("PAID".equals(bill.getStatus())) {
+      if (BillStatus.isPaid(bill.getStatus())) {
         return ResponseEntity.badRequest().body("已付款的账单不能重新生成");
       }
 
@@ -277,17 +284,33 @@ public class BillController {
         "undoTip", "操作成功，可在30分钟内撤销"));
   }
 
+  /**
+   * 登记收款。前端 `recordPayment` 调用此路径；此前缺少该映射导致收款静默失败。
+   * 支持多次部分收款，状态由 PaymentService 依据累计已付金额更新。
+   */
+  @PostMapping("/{id}/payments")
+  public ResponseEntity<?> recordPayment(@PathVariable Long id, @RequestBody PaymentRequest req) {
+    try {
+      PaymentRecord saved = paymentService.recordPayment(id, req);
+      Bill bill = billRepository.findById(id).orElse(null);
+      return ResponseEntity.ok(Map.of(
+          "data", saved,
+          "billStatus", bill != null ? BillStatus.normalize(bill.getStatus()) : BillStatus.PENDING));
+    } catch (IllegalArgumentException | IllegalStateException e) {
+      return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+    }
+  }
+
   @PutMapping("/{id}/void")
   public ResponseEntity<?> voidBill(@PathVariable Long id) {
     Bill before = billRepository.findById(id).orElse(null);
     if (before == null) {
       return ResponseEntity.notFound().build();
     }
-    if ("PAID".equalsIgnoreCase(before.getStatus()) || "已支付".equals(before.getStatus())) {
+    if (BillStatus.isPaid(before.getStatus())) {
       return ResponseEntity.badRequest().body("已支付账单不可作废");
     }
-    if ("VOID".equalsIgnoreCase(before.getStatus()) || "OBSOLETE".equalsIgnoreCase(before.getStatus())
-        || "作废".equals(before.getStatus())) {
+    if (BillStatus.isVoid(before.getStatus())) {
       return ResponseEntity.badRequest().body("账单已作废");
     }
 
@@ -295,7 +318,7 @@ public class BillController {
     OperationSnapshot snapshot = operationSnapshotService.capture(
         "账单管理", "void", "bill", id, targetName, before);
 
-    before.setStatus("VOID");
+    before.setStatus(BillStatus.VOID);
     Bill after = billRepository.save(before);
     operationSnapshotService.complete(snapshot.getId(), after);
 

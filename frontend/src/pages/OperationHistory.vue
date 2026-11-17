@@ -94,6 +94,7 @@ import {
   getOperationSnapshots,
   getOperationSnapshotDetail,
   recoverOperationSnapshot,
+  getErrorMessage,
 } from "../api";
 
 const loading = ref(false);
@@ -144,7 +145,7 @@ async function loadHistory() {
     rows.value = res.data.content || [];
     total.value = res.data.totalElements || rows.value.length;
   } catch (e) {
-    ElMessage.error("加载操作历史失败");
+    ElMessage.error(getErrorMessage(e, "加载操作历史失败"));
   } finally {
     loading.value = false;
   }
@@ -162,7 +163,7 @@ async function showDetail(row) {
     detailAfter.value = res.data.afterData;
     detailVisible.value = true;
   } catch (e) {
-    ElMessage.error(e.response?.data || "加载详情失败");
+    ElMessage.error(getErrorMessage(e, "加载详情失败"));
   }
 }
 
@@ -182,7 +183,7 @@ async function recover(row) {
     await loadHistory();
   } catch (e) {
     if (e === "cancel") return;
-    ElMessage.error(e.response?.data || "恢复失败");
+    ElMessage.error(getErrorMessage(e, "恢复失败"));
   }
 }
 

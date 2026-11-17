@@ -24,7 +24,16 @@
       <el-tag type="info">已选择 {{ selectedRoomIds.length }} 个房间</el-tag>
     </el-row>
 
-    <el-row :gutter="20" style="margin-top: 20px">
+    <el-empty
+      v-if="rooms.length === 0"
+      description="该楼栋还没有房间"
+      style="margin-top: 40px"
+    >
+      <el-button type="primary" @click="openCreate">新建房间</el-button>
+      <el-button @click="openBatch">批量生成</el-button>
+    </el-empty>
+
+    <el-row v-else :gutter="20" style="margin-top: 20px">
       <el-col v-for="room in rooms" :key="room.id" :span="8">
         <el-card class="room-card" shadow="hover">
           <div
@@ -33,7 +42,7 @@
               z-index: 2;
               left: 10px;
               top: 10px;
-              background: #fff;
+              background: var(--bg-surface);
               border-radius: 4px;
               padding: 2px 6px;
             "
@@ -46,7 +55,7 @@
           <div class="room-image">
             <img :src="getRoomImage(room)" alt="房间图片" />
             <div class="room-status" :class="room.status">
-              {{ room.status }}
+              {{ roomStatusText(room.status) }}
             </div>
           </div>
           <div class="room-info">
@@ -128,9 +137,9 @@
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="form.status">
-            <el-option label="空闲" value="空闲" />
-            <el-option label="已租" value="已租" />
-            <el-option label="维修中" value="维修中" />
+            <el-option label="空闲" value="IDLE" />
+            <el-option label="已租" value="RENTED" />
+            <el-option label="维修中" value="MAINTENANCE" />
           </el-select>
         </el-form-item>
       </el-form>
@@ -227,9 +236,9 @@
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="batchForm.status" style="width: 100%">
-            <el-option label="空闲" value="空闲" />
-            <el-option label="已租" value="已租" />
-            <el-option label="维修中" value="维修中" />
+            <el-option label="空闲" value="IDLE" />
+            <el-option label="已租" value="RENTED" />
+            <el-option label="维修中" value="MAINTENANCE" />
           </el-select>
         </el-form-item>
       </el-form>
@@ -370,8 +379,10 @@ import {
   batchAdjustRoomRent,
   getRoomQrPng,
   exportRoomQrsPdf,
+  getErrorMessage,
 } from "../api";
 import { showUndoToast } from "../utils/undo";
+import { roomStatusText } from "../utils/labels";
 
 const route = useRoute();
 const router = useRouter();
@@ -386,7 +397,7 @@ const form = ref({
   roomNumber: "",
   layout: "",
   area: 0,
-  status: "空闲",
+  status: "IDLE",
   imageUrl: "",
 });
 const uploadType = ref("local");
@@ -400,7 +411,7 @@ const batchForm = ref({
   endNumber: 10,
   layout: "",
   area: 0,
-  status: "空闲",
+  status: "IDLE",
 });
 
 const showConflictDialog = ref(false);
@@ -494,7 +505,7 @@ async function submitBatchRent() {
     );
     showBatchRentDialog.value = false;
   } catch (e) {
-    ElMessage.error(e.response?.data || e.message);
+    ElMessage.error(getErrorMessage(e, '操作失败'));
   } finally {
     batchRentLoading.value = false;
   }
@@ -508,7 +519,7 @@ function openCreate() {
     roomNumber: "",
     layout: "",
     area: 0,
-    status: "空闲",
+    status: "IDLE",
     imageUrl: "",
   };
   uploadType.value = "local";
@@ -525,7 +536,7 @@ function openBatch() {
     endNumber: 10,
     layout: "",
     area: 0,
-    status: "空闲",
+    status: "IDLE",
   };
 }
 
@@ -711,7 +722,7 @@ async function batchCreate() {
       }
     }
   } catch (e) {
-    ElMessage.error("批量生成失败：" + (e?.response?.data || e.message));
+    ElMessage.error(getErrorMessage(e, "批量生成失败"));
   }
 }
 
@@ -765,8 +776,8 @@ async function overrideAll() {
 }
 
 function tagType(status) {
-  if (status === "已租") return "danger";
-  if (status === "维修中") return "warning";
+  if (status === "RENTED") return "danger";
+  if (status === "MAINTENANCE") return "warning";
   return "success";
 }
 
@@ -825,7 +836,7 @@ onMounted(load);
   width: 100%;
   height: 220px;
   overflow: hidden;
-  background: #f5f5f5;
+  background: var(--bg-main);
   position: relative;
 }
 
@@ -845,15 +856,15 @@ onMounted(load);
   color: #fff;
 }
 
-.room-status.已租 {
+.room-status.RENTED {
   background: #f56c6c;
 }
 
-.room-status.空闲 {
+.room-status.IDLE {
   background: #67c23a;
 }
 
-.room-status.维修中 {
+.room-status.MAINTENANCE {
   background: #e6a23c;
 }
 
@@ -864,11 +875,11 @@ onMounted(load);
 .room-info h3 {
   margin: 0 0 8px 0;
   font-size: 20px;
-  color: #333;
+  color: var(--text-main);
 }
 
 .room-info .detail {
-  color: #666;
+  color: var(--text-muted);
   font-size: 14px;
   margin: 0 0 12px 0;
 }

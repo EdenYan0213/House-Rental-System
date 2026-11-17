@@ -4,7 +4,7 @@
     <el-card class="panel" v-for="bill in bills" :key="bill.id">
       <div class="row">
         <span>{{ bill.billMonth }}</span>
-        <el-tag type="danger">{{ bill.status }}</el-tag>
+        <el-tag :type="billStatusTag(bill.status)">{{ billStatusText(bill.status) }}</el-tag>
       </div>
       <div class="muted">账单ID: {{ bill.id }}</div>
       <div class="amount">{{ formatMoney(bill.totalAmount) }}</div>
@@ -18,6 +18,7 @@ import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { getMobileRoomSummary } from '@/api'
+import { billStatusText, billStatusTag } from '@/utils/labels'
 
 const route = useRoute()
 const router = useRouter()

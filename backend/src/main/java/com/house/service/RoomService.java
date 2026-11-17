@@ -4,6 +4,7 @@ import com.house.dto.BatchCreateResult;
 import com.house.dto.BatchRoomRequest;
 import com.house.dto.ConflictInfo;
 import com.house.model.Room;
+import com.house.model.RoomStatus;
 import com.house.repo.RoomRepository;
 import org.springframework.stereotype.Service;
 
@@ -20,6 +21,7 @@ public class RoomService {
     }
 
     public Room create(Room room) {
+        room.setStatus(RoomStatus.normalize(room.getStatus()));
         return roomRepository.save(room);
     }
 
@@ -64,7 +66,7 @@ public class RoomService {
                     .roomNumber(roomNumber)
                     .layout(req.getLayout())
                     .area(req.getArea())
-                    .status(req.getStatus() == null ? "空闲" : req.getStatus())
+                    .status(RoomStatus.normalize(req.getStatus()))
                     .build();
             created.add(roomRepository.save(r));
         }
@@ -106,7 +108,7 @@ public class RoomService {
                 existing.setLayout(req.getLayout());
                 existing.setArea(req.getArea());
                 existing.setFloor(req.getFloor());
-                existing.setStatus(req.getStatus() == null ? "空闲" : req.getStatus());
+                existing.setStatus(RoomStatus.normalize(req.getStatus()));
                 created.add(roomRepository.save(existing));
                 continue;
             }
@@ -116,7 +118,7 @@ public class RoomService {
                     .roomNumber(roomNumber)
                     .layout(req.getLayout())
                     .area(req.getArea())
-                    .status(req.getStatus() == null ? "空闲" : req.getStatus())
+                    .status(RoomStatus.normalize(req.getStatus()))
                     .build();
             created.add(roomRepository.save(r));
         }
@@ -144,16 +146,26 @@ public class RoomService {
     }
 
     public List<Room> listByBuildingAndFloor(Long buildingId, Integer floor, String status) {
-        if (buildingId == null && floor == null && status == null)
-            return roomRepository.findAll();
-        if (floor == null && status == null)
-            return roomRepository.findByBuildingId(buildingId);
-        if (status == null)
-            return roomRepository.findByBuildingIdAndFloor(buildingId, floor);
-        return roomRepository.findByBuildingIdAndFloorAndStatus(buildingId, floor, status);
+        List<Room> rooms;
+        if (buildingId == null) {
+            // 未指定楼栋时忽略楼层，避免查 building_id = null 的无效条件
+            rooms = roomRepository.findAll();
+        } else if (floor == null) {
+            rooms = roomRepository.findByBuildingId(buildingId);
+        } else {
+            rooms = roomRepository.findByBuildingIdAndFloor(buildingId, floor);
+        }
+        // 状态筛选在内存中归一化后再比较，兼容历史数据的中英文混用
+        if (status != null && !status.isBlank()) {
+            rooms = rooms.stream().filter(r -> RoomStatus.matches(r.getStatus(), status)).toList();
+        }
+        // 输出统一为规范中文，保证前端标签与筛选下拉能正确命中
+        rooms.forEach(r -> r.setStatus(RoomStatus.normalize(r.getStatus())));
+        return rooms;
     }
 
     public Room update(Room room) {
+        room.setStatus(RoomStatus.normalize(room.getStatus()));
         return roomRepository.save(room);
     }
 

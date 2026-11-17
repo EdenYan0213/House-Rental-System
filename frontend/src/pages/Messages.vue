@@ -51,7 +51,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getMessages, markMessageRead, markAllMessagesRead, getUnreadCount } from '../api'
+import { getMessages, markMessageRead, markAllMessagesRead, getUnreadCount, getErrorMessage } from '../api'
 import { ElMessage } from 'element-plus'
 import { Bell } from '@element-plus/icons-vue'
 

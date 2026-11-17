@@ -87,7 +87,8 @@ import {
   getApplianceTemplates,
   createApplianceTemplate,
   updateApplianceTemplate,
-  deleteApplianceTemplate
+  deleteApplianceTemplate,
+  getErrorMessage,
 } from '../api'
 
 const workers = ref([])
