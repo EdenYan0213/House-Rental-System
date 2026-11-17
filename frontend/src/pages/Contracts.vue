@@ -101,7 +101,7 @@
           <div class="contract-actions">
             <el-button size="small" @click="viewDetail(row)">详情</el-button>
             <el-button size="small" type="warning" @click="renew(row)" :disabled="row.status !== 'ACTIVE'" v-if="canRenew">续租</el-button>
-            <el-button size="small" type="danger" @click="terminate(row)" :disabled="row.status !== 'ACTIVE'" v-if="canTerminate">解约</el-button>
+            <el-button size="small" type="danger" @click="openMoveOut(row)" :disabled="row.status !== 'ACTIVE'" v-if="canTerminate">办理退租</el-button>
           </div>
         </template>
       </el-table-column>
@@ -152,34 +152,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog title="解约" v-model="showTerminate" width="450px">
-      <el-form :model="terminateForm" label-width="80px">
-        <el-form-item label="解约日期" required>
-          <el-date-picker v-model="terminateForm.terminateDate" type="date" value-format="YYYY-MM-DD" format="YYYY-MM-DD" style="width: 100%" />
-        </el-form-item>
-        <el-form-item label="解约原因">
-          <el-input v-model="terminateForm.reason" type="textarea" :rows="3" />
-        </el-form-item>
-        <el-form-item>
-          <el-checkbox v-model="terminateForm.addToBlacklist">将此租户加入黑名单</el-checkbox>
-        </el-form-item>
-        <el-form-item v-if="terminateForm.addToBlacklist" label="加入原因" required>
-          <el-select v-model="terminateForm.blacklistReasonType" placeholder="请选择原因" style="width: 100%" @change="handleBlacklistReasonChange">
-            <el-option label="欠费" value="欠费" />
-            <el-option label="扰民" value="扰民" />
-            <el-option label="房屋损坏" value="房屋损坏" />
-            <el-option label="其他" value="其他" />
-          </el-select>
-        </el-form-item>
-        <el-form-item v-if="terminateForm.addToBlacklist && terminateForm.blacklistReasonType === '其他'" label="详情">
-          <el-input v-model="terminateForm.blacklistCustomReason" placeholder="请输入具体原因" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showTerminate = false">取消</el-button>
-        <el-button type="danger" @click="confirmTerminate">确认解约</el-button>
-      </template>
-    </el-dialog>
+    <MoveOutWizard v-model="showMoveOut" :contract-id="moveOutContractId" @done="onMoveOutDone" />
 
     <el-dialog title="续租" v-model="showRenew" width="480px">
       <el-form :model="renewForm" label-width="110px">
@@ -260,7 +233,6 @@
 import { ref, onMounted, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
-  addToBlacklist,
   batchRenewContracts,
   batchTerminateContracts,
   canAddContract,
@@ -275,6 +247,7 @@ import {
 } from '../api'
 import { contractStatusText, contractStatusTag, paymentCycleText } from '../utils/labels'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import MoveOutWizard from '../components/MoveOutWizard.vue'
 import { Search, Plus, Download } from '@element-plus/icons-vue'
 import { showUndoToast } from '../utils/undo'
 
@@ -294,11 +267,30 @@ const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
 const showDetail = ref(false)
-const showTerminate = ref(false)
 const showRenew = ref(false)
 const renewing = ref(false)
 const currentContract = ref(null)
-const terminateForm = ref({ terminateDate: '', reason: '' })
+const showMoveOut = ref(false)
+const moveOutContractId = ref(null)
+
+// 打开退租向导：预检 + 一次性完成退押金/解约/房间置空/加黑名单
+function openMoveOut(row) {
+  if (!row?.id) return
+  moveOutContractId.value = row.id
+  showMoveOut.value = true
+}
+
+function onMoveOutDone(payload) {
+  // 展示执行步骤，让管理员清楚系统替他做了什么
+  const steps = payload?.steps || []
+  if (steps.length) {
+    ElMessageBox.alert(steps.join('\n'), '退租已办理', { type: 'success' })
+  }
+  if (payload?.undoSnapshotId) {
+    showUndoToast(payload, loadContracts)
+  }
+  loadContracts()
+}
 const renewForm = ref({ endDate: '' })
 const selectedContractIds = ref([])
 const showBatchRenew = ref(false)
@@ -548,45 +540,6 @@ async function exportCurrent() {
     URL.revokeObjectURL(url)
   } catch (e) {
     ElMessage.error('导出失败')
-  }
-}
-
-function terminate(row) {
-  currentContract.value = row
-  terminateForm.value = { terminateDate: '', reason: '', addToBlacklist: false, blacklistReasonType: '', blacklistCustomReason: '' }
-  showTerminate.value = true
-}
-
-function handleBlacklistReasonChange() {
-  terminateForm.value.blacklistCustomReason = ''
-}
-
-async function confirmTerminate() {
-  if (!terminateForm.value.terminateDate) {
-    return ElMessage.warning('请选择解约日期')
-  }
-  try {
-    await ElMessageBox.confirm('确定要解约吗？此操作不可撤销。', '确认解约', { type: 'warning' })
-    const res = await terminateContract(currentContract.value.id, terminateForm.value)
-    
-    if (terminateForm.value.addToBlacklist) {
-      const reason = terminateForm.value.blacklistReasonType === '其他' ? terminateForm.value.blacklistCustomReason : terminateForm.value.blacklistReasonType
-      if (reason) {
-        try {
-          await addToBlacklist(currentContract.value.tenantId, { reason, adminId: 1 })
-        } catch (e) {
-          console.error('加入黑名单失败', e)
-        }
-      }
-    }
-    
-    ElMessage.success('解约成功')
-    showUndoToast(res?.data, loadContracts)
-    showTerminate.value = false
-    showDetail.value = false
-    loadContracts()
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error('操作失败')
   }
 }
 

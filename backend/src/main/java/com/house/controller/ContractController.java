@@ -8,6 +8,8 @@ import com.house.repo.ContractRepository;
 import com.house.repo.RoomRepository;
 import com.house.service.ContractService;
 import com.house.service.OperationLogService;
+import com.house.dto.MoveOutRequest;
+import com.house.service.MoveOutService;
 import com.house.service.OperationSnapshotService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -27,15 +29,18 @@ public class ContractController {
   private final ContractRepository contractRepository;
   private final RoomRepository roomRepository;
   private final OperationSnapshotService operationSnapshotService;
+  private final MoveOutService moveOutService;
 
   public ContractController(ContractService contractService, OperationLogService operationLogService,
       ContractRepository contractRepository, RoomRepository roomRepository,
-      OperationSnapshotService operationSnapshotService) {
+      OperationSnapshotService operationSnapshotService,
+      MoveOutService moveOutService) {
     this.contractService = contractService;
     this.operationLogService = operationLogService;
     this.contractRepository = contractRepository;
     this.roomRepository = roomRepository;
     this.operationSnapshotService = operationSnapshotService;
+    this.moveOutService = moveOutService;
   }
 
   @GetMapping
@@ -98,6 +103,58 @@ public class ContractController {
         "undoSnapshotId", snapshot.getId(),
         "undoExpireAt", snapshot.getExpiredAt(),
         "undoTip", "操作成功，可在30分钟内撤销"));
+  }
+
+  /**
+   * 退租预检：返回押金余额、未结清账单、缺读数等关键信息，供退租向导展示。
+   */
+  @GetMapping("/{id}/move-out-check")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+  public ResponseEntity<?> moveOutCheck(@PathVariable Long id) {
+    try {
+      return ResponseEntity.ok(moveOutService.check(id));
+    } catch (IllegalArgumentException e) {
+      return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+    }
+  }
+
+  /**
+   * 办理退租：退押金 + 解约 + 房间置空闲 + 可选加黑名单，一次事务完成。
+   */
+  @PostMapping("/{id}/move-out")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+  public ResponseEntity<?> moveOut(@PathVariable Long id, @RequestBody MoveOutRequest req,
+      HttpServletRequest request) {
+    try {
+      Contract beforeContract = contractRepository.findById(id)
+          .orElseThrow(() -> new IllegalArgumentException("合同不存在"));
+      Room beforeRoom = beforeContract.getRoomId() == null ? null
+          : roomRepository.findById(beforeContract.getRoomId()).orElse(null);
+      Map<String, Object> beforePayload = new HashMap<>();
+      beforePayload.put("contract", beforeContract);
+      beforePayload.put("room", beforeRoom);
+      OperationSnapshot snapshot = operationSnapshotService.capture(
+          "合同管理", "move_out", "contract", id, beforeContract.getContractNo(), beforePayload);
+
+      Map<String, Object> result = new HashMap<>(moveOutService.settle(id, req));
+
+      Contract afterContract = contractRepository.findById(id).orElse(null);
+      Room afterRoom = (afterContract == null || afterContract.getRoomId() == null) ? null
+          : roomRepository.findById(afterContract.getRoomId()).orElse(null);
+      Map<String, Object> afterPayload = new HashMap<>();
+      afterPayload.put("contract", afterContract);
+      afterPayload.put("room", afterRoom);
+      operationSnapshotService.complete(snapshot.getId(), afterPayload);
+
+      operationLogService.log("合同管理", "办理退租: " + beforeContract.getContractNo(), request);
+
+      result.put("undoSnapshotId", snapshot.getId());
+      result.put("undoExpireAt", snapshot.getExpiredAt());
+      result.put("undoTip", "退租完成，可在30分钟内撤销");
+      return ResponseEntity.ok(result);
+    } catch (IllegalArgumentException | IllegalStateException e) {
+      return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+    }
   }
 
   @PostMapping("/{id}/terminate")
