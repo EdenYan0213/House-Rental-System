@@ -136,7 +136,7 @@
         </el-main>
       </el-container>
     </el-container>
-    <router-view v-else />
+    <router-view v-if="isLoginPage" :key="'bare'" />
     <el-dialog v-model="showWelcomeDialog" title="欢迎使用" width="520px" :close-on-click-modal="false">
       <p class="welcome-text">这是你的首次登录。建议按顺序完成关键功能，系统会在页面中提供上下文提示。</p>
       <template #footer>
@@ -420,10 +420,13 @@ async function setFirstLoginFlag(value) {
 
 async function skipWelcomeGuide() {
   showWelcomeDialog.value = false
+  // 先写本地，避免服务端同步失败导致每次刷新都再次弹窗
+  const user = getUser()
+  if (user) setUser({ ...user, firstLogin: false })
   try {
     await setFirstLoginFlag(false)
   } catch (_) {
-    // Ignore sync errors and keep local UX state.
+    // 服务端同步失败时保留本地已读状态即可
   }
 }
 

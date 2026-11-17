@@ -66,6 +66,14 @@ public class Tenant {
   @Transient
   private Boolean activeContract;
 
+  /** 在租合同的房间号（无合同则为 null），用于列表直接展示 */
+  @Transient
+  private String activeRoomNumber;
+
+  /** 在租合同ID，前端点击可跳转合同详情 */
+  @Transient
+  private Long activeContractId;
+
   public void setId(Long id) {
     this.id = id;
   }
@@ -224,6 +232,22 @@ public class Tenant {
 
   public void setActiveContract(Boolean activeContract) {
     this.activeContract = activeContract;
+  }
+
+  public String getActiveRoomNumber() {
+    return activeRoomNumber;
+  }
+
+  public void setActiveRoomNumber(String activeRoomNumber) {
+    this.activeRoomNumber = activeRoomNumber;
+  }
+
+  public Long getActiveContractId() {
+    return activeContractId;
+  }
+
+  public void setActiveContractId(Long activeContractId) {
+    this.activeContractId = activeContractId;
   }
 
   @PrePersist

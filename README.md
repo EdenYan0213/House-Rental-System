@@ -1,6 +1,14 @@
 # 房屋租赁管理系统
 
-包含后端（Spring Boot 3.4.2，Java 17）和前端（Vue 3 + Vite）。
+包含后端（Spring Boot 3.4.2，Java 17）和 **两个独立前端**：
+
+| 目录 | 说明 | 端口 |
+|---|---|---|
+| `backend/` | 后端服务，唯一 API 提供方 | 8081 |
+| `frontend/` | 管理端（桌面浏览器） | 5173 |
+| `staff-mobile/` | 员工移动端（扫码录入/报修，Capacitor 打 APK） | 5180 |
+
+移动端已从 `frontend/` 完全拆出：独立依赖、独立构建产物、独立 Android 工程（`com.house.staff`），可单独部署与发版。
 
 ## 环境要求
 
@@ -69,21 +77,30 @@ mysql -uroot -proot < backend/sql/migrate_normalize_status_values.sql
 API 示例：
 - GET http://localhost:8081/api/buildings
 
-## 前端（frontend）
-
-运行：
+## 管理端（frontend）
 
 ```bash
 cd frontend
 npm install
-npm run dev
-```
-
-构建：
-
-```bash
+npm run dev      # http://localhost:5173
 npm run build
 ```
+
+## 员工移动端（staff-mobile）
+
+```bash
+cd staff-mobile
+npm install
+npm run dev                 # http://localhost:5180
+npm run build               # 产物在 staff-mobile/dist
+
+# 打包 Android APK
+npm run android:sync
+npm run android:open        # 或用 Android Studio 打开 staff-mobile/android
+npm run android:apk:debug
+```
+
+移动端同样通过 `/api` 访问后端，默认代理到 `http://localhost:8081`（可用 `VITE_PROXY_TARGET` 覆盖）。真机调试时在登录页的「连接设置」里填写后端地址，如 `http://10.0.2.2:8081/api`。
 
 前端使用 Element Plus。路由按页面懒加载，未匹配的路径会显示 404 页面。
 

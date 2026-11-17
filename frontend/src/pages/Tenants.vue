@@ -1,38 +1,49 @@
 <template>
-  <div style="padding: 20px">
-    <el-row justify="space-between" align="middle">
-      <h2>租户管理</h2>
-      <div>
-        <el-button @click="exportCurrent">导出</el-button>
-        <el-button v-if="canManageBlacklist" type="danger" @click="$router.push('/tenants/blacklist')"
-          >黑名单列表</el-button
-        >
-        <el-button type="primary" @click="openCreate" v-if="canAdd"
-          >新增租户</el-button
-        >
+  <div class="page">
+    <el-card shadow="never" class="page-card">
+      <template #header>
+        <div class="page-header">
+          <div>
+            <span class="page-title">租户管理</span>
+            <span class="page-subtitle">共 {{ total }} 位租户</span>
+          </div>
+          <div class="page-actions">
+            <el-button :icon="Download" @click="exportCurrent">导出</el-button>
+            <el-button
+              v-if="canManageBlacklist"
+              type="danger"
+              plain
+              @click="$router.push('/tenants/blacklist')"
+            >
+              黑名单
+            </el-button>
+            <el-button type="primary" :icon="Plus" @click="openCreate" v-if="canAdd">
+              新增租户
+            </el-button>
+          </div>
+        </div>
+      </template>
+
+      <div class="toolbar">
+        <el-input
+          v-model="searchQuery"
+          placeholder="按姓名或手机号搜索"
+          clearable
+          class="toolbar-search"
+          :prefix-icon="Search"
+          @input="onSearchInput"
+          @clear="loadTenants"
+          @keyup.enter="loadTenants"
+        />
+        <transition name="el-fade-in">
+          <div v-if="selectedTenantIds.length > 0" class="selection-bar">
+            <el-tag type="primary" effect="light" round>
+              已选择 {{ selectedTenantIds.length }} 位租户
+            </el-tag>
+            <el-button type="primary" size="small" @click="openBatchNotify">批量通知</el-button>
+          </div>
+        </transition>
       </div>
-    </el-row>
-
-    <el-row v-if="selectedTenantIds.length > 0" style="margin-top: 12px" :gutter="10">
-      <el-tag type="info">已选择 {{ selectedTenantIds.length }} 位租户</el-tag>
-      <el-button type="primary" @click="openBatchNotify">发送通知</el-button>
-    </el-row>
-
-    <el-row style="margin-top: 16px">
-      <el-input
-        v-model="searchQuery"
-        placeholder="按姓名或手机号搜索"
-        clearable
-        style="width: 300px"
-        @input="onSearchInput"
-        @clear="loadTenants"
-        @keyup.enter="loadTenants"
-      >
-        <template #append>
-          <el-button :icon="Search" @click="loadTenants" />
-        </template>
-      </el-input>
-    </el-row>
 
     <el-table
       ref="tenantsTableRef"
@@ -69,17 +80,29 @@
           <span>{{ row.emergencyPhone || "-" }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="合同" width="110" align="center">
+      <el-table-column label="在租房间 / 合同" min-width="170" align="center">
         <template #default="{ row }">
-          <el-tag v-if="row.activeContract" type="success" size="small">有合同</el-tag>
+          <template v-if="row.activeContract">
+            <el-tag type="success" size="small" effect="light">
+              {{ row.activeRoomNumber || '已签约' }}
+            </el-tag>
+            <el-link
+              v-if="row.activeContractId"
+              type="primary"
+              :underline="false"
+              style="margin-left: 8px; font-size: 12px"
+              @click="goContract(row)"
+            >
+              查看合同
+            </el-link>
+          </template>
           <span v-else class="text-gray">无合同</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="300" fixed="right" align="left">
+      <el-table-column label="操作" width="250" fixed="right" align="left">
         <template #default="{ row }">
           <div class="tenant-actions">
             <el-button size="small" type="primary" link @click="viewDetail(row)">详情</el-button>
-            <el-button size="small" type="primary" link @click="goRepair(row)">报修</el-button>
             <el-button size="small" type="primary" link @click="goComplaint(row)">投诉</el-button>
             <el-button size="small" type="primary" link @click="openEdit(row)" v-if="canEdit">编辑</el-button>
             <el-button size="small" type="warning" link @click="addToBlacklist(row)" v-if="canEdit && !row.isBlacklisted">拉黑</el-button>
@@ -89,15 +112,18 @@
       </el-table-column>
     </el-table>
 
-    <el-pagination
-      v-if="total > 0"
-      style="margin-top: 16px"
-      :current-page="page"
-      :page-size="pageSize"
-      :total="total"
-      layout="total, prev, pager, next"
-      @current-change="loadTenants"
-    />
+      <div class="table-footer">
+        <el-pagination
+          v-if="total > 0"
+          :current-page="page"
+          :page-size="pageSize"
+          :total="total"
+          layout="total, prev, pager, next"
+          background
+          @current-change="loadTenants"
+        />
+      </div>
+    </el-card>
 
     <el-dialog :title="editId ? '编辑租户' : '新增租户'" v-model="showDialog" width="500px">
       <el-form :model="form" label-width="100px">
@@ -247,12 +273,80 @@
   color: var(--text-muted);
   font-size: 13px;
 }
+
+.page {
+  padding: 20px;
+}
+
+.page-card {
+  border-radius: 8px;
+}
+
+.page-card :deep(.el-card__header) {
+  padding: 14px 20px;
+  background: var(--bg-surface);
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.page-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.page-subtitle {
+  margin-left: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.page-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.toolbar-search {
+  width: 280px;
+}
+
+.selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.table-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.tenant-actions {
+  display: flex;
+  gap: 4px;
+  flex-wrap: nowrap;
+}
 </style>
 
 <script setup>
 import { ref, onMounted, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Search } from '@element-plus/icons-vue'
+import { Search, Plus, Download } from '@element-plus/icons-vue'
 import {
   addToBlacklist as apiAddToBlacklist,
   batchSendMessages,
@@ -280,7 +374,8 @@ const canEdit = computed(() => canEditTenant());
 const canDelete = computed(() => canDeleteTenant());
 // 黑名单管理接口仅对管理员开放，普通用户不展示入口
 const canManageBlacklist = computed(() => canEditTenant());
-const router = useRouter();
+const router = useRouter()
+const route = useRoute()
 
 const tenants = ref([])
 const loading = ref(false)
@@ -449,8 +544,10 @@ async function focusTenantRow(id) {
   }, 2000)
 }
 
-function goRepair(row) {
-  router.push(`/repairs/orders?tenantId=${row.id}`)
+// 跳转到该租户的在租合同详情
+function goContract(row) {
+  if (!row.activeContractId) return
+  router.push(`/contracts?highlight=${row.activeContractId}`)
 }
 
 function goComplaint(row) {

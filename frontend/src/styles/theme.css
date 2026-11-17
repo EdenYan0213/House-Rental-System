@@ -132,3 +132,42 @@ body,
 .el-empty__description p {
   color: var(--text-muted);
 }
+
+/* ---- 提示条：深色下 el-alert 的浅色底会与主题冲突 ---- */
+.el-alert {
+  border: 1px solid var(--border-color);
+}
+
+.el-alert--info.is-light {
+  background: var(--el-fill-color-light);
+  color: var(--text-main);
+}
+
+.el-alert--info.is-light .el-alert__title {
+  color: var(--text-main);
+}
+
+.el-alert--info.is-light .el-alert__description {
+  color: var(--text-muted);
+}
+
+.el-alert__title {
+  color: var(--text-main);
+}
+
+/* 分页与空态在深色下的文字对比 */
+.el-pagination {
+  --el-pagination-button-color: var(--text-main);
+  --el-pagination-text-color: var(--text-muted);
+  color: var(--text-muted);
+}
+
+.el-pagination.is-background .el-pager li {
+  background: var(--el-fill-color-light);
+  color: var(--text-main);
+}
+
+.el-pagination.is-background .el-pager li.is-active {
+  background: var(--accent-color);
+  color: #fff;
+}

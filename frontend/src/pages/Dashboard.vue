@@ -299,7 +299,18 @@ function renderCharts() {
       tooltip: { trigger: 'item', formatter: '{b}: {c} 间 ({d}%)' },
       series: [{
         type: 'pie',
-        radius: ['40%', '70%'],
+        // 半径收紧 + 居中，避免标签被卡片边缘裁切
+        radius: ['42%', '62%'],
+        center: ['50%', '52%'],
+        avoidLabelOverlap: true,
+        label: {
+          show: true,
+          formatter: '{b}\n{c} 间',
+          fontSize: 12,
+          color: 'inherit',
+          lineHeight: 16
+        },
+        labelLine: { length: 10, length2: 12 },
         data: [
           { value: stats.rentedRooms, name: '已租' },
           { value: stats.idleRooms, name: '空闲' },

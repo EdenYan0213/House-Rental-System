@@ -3,13 +3,16 @@ package com.house.service;
 import com.house.model.Contract;
 import com.house.model.Tenant;
 import com.house.repo.TenantRepository;
+import com.house.model.Room;
 import com.house.repo.ContractRepository;
+import com.house.repo.RoomRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -18,10 +21,13 @@ public class TenantService {
 
   private final TenantRepository tenantRepository;
   private final ContractRepository contractRepository;
+  private final RoomRepository roomRepository;
 
-  public TenantService(TenantRepository tenantRepository, ContractRepository contractRepository) {
+  public TenantService(TenantRepository tenantRepository, ContractRepository contractRepository,
+      RoomRepository roomRepository) {
     this.tenantRepository = tenantRepository;
     this.contractRepository = contractRepository;
+    this.roomRepository = roomRepository;
   }
 
   public Tenant create(Tenant tenant) {
@@ -43,13 +49,20 @@ public class TenantService {
     if (tenants.isEmpty()) {
       return tenants;
     }
-    // 一次性取出在租合同的租户ID，避免每个租户都全表扫描一次
-    Set<Long> tenantIdsWithActiveContract = contractRepository.findAll().stream()
+    // 一次性取出所有在租合同，按租户索引，避免每个租户都全表扫描一次
+    Map<Long, Contract> activeContractByTenant = contractRepository.findAll().stream()
         .filter(c -> c.getTenantId() != null && "ACTIVE".equals(c.getStatus()))
-        .map(Contract::getTenantId)
-        .collect(Collectors.toSet());
+        .collect(Collectors.toMap(Contract::getTenantId, c -> c, (a, b) -> a));
     for (Tenant tenant : tenants) {
-      tenant.setActiveContract(tenantIdsWithActiveContract.contains(tenant.getId()));
+      Contract active = activeContractByTenant.get(tenant.getId());
+      tenant.setActiveContract(active != null);
+      if (active != null) {
+        // Contract.roomNumber 是 @Transient，不会从库里读出来；直接按 roomId 取房间号
+        tenant.setActiveRoomNumber(roomRepository.findById(active.getRoomId())
+            .map(Room::getRoomNumber)
+            .orElse(active.getRoomNumber()));
+        tenant.setActiveContractId(active.getId());
+      }
     }
     return tenants;
   }

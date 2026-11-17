@@ -67,6 +67,12 @@ CALL sp_add_index_if_missing('tenant', 'idx_tenant_blacklisted', '`is_blackliste
 CALL sp_add_column_if_missing('contract', 'deleted', 'tinyint(1) NOT NULL DEFAULT 0 COMMENT ''软删除标记''');
 CALL sp_add_column_if_missing('contract', 'reminder_sent', 'varchar(10) NOT NULL DEFAULT ''0'' COMMENT ''到期提醒标记''');
 
+-- ---------- contract 冗余展示字段 ----------
+CALL sp_add_column_if_missing('contract', 'room_number', 'varchar(50) NULL COMMENT ''房间号(冗余)''');
+CALL sp_add_column_if_missing('contract', 'building_name', 'varchar(100) NULL COMMENT ''楼栋名(冗余)''');
+CALL sp_add_column_if_missing('contract', 'tenant_name', 'varchar(50) NULL COMMENT ''租户姓名(冗余)''');
+CALL sp_add_column_if_missing('contract', 'tenant_phone', 'varchar(20) NULL COMMENT ''租户电话(冗余)''');
+
 -- ---------- bill ----------
 -- 账单上冗余存房间/租户/楼栋名称，避免列表页逐条关联查询
 CALL sp_add_column_if_missing('bill', 'room_id', 'bigint NULL COMMENT ''房间ID''');

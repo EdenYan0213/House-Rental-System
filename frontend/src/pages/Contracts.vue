@@ -1,36 +1,54 @@
 <template>
-  <div style="padding: 20px">
-    <el-row justify="space-between" align="middle">
-      <h2>合同管理</h2>
-      <div>
-        <el-button @click="exportCurrent">导出</el-button>
-        <el-button type="primary" @click="$router.push('/contracts/new')" v-if="canAdd">新建合同</el-button>
+  <div class="page">
+    <el-card shadow="never" class="page-card">
+      <template #header>
+        <div class="page-header">
+          <div>
+            <span class="page-title">合同管理</span>
+            <span class="page-subtitle">共 {{ total }} 份合同</span>
+          </div>
+          <div class="page-actions">
+            <el-button :icon="Download" @click="exportCurrent">导出</el-button>
+            <el-button type="primary" :icon="Plus" @click="$router.push('/contracts/new')" v-if="canAdd">
+              新建合同
+            </el-button>
+          </div>
+        </div>
+      </template>
+
+      <div class="toolbar">
+        <el-select v-model="statusFilter" placeholder="合同状态" clearable style="width: 140px" @change="loadContracts">
+          <el-option label="全部" value="" />
+          <el-option label="待生效" value="PENDING" />
+          <el-option label="进行中" value="ACTIVE" />
+          <el-option label="已到期" value="EXPIRED" />
+          <el-option label="已解约" value="TERMINATED" />
+        </el-select>
+        <el-select v-model="expiringFilter" placeholder="即将到期" clearable style="width: 140px" @change="loadContracts">
+          <el-option label="全部" value="" />
+          <el-option label="3天内" value="3" />
+          <el-option label="7天内" value="7" />
+          <el-option label="30天内" value="30" />
+        </el-select>
+        <el-input
+          v-model="searchQuery"
+          placeholder="合同编号 / 房间号 / 租户姓名"
+          clearable
+          class="toolbar-search"
+          :prefix-icon="Search"
+          @keyup.enter="loadContracts"
+        />
+        <el-button type="primary" plain @click="loadContracts">搜索</el-button>
+        <transition name="el-fade-in">
+          <div v-if="selectedContractIds.length > 0" class="selection-bar">
+            <el-tag type="primary" effect="light" round>
+              已选 {{ selectedContractIds.length }} 份
+            </el-tag>
+            <el-button type="warning" size="small" @click="openBatchRenew" v-if="canRenew">批量续租</el-button>
+            <el-button type="danger" size="small" @click="openBatchTerminate" v-if="canTerminate">批量退租</el-button>
+          </div>
+        </transition>
       </div>
-    </el-row>
-
-    <el-row v-if="selectedContractIds.length > 0" style="margin-top: 12px" :gutter="10">
-      <el-tag type="info">已选择 {{ selectedContractIds.length }} 份合同</el-tag>
-      <el-button type="warning" @click="openBatchRenew" v-if="canRenew">批量续租</el-button>
-      <el-button type="danger" @click="openBatchTerminate" v-if="canTerminate">批量退租</el-button>
-    </el-row>
-
-    <el-row style="margin-top: 16px" :gutter="10">
-      <el-select v-model="statusFilter" placeholder="合同状态" clearable style="width: 150px" @change="loadContracts">
-        <el-option label="全部" value="" />
-        <el-option label="待生效" value="PENDING" />
-        <el-option label="进行中" value="ACTIVE" />
-        <el-option label="已到期" value="EXPIRED" />
-        <el-option label="已解约" value="TERMINATED" />
-      </el-select>
-      <el-select v-model="expiringFilter" placeholder="即将到期" clearable style="width: 150px" @change="loadContracts">
-        <el-option label="全部" value="" />
-        <el-option label="3天内" value="3" />
-        <el-option label="7天内" value="7" />
-        <el-option label="30天内" value="30" />
-      </el-select>
-      <el-input v-model="searchQuery" placeholder="合同编号/房间号/租户姓名" clearable style="width: 250px" @keyup.enter="loadContracts" />
-      <el-button icon="Search" @click="loadContracts">搜索</el-button>
-    </el-row>
 
     <el-table
       ref="contractsTableRef"
@@ -43,8 +61,18 @@
       @selection-change="onSelectionChange"
     >
       <el-table-column type="selection" width="50" />
-      <el-table-column prop="contractNo" label="合同编号" width="150" />
-      <el-table-column prop="roomNumber" label="房间号" width="100" />
+      <el-table-column label="合同编号" width="160">
+        <template #default="{ row }">
+          <el-link type="primary" :underline="false" @click="viewDetail(row)">
+            {{ row.contractNo }}
+          </el-link>
+        </template>
+      </el-table-column>
+      <el-table-column label="房间" min-width="140">
+        <template #default="{ row }">
+          <span>{{ row.buildingName ? row.buildingName + ' ' : '' }}{{ row.roomNumber || '-' }}</span>
+        </template>
+      </el-table-column>
       <el-table-column prop="tenantName" label="租户姓名" />
       <el-table-column prop="startDate" label="起租日期" width="110" />
       <el-table-column prop="endDate" label="结束日期" width="110" />
@@ -68,11 +96,10 @@
           <el-tag :type="getStatusType(row.status)">{{ getStatusText(row.status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="320" fixed="right" align="center">
+      <el-table-column label="操作" width="240" fixed="right" align="center">
         <template #default="{ row }">
           <div class="contract-actions">
             <el-button size="small" @click="viewDetail(row)">详情</el-button>
-            <el-button size="small" @click="goComplaint(row)">投诉</el-button>
             <el-button size="small" type="warning" @click="renew(row)" :disabled="row.status !== 'ACTIVE'" v-if="canRenew">续租</el-button>
             <el-button size="small" type="danger" @click="terminate(row)" :disabled="row.status !== 'ACTIVE'" v-if="canTerminate">解约</el-button>
           </div>
@@ -80,15 +107,18 @@
       </el-table-column>
     </el-table>
 
-    <el-pagination
-      v-if="total > 0"
-      style="margin-top: 16px"
-      :current-page="page"
-      :page-size="pageSize"
-      :total="total"
-      layout="total, prev, pager, next"
-      @current-change="loadContracts"
-    />
+      <div class="table-footer">
+        <el-pagination
+          v-if="total > 0"
+          :current-page="page"
+          :page-size="pageSize"
+          :total="total"
+          layout="total, prev, pager, next"
+          background
+          @current-change="loadContracts"
+        />
+      </div>
+    </el-card>
 
     <el-dialog title="合同详情" v-model="showDetail" width="700px" top="5vh">
       <div v-if="isExpiring(currentContract)" style="margin-bottom: 16px">
@@ -245,6 +275,7 @@ import {
 } from '../api'
 import { contractStatusText, contractStatusTag, paymentCycleText } from '../utils/labels'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Search, Plus, Download } from '@element-plus/icons-vue'
 import { showUndoToast } from '../utils/undo'
 
 const router = useRouter()
@@ -586,6 +617,68 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.page {
+  padding: 20px;
+}
+
+.page-card {
+  border-radius: 8px;
+}
+
+.page-card :deep(.el-card__header) {
+  padding: 14px 20px;
+  background: var(--bg-surface);
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.page-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.page-subtitle {
+  margin-left: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.page-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.toolbar-search {
+  width: 240px;
+}
+
+.selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.table-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
 .contract-actions {
   display: flex;
   align-items: center;

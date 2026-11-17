@@ -70,10 +70,19 @@ public class ContractService {
     LocalDate startDate = req.getStartDate();
     LocalDate endDate = req.getEndDate();
 
+    // 冗余存房间号/楼栋名/租户名，供列表直接展示，避免逐条关联查询
+    String buildingName = buildingRepository.findById(room.getBuildingId())
+        .map(Building::getName)
+        .orElse(null);
+
     Contract c = Contract.builder()
         .contractNo(contractNo)
         .roomId(room.getId())
+        .roomNumber(room.getRoomNumber())
+        .buildingName(buildingName)
         .tenantId(tenant.getId())
+        .tenantName(tenant.getName())
+        .tenantPhone(tenant.getPhone())
         .startDate(startDate)
         .endDate(endDate)
         .status("ACTIVE")
