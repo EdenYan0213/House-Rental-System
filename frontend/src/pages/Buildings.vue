@@ -9,10 +9,24 @@
       <el-col v-for="building in buildings" :key="building.id" :xs="24" :sm="12" :md="8" :lg="6">
         <el-card class="building-card" shadow="hover">
           <div class="building-cover" @click="goRooms(building)">
-            <img v-if="building.imageUrl" :src="resolveImageUrl(building.imageUrl)" alt="楼栋图片" />
+            <el-carousel
+              v-if="imagesOf(building).length > 0"
+              :height="'160px'"
+              :interval="4000"
+              indicator-position="inside"
+              arrow="hover"
+              @click.stop
+            >
+              <el-carousel-item v-for="(img, i) in imagesOf(building)" :key="i">
+                <img :src="resolveImageUrl(img)" alt="楼栋图片" class="cover-img" />
+              </el-carousel-item>
+            </el-carousel>
             <div v-else class="building-placeholder">
               <el-icon size="28"><OfficeBuilding /></el-icon>
               <span>暂无图片</span>
+            </div>
+            <div v-if="imagesOf(building).length > 1" class="img-count">
+              {{ imagesOf(building).length }} 张
             </div>
           </div>
           <div class="building-body">
@@ -43,24 +57,44 @@
           </el-radio-group>
           <div v-if="uploadType === 'local'">
             <el-upload
-              class="cover-uploader"
               action="/api/files/upload"
               :show-file-list="false"
-              :on-success="handleUploadSuccess"
               :on-error="handleUploadError"
               :before-upload="beforeUpload"
               :http-request="customUpload"
             >
-              <img v-if="form.imageUrl" :src="resolveImageUrl(form.imageUrl)" class="cover-preview" />
-              <el-icon v-else class="cover-uploader-icon"><Plus /></el-icon>
+              <div class="add-image-tile">
+                <el-icon><Plus /></el-icon>
+                <span>添加图片</span>
+              </div>
             </el-upload>
+            <div class="image-grid">
+              <div v-for="(img, i) in formImages" :key="img + i" class="image-item">
+                <img :src="resolveImageUrl(img)" />
+                <div class="image-mask">
+                  <el-tag v-if="i === 0" size="small" type="success" effect="dark">封面</el-tag>
+                  <el-button
+                    v-else
+                    size="small"
+                    link
+                    class="mask-btn"
+                    @click="setAsCover(i)"
+                  >设为封面</el-button>
+                </div>
+                <el-button
+                  class="remove-btn"
+                  circle
+                  size="small"
+                  type="danger"
+                  @click="removeImage(i)"
+                >×</el-button>
+              </div>
+            </div>
+            <div class="image-hint">第一张为封面，最多 9 张；卡片上会自动轮播</div>
           </div>
           <div v-else class="url-upload">
             <el-input v-model="imageUrlInput" placeholder="请输入图片URL" />
-            <el-button type="primary" :loading="urlUploading" @click="handleUrlUpload">确认</el-button>
-          </div>
-          <div v-if="form.imageUrl" style="margin-top: 8px">
-            <el-button type="danger" size="small" @click="form.imageUrl = ''">删除图片</el-button>
+            <el-button type="primary" :loading="urlUploading" @click="handleUrlUpload">添加</el-button>
           </div>
         </el-form-item>
         <el-form-item label="名称">
@@ -125,10 +159,55 @@ const form = ref({
   code: '',
   address: '',
   imageUrl: '',
+  imageUrls: '',
   totalFloors: 1,
   waterUnitPrice: 0,
   electricUnitPrice: 0
 })
+
+// 表单中的图片列表（本地状态），保存时序列化到 imageUrls
+const formImages = ref([])
+
+/** 卡片展示用：优先 imageList（后端合并后的列表），回退单图 */
+function imagesOf(building) {
+  if (Array.isArray(building?.imageList) && building.imageList.length) {
+    return building.imageList
+  }
+  return building?.imageUrl ? [building.imageUrl] : []
+}
+
+/** 把当前 formImages 同步到表单字段 */
+function syncFormImages() {
+  form.value.imageUrls = formImages.value.length
+    ? JSON.stringify(formImages.value)
+    : ''
+  // 封面始终取第一张，保持与旧字段兼容
+  form.value.imageUrl = formImages.value[0] || ''
+}
+
+function addImage(url) {
+  if (!url) return
+  if (formImages.value.includes(url)) {
+    return ElMessage.warning('该图片已添加')
+  }
+  if (formImages.value.length >= 9) {
+    return ElMessage.warning('最多上传 9 张图片')
+  }
+  formImages.value.push(url)
+  syncFormImages()
+}
+
+function removeImage(index) {
+  formImages.value.splice(index, 1)
+  syncFormImages()
+}
+
+function setAsCover(index) {
+  if (index <= 0 || index >= formImages.value.length) return
+  const [picked] = formImages.value.splice(index, 1)
+  formImages.value.unshift(picked)
+  syncFormImages()
+}
 
 async function load() {
   const res = await getBuildings()
@@ -142,10 +221,12 @@ function openCreate() {
     code: '',
     address: '',
     imageUrl: '',
+    imageUrls: '',
     totalFloors: 1,
     waterUnitPrice: 0,
     electricUnitPrice: 0
   }
+  formImages.value = []
   uploadType.value = 'local'
   imageUrlInput.value = ''
   showDialog.value = true
@@ -156,10 +237,13 @@ function openEdit(row) {
   form.value = {
     ...row,
     imageUrl: row.imageUrl || '',
+    imageUrls: row.imageUrls || '',
     totalFloors: row.totalFloors || 1,
     waterUnitPrice: row.waterUnitPrice ?? 0,
     electricUnitPrice: row.electricUnitPrice ?? 0
   }
+  // 回填已有图片（后端 imageList 优先，回退单图）
+  formImages.value = imagesOf(row)
   uploadType.value = 'local'
   imageUrlInput.value = ''
   showDialog.value = true
@@ -184,7 +268,7 @@ function beforeUpload(file) {
 
 function handleUploadSuccess(response) {
   if (response?.success && response?.url) {
-    form.value.imageUrl = response.url
+    addImage(response.url)
     ElMessage.success('图片上传成功')
     return
   }
@@ -214,7 +298,7 @@ async function handleUrlUpload() {
   try {
     const res = await uploadFileByUrl(imageUrlInput.value)
     if (res.data?.success) {
-      form.value.imageUrl = res.data.url
+      addImage(res.data.url)
       imageUrlInput.value = ''
       ElMessage.success('图片上传成功')
     } else {
@@ -228,6 +312,8 @@ async function handleUrlUpload() {
 }
 
 async function save() {
+  // 以本地 formImages 为准重新序列化，避免图片列表被清空
+  syncFormImages()
   if (!form.value.name) {
     ElMessage.warning('请填写楼栋名称')
     return
@@ -289,13 +375,109 @@ onMounted(load)
 .building-cover {
   height: 160px;
   background: var(--bg-main);
+  /* 角标与轮播需要相对定位的容器，否则会相对页面定位 */
+  position: relative;
+  overflow: hidden;
   cursor: pointer;
 }
 
-.building-cover img {
+.building-cover img,
+.cover-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
+}
+
+/* 轮播图片数量角标 */
+.img-count {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 11px;
+  z-index: 3;
+}
+
+/* 表单多图上传 */
+.add-image-tile {
+  width: 92px;
+  height: 92px;
+  border: 1px dashed var(--border-color);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.add-image-tile:hover {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+
+.image-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.image-item {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+}
+
+.image-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.image-mask {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  padding: 3px 5px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.6));
+  display: flex;
+  justify-content: center;
+}
+
+.mask-btn {
+  color: #fff !important;
+  font-size: 11px;
+}
+
+.remove-btn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.image-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .building-placeholder {

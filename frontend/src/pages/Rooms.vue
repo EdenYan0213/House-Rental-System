@@ -58,9 +58,23 @@
             />
           </div>
           <div class="room-image">
-            <img :src="getRoomImage(room)" alt="房间图片" />
+            <el-carousel
+              v-if="imagesOf(room).length > 0"
+              height="220px"
+              :interval="4500"
+              indicator-position="none"
+              arrow="hover"
+            >
+              <el-carousel-item v-for="(img, i) in imagesOf(room)" :key="i">
+                <img :src="resolveImageUrl(img)" alt="房间图片" />
+              </el-carousel-item>
+            </el-carousel>
+            <img v-else :src="getRoomImage(room)" alt="房间图片" />
             <div class="room-status" :class="room.status">
               {{ roomStatusText(room.status) }}
+            </div>
+            <div v-if="imagesOf(room).length > 1" class="room-img-count">
+              {{ imagesOf(room).length }} 张
             </div>
           </div>
           <div class="room-info">
@@ -79,7 +93,7 @@
       </el-col>
     </el-row>
 
-    <el-dialog title="新建房间" v-model="showDialog" width="600px">
+    <el-dialog :title="editId ? '编辑房间' : '新建房间'" v-model="showDialog" width="600px">
       <el-form :model="form" label-width="80px">
         <el-form-item label="图片">
           <el-radio-group v-model="uploadType" style="margin-bottom: 10px">
@@ -88,25 +102,33 @@
           </el-radio-group>
           <div v-if="uploadType === 'local'">
             <el-upload
-              class="avatar-uploader"
               action="/api/files/upload"
               :show-file-list="false"
-              :on-success="handleRoomUploadSuccess"
               :on-error="handleUploadError"
               :before-upload="beforeUpload"
               :http-request="customUpload"
             >
-              <img v-if="form.imageUrl" :src="resolveImageUrl(form.imageUrl)" class="avatar" />
-              <el-icon v-else class="avatar-uploader-icon"><Plus /></el-icon>
+              <div class="add-image-tile">
+                <el-icon><Plus /></el-icon>
+                <span>添加图片</span>
+              </div>
             </el-upload>
           </div>
           <div v-else style="display: flex; gap: 10px; align-items: center;">
             <el-input v-model="imageUrlInput" placeholder="请输入图片URL" style="flex: 1" />
-            <el-button type="primary" @click="handleUrlUpload" :loading="urlUploading">确认</el-button>
+            <el-button type="primary" @click="handleUrlUpload" :loading="urlUploading">添加</el-button>
           </div>
-          <div v-if="form.imageUrl" style="margin-top: 5px">
-            <el-button type="danger" size="small" @click="form.imageUrl = ''">删除图片</el-button>
+          <div class="image-grid">
+            <div v-for="(img, i) in formImages" :key="img + i" class="image-item">
+              <img :src="resolveImageUrl(img)" />
+              <div class="image-mask">
+                <el-tag v-if="i === 0" size="small" type="success" effect="dark">封面</el-tag>
+                <el-button v-else size="small" link class="mask-btn" @click="setAsCover(i)">设为封面</el-button>
+              </div>
+              <el-button class="remove-btn" circle size="small" type="danger" @click="removeImage(i)">×</el-button>
+            </div>
           </div>
+          <div class="image-hint">第一张为封面，最多 9 张；房间卡片上会自动轮播</div>
         </el-form-item>
         <el-form-item label="房间号">
           <el-input v-model="form.roomNumber" />
@@ -301,6 +323,41 @@ const form = ref({
 })
 const uploadType = ref('local')
 const imageUrlInput = ref('')
+// 房间图片列表（本地状态），保存时序列化到 imageUrls
+const formImages = ref([])
+
+/** 卡片展示用：优先后端合并后的 imageList，回退单图 */
+function imagesOf(room) {
+  if (Array.isArray(room?.imageList) && room.imageList.length) {
+    return room.imageList
+  }
+  return room?.imageUrl ? [room.imageUrl] : []
+}
+
+function syncFormImages() {
+  form.value.imageUrls = formImages.value.length ? JSON.stringify(formImages.value) : ''
+  form.value.imageUrl = formImages.value[0] || ''
+}
+
+function addImage(url) {
+  if (!url) return
+  if (formImages.value.includes(url)) return ElMessage.warning('该图片已添加')
+  if (formImages.value.length >= 9) return ElMessage.warning('最多上传 9 张图片')
+  formImages.value.push(url)
+  syncFormImages()
+}
+
+function removeImage(index) {
+  formImages.value.splice(index, 1)
+  syncFormImages()
+}
+
+function setAsCover(index) {
+  if (index <= 0 || index >= formImages.value.length) return
+  const [picked] = formImages.value.splice(index, 1)
+  formImages.value.unshift(picked)
+  syncFormImages()
+}
 const urlUploading = ref(false)
 const showBatchDialog = ref(false)
 const batchForm = ref({
@@ -451,8 +508,10 @@ function openCreate() {
     layout: '',
     area: 0,
     status: 'IDLE',
-    imageUrl: ''
+    imageUrl: '',
+    imageUrls: ''
   }
+  formImages.value = []
   uploadType.value = 'local'
   imageUrlInput.value = ''
   showDialog.value = true
@@ -553,6 +612,8 @@ async function exportQrBatchPdf() {
 function editRoom(r) {
   editId.value = r.id
   form.value = { ...r }
+  // 回填已有图片（后端 imageList 优先，回退单图）
+  formImages.value = imagesOf(r)
   uploadType.value = 'local'
   imageUrlInput.value = ''
   showDialog.value = true
@@ -567,7 +628,7 @@ async function handleUrlUpload() {
   try {
     const res = await uploadFileByUrl(imageUrlInput.value)
     if (res.data.success) {
-      form.value.imageUrl = res.data.url
+      addImage(res.data.url)
       imageUrlInput.value = ''
       ElMessage.success('图片上传成功')
     } else {
@@ -581,16 +642,13 @@ async function handleUrlUpload() {
 }
 
 function handleRoomUploadSuccess(response) {
-  console.log('Upload response:', response)
-  if (response.success && response.url) {
-    form.value.imageUrl = response.url
+  const payload = response?.data?.url ? response.data : response
+  if (payload?.success && payload?.url) {
+    addImage(payload.url)
     ElMessage.success('图片上传成功')
-  } else if (response.data && response.data.success && response.data.url) {
-    form.value.imageUrl = response.data.url
-    ElMessage.success('图片上传成功')
-  } else {
-    ElMessage.error('图片上传失败')
+    return
   }
+  ElMessage.error(payload?.message || '图片上传失败')
 }
 
 function handleUploadError(error) {
@@ -608,6 +666,9 @@ async function customUpload(options) {
 }
 
 async function save() {
+  // 后端用 @JsonIgnore 隐藏了 imageUrls 原字段，编辑回填时拿不到，
+  // 这里以本地 formImages 为准重新序列化，避免保存后图片列表被清空。
+  syncFormImages()
   if (editId.value) {
     await updateRoom(editId.value, form.value)
   } else {
@@ -811,6 +872,98 @@ onMounted(load)
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
+}
+
+/* 图片数量角标 */
+.room-img-count {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 11px;
+  z-index: 3;
+}
+
+/* 表单多图上传 */
+.add-image-tile {
+  width: 92px;
+  height: 92px;
+  border: 1px dashed var(--border-color);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.add-image-tile:hover {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+
+.image-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.image-item {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+}
+
+.image-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.image-mask {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 3px 5px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.6));
+  display: flex;
+  justify-content: center;
+}
+
+.mask-btn {
+  color: #fff !important;
+  font-size: 11px;
+}
+
+.remove-btn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.image-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .room-status {

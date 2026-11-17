@@ -164,9 +164,38 @@ public class RoomService {
         return rooms;
     }
 
+    /**
+     * 更新房间。
+     *
+     * <p>请求体通常是前端表单的部分字段，直接 save() 会把未传的字段
+     * （如 deleted）覆盖成 null，触发非空约束。这里先读原记录再逐字段合并。
+     */
     public Room update(Room room) {
-        room.setStatus(RoomStatus.normalize(room.getStatus()));
-        return roomRepository.save(room);
+        Room existing = room.getId() == null ? null
+            : roomRepository.findById(room.getId()).orElse(null);
+        if (existing == null) {
+            room.setStatus(RoomStatus.normalize(room.getStatus()));
+            if (room.getDeleted() == null) {
+                room.setDeleted(0);
+            }
+            return roomRepository.save(room);
+        }
+
+        if (room.getBuildingId() != null) existing.setBuildingId(room.getBuildingId());
+        if (room.getFloor() != null) existing.setFloor(room.getFloor());
+        if (room.getRoomNumber() != null) existing.setRoomNumber(room.getRoomNumber());
+        if (room.getLayout() != null) existing.setLayout(room.getLayout());
+        if (room.getArea() != null) existing.setArea(room.getArea());
+        if (room.getStatus() != null) existing.setStatus(RoomStatus.normalize(room.getStatus()));
+        if (room.getImageUrl() != null) existing.setImageUrl(room.getImageUrl());
+        if (room.getImageUrls() != null) existing.setImageUrls(room.getImageUrls());
+        if (room.getWaterMeterId() != null) existing.setWaterMeterId(room.getWaterMeterId());
+        if (room.getElectricMeterId() != null) existing.setElectricMeterId(room.getElectricMeterId());
+
+        if (existing.getDeleted() == null) {
+            existing.setDeleted(0);
+        }
+        return roomRepository.save(existing);
     }
 
     public void delete(Long id) {
