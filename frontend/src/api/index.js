@@ -261,6 +261,8 @@ export const regenerateBillByContract = (contractId) => api.post(`/bills/regener
 export const voidBill = (id) => api.put(`/bills/${id}/void`)
 export const sendBillSms = (id) => api.post(`/bills/${id}/send-sms`)
 export const recordPayment = (id, data) => api.post(`/bills/${id}/payments`, data)
+// 批量收款：按剩余应收金额全额收款
+export const batchPayments = (data) => api.post('/bills/batch-payments', data)
 
 export const exportModuleData = (module, data) =>
   api.post(`/export/${module}`, data || {}, { responseType: 'blob', timeout: 60000 })

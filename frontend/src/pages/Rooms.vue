@@ -8,15 +8,26 @@
       <div>
         <el-button type="primary" @click="openCreate">新建房间</el-button>
         <el-button @click="openBatch">批量生成</el-button>
-        <el-button :disabled="rooms.length === 0" @click="toggleSelectAll">{{ allSelected ? '取消全选' : '一键全选' }}</el-button>
+        <el-button :disabled="rooms.length === 0" @click="toggleSelectAll">{{ allSelected ? '取消本页全选' : '选中本页' }}</el-button>
         <el-button type="danger" plain :disabled="selectedRoomIds.length === 0" @click="batchDelete">批量删除</el-button>
         <el-button type="warning" :disabled="selectedRoomIds.length === 0" @click="openBatchRentDialog">批量调整租金</el-button>
       </div>
     </el-row>
 
-    <el-row v-if="selectedRoomIds.length > 0" style="margin-top: 12px">
-      <el-tag type="info">已选择 {{ selectedRoomIds.length }} 个房间</el-tag>
-    </el-row>
+    <div class="room-toolbar">
+      <el-select v-model="filterFloor" placeholder="全部楼层" clearable style="width: 130px" @change="onFilterChange">
+        <el-option v-for="f in floorList" :key="f" :label="`${f}层`" :value="f" />
+      </el-select>
+      <el-select v-model="filterStatus" placeholder="全部状态" clearable style="width: 130px" @change="onFilterChange">
+        <el-option label="空闲" value="IDLE" />
+        <el-option label="已租" value="RENTED" />
+        <el-option label="维修中" value="MAINTENANCE" />
+      </el-select>
+      <el-tag v-if="selectedRoomIds.length > 0" type="primary" effect="light" round>
+        已选 {{ selectedRoomIds.length }} 个房间
+      </el-tag>
+      <span class="total-hint">共 {{ totalRooms }} 个房间</span>
+    </div>
 
     <el-empty
       v-if="rooms.length === 0"
@@ -235,6 +246,16 @@
         <el-button type="primary" @click="showResultDialog = false; showBatchDialog = false; load()">确定</el-button>
       </template>
     </el-dialog>
+    <div class="room-pager" v-if="totalRooms > pageSize">
+      <el-pagination
+        :current-page="currentPage"
+        :page-size="pageSize"
+        :total="totalRooms"
+        layout="total, prev, pager, next"
+        background
+        @current-change="onPageChange"
+      />
+    </div>
   </div>
 </template>
 
@@ -301,7 +322,11 @@ const selectedRoomIds = ref([])
 const showBatchRentDialog = ref(false)
 const batchRentLoading = ref(false)
 const batchRentForm = ref({ mode: 'FIXED', fixedAmount: 0, percent: 0, syncActiveContracts: true })
-const allSelected = computed(() => rooms.value.length > 0 && selectedRoomIds.value.length === rooms.value.length)
+// 分页后「全选」只作用于当前页，避免误以为选中了全部房间
+const allSelected = computed(() =>
+  rooms.value.length > 0 &&
+  rooms.value.every(r => selectedRoomIds.value.includes(r.id))
+)
 
 function beforeUpload(file) {
   const ext = (file.name || '').split('.').pop()?.toLowerCase() || ''
@@ -320,17 +345,57 @@ function beforeUpload(file) {
   return true
 }
 
+// 服务端分页 + 楼层/状态筛选（房间数量大时避免一次全量返回）
+const currentPage = ref(1)
+const pageSize = ref(24)
+const totalRooms = ref(0)
+const filterFloor = ref(null)
+const filterStatus = ref(null)
+const floorList = ref([])
+
 async function load() {
-  const res = await getRooms({ buildingId })
-  rooms.value = res.data
+  const params = {
+    buildingId,
+    page: currentPage.value - 1,
+    size: pageSize.value
+  }
+  if (filterFloor.value != null) params.floor = filterFloor.value
+  if (filterStatus.value) params.status = filterStatus.value
+
+  const res = await getRooms(params)
+  const data = res.data
+  // 兼容服务端分页对象与旧的纯数组返回
+  if (Array.isArray(data)) {
+    rooms.value = data
+    totalRooms.value = data.length
+  } else {
+    rooms.value = data?.content || []
+    totalRooms.value = data?.totalElements ?? rooms.value.length
+  }
+
   const validIds = new Set((rooms.value || []).map(r => r.id))
   selectedRoomIds.value = selectedRoomIds.value.filter(id => validIds.has(id))
+
   try {
     const b = await getBuilding(buildingId)
     buildingName.value = b.data.name
+    // 楼层下拉按楼栋总层数生成
+    const floors = []
+    for (let i = 1; i <= (b.data.totalFloors || 1); i++) floors.push(i)
+    floorList.value = floors
   } catch (e) {
     buildingName.value = ''
   }
+}
+
+function onFilterChange() {
+  currentPage.value = 1
+  load()
+}
+
+function onPageChange(page) {
+  currentPage.value = page
+  load()
 }
 
 function toggleRoomSelection(roomId, checked) {
@@ -708,6 +773,25 @@ onMounted(load)
 </script>
 
 <style scoped>
+.room-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.total-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.room-pager {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
 .room-card {
   margin-bottom: 20px;
   border-radius: 8px;

@@ -147,11 +147,34 @@ public class RoomController {
     }
   }
 
+  /**
+   * 房间列表。
+   *
+   * <p>向后兼容：不传 page 时返回纯数组（现有前端与二维码批量导出依赖该形状）；
+   * 传了 page 才返回 { content, totalElements, page, size } 分页对象。
+   */
   @GetMapping
-  public List<Room> list(@RequestParam(required = false) Long buildingId, @RequestParam(required = false) Integer floor,
-      @RequestParam(required = false) String status) {
-    // 三个筛选条件都可选，统一交给 service 处理（含状态归一化）
-    return roomService.listByBuildingAndFloor(buildingId, floor, status);
+  public Object list(@RequestParam(required = false) Long buildingId,
+      @RequestParam(required = false) Integer floor,
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) Integer page,
+      @RequestParam(defaultValue = "50") int size) {
+    List<Room> rooms = roomService.listByBuildingAndFloor(buildingId, floor, status);
+    if (page == null) {
+      return rooms;
+    }
+    int total = rooms.size();
+    int safeSize = size <= 0 ? 50 : size;
+    int from = Math.max(page, 0) * safeSize;
+    int to = Math.min(total, from + safeSize);
+    List<Room> content = from >= total ? List.of() : rooms.subList(from, to);
+
+    Map<String, Object> result = new HashMap<>();
+    result.put("content", content);
+    result.put("totalElements", total);
+    result.put("page", page);
+    result.put("size", safeSize);
+    return result;
   }
 
   @GetMapping("/{id}")

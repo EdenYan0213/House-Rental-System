@@ -8,7 +8,9 @@ import com.house.service.OperationSnapshotService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/buildings")
@@ -26,9 +28,28 @@ public class BuildingController {
     this.operationSnapshotService = operationSnapshotService;
   }
 
+  /**
+   * 楼栋列表。不传 page 返回纯数组（兼容现有调用），传了 page 返回分页对象。
+   */
   @GetMapping
-  public List<Building> list() {
-    return buildingRepository.findAll();
+  public Object list(@RequestParam(required = false) Integer page,
+      @RequestParam(defaultValue = "50") int size) {
+    List<Building> all = buildingRepository.findAll();
+    if (page == null) {
+      return all;
+    }
+    int total = all.size();
+    int safeSize = size <= 0 ? 50 : size;
+    int from = Math.max(page, 0) * safeSize;
+    int to = Math.min(total, from + safeSize);
+    List<Building> content = from >= total ? List.of() : all.subList(from, to);
+
+    Map<String, Object> result = new HashMap<>();
+    result.put("content", content);
+    result.put("totalElements", total);
+    result.put("page", page);
+    result.put("size", safeSize);
+    return result;
   }
 
   @GetMapping("/{id}")

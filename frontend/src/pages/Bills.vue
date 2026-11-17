@@ -55,16 +55,30 @@
         </el-select>
         <el-button type="primary" plain @click="loadBills">查询</el-button>
         <el-button @click="resetQuery">重置</el-button>
+        <transition name="el-fade-in">
+          <div v-if="selectedBills.length > 0" class="selection-bar">
+            <el-tag type="primary" effect="light" round>
+              已选 {{ selectedBills.length }} 张 · 待收 ¥{{ money(selectedRemain) }}
+            </el-tag>
+            <el-button type="success" size="small" :icon="Wallet" @click="openBatchPay">
+              批量收款
+            </el-button>
+          </div>
+        </transition>
       </div>
 
       <el-table
+        ref="billsTableRef"
         :data="bills"
+        row-key="id"
         border
         stripe
         v-loading="loading"
         empty-text="当前筛选条件下没有账单，可调整月份或状态后重试"
         style="width: 100%"
+        @selection-change="onSelectionChange"
       >
+        <el-table-column type="selection" width="46" :selectable="row => !isBillFinal(row)" />
         <el-table-column label="账单月份" width="110" sortable prop="billMonth" />
         <el-table-column label="房间" min-width="130">
           <template #default="{ row }">
@@ -164,6 +178,52 @@
       </template>
     </el-dialog>
 
+    <!-- 批量收款 -->
+    <el-dialog v-model="batchPayVisible" title="批量收款" width="560px">
+      <el-alert type="info" :closable="false" show-icon style="margin-bottom: 14px">
+        <template #title>
+          将对所选 {{ selectedBills.length }} 张账单按「剩余应收」全额收款，合计
+          <b>¥{{ money(selectedRemain) }}</b>
+        </template>
+      </el-alert>
+
+      <el-table :data="selectedBills" size="small" border max-height="240">
+        <el-table-column label="房间" width="100">
+          <template #default="{ row }">{{ row.roomNumber || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="billMonth" label="月份" width="100" />
+        <el-table-column label="待收" width="120" align="right">
+          <template #default="{ row }">¥{{ money(remainOf(row)) }}</template>
+        </el-table-column>
+        <el-table-column label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag size="small" :type="getStatusType(row.status)">{{ getStatusText(row.status) }}</el-tag>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <el-form :model="batchPayForm" label-width="90px" style="margin-top: 14px">
+        <el-form-item label="收款方式" required>
+          <el-select v-model="batchPayForm.paymentMethod" style="width: 100%">
+            <el-option label="现金" value="CASH" />
+            <el-option label="支付宝" value="ALIPAY" />
+            <el-option label="微信" value="WECHAT" />
+            <el-option label="银行转账" value="BANK" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="batchPayForm.remark" placeholder="可选" />
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="batchPayVisible = false">取消</el-button>
+        <el-button type="success" :loading="batchPaying" @click="submitBatchPay">
+          确认收款 ¥{{ money(selectedRemain) }}
+        </el-button>
+      </template>
+    </el-dialog>
+
     <!-- 批量生成失败清单：可逐条或全部重试 -->
     <el-dialog v-model="generationVisible" title="部分账单生成失败" width="620px">
       <el-alert type="warning" :closable="false" show-icon style="margin-bottom: 14px">
@@ -257,7 +317,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Download, Plus, DocumentAdd } from '@element-plus/icons-vue'
+import { Download, Plus, DocumentAdd, Wallet } from '@element-plus/icons-vue'
 import {
   getBills,
   generateBill,
@@ -272,7 +332,8 @@ import {
   getRooms,
   canGenerateBill,
   canRecordPayment,
-  canVoidBill
+  canVoidBill,
+  batchPayments
 } from '@/api'
 import { billStatusText, billStatusTag, paymentMethodText } from '@/utils/labels'
 import { getErrorMessage } from '@/api'
@@ -322,6 +383,62 @@ const paymentForm = reactive({
 const waterUnit = ref(null)
 const electricUnit = ref(null)
 const generating = ref(false)
+const billsTableRef = ref(null)
+const selectedBills = ref([])
+const batchPayVisible = ref(false)
+const batchPaying = ref(false)
+const batchPayForm = reactive({ paymentMethod: 'CASH', remark: '批量收款' })
+
+// 所选账单的待收合计
+const selectedRemain = computed(() =>
+  selectedBills.value.reduce((sum, b) => sum + remainOf(b), 0)
+)
+
+function remainOf(bill) {
+  const total = Number(bill?.totalAmount || 0)
+  const paid = Number(bill?.paidAmount || 0)
+  return Math.max(total - paid, 0)
+}
+
+function onSelectionChange(rows) {
+  selectedBills.value = rows || []
+}
+
+function openBatchPay() {
+  if (selectedBills.value.length === 0) {
+    return ElMessage.warning('请先选择要收款的账单')
+  }
+  if (selectedRemain.value <= 0) {
+    return ElMessage.warning('所选账单没有待收金额')
+  }
+  batchPayVisible.value = true
+}
+
+async function submitBatchPay() {
+  batchPaying.value = true
+  try {
+    const res = await batchPayments({
+      billIds: selectedBills.value.map(b => b.id),
+      paymentMethod: batchPayForm.paymentMethod,
+      remark: batchPayForm.remark
+    })
+    const data = res.data || {}
+    if (data.failCount > 0) {
+      const detail = (data.failures || []).map(f => `账单#${f.billId}：${f.reason}`).join('\n')
+      ElMessageBox.alert(detail, `成功 ${data.successCount} 张，失败 ${data.failCount} 张`, { type: 'warning' })
+    } else {
+      ElMessage.success(`批量收款完成，共 ${data.successCount} 张，合计 ¥${money(data.totalPaid)}`)
+    }
+    batchPayVisible.value = false
+    selectedBills.value = []
+    billsTableRef.value?.clearSelection()
+    await loadBills()
+  } catch (e) {
+    ElMessage.error(getErrorMessage(e, '批量收款失败'))
+  } finally {
+    batchPaying.value = false
+  }
+}
 // 批量生成失败明细（房间 + 原因），允许逐条重试
 const generationFailures = ref([])
 const generationVisible = ref(false)
@@ -829,6 +946,12 @@ onMounted(() => {
   gap: 10px;
   margin-bottom: 16px;
   flex-wrap: wrap;
+}
+
+.selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .toolbar-search {

@@ -59,25 +59,48 @@ public class MeterReadingController {
     this.operationSnapshotService = operationSnapshotService;
   }
 
+  /**
+   * 水电流水列表。
+   *
+   * <p>向后兼容：不传 page 返回纯数组（导出等场景依赖该形状），传了 page 返回分页对象。
+   */
   @GetMapping
-  public List<MeterReading> list(
+  public Object list(
       @RequestParam(required = false) String date,
       @RequestParam(required = false) Long buildingId,
-      @RequestParam(required = false) Long roomId) {
+      @RequestParam(required = false) Long roomId,
+      @RequestParam(required = false) Integer page,
+      @RequestParam(defaultValue = "50") int size) {
+    List<MeterReading> readings;
     if (roomId != null) {
-      return meterReadingRepository.findByRoomIdOrderByRecordDateDesc(roomId);
-    }
-    if (date != null && !date.isBlank()) {
-      List<MeterReading> readings = meterReadingRepository.findByRecordDate(java.time.LocalDate.parse(date));
+      readings = meterReadingRepository.findByRoomIdOrderByRecordDateDesc(roomId);
+    } else if (date != null && !date.isBlank()) {
+      readings = meterReadingRepository.findByRecordDate(java.time.LocalDate.parse(date));
       if (buildingId != null) {
         Set<Long> roomIds = roomRepository.findByBuildingId(buildingId).stream()
             .map(Room::getId)
             .collect(Collectors.toSet());
         readings = readings.stream().filter(r -> roomIds.contains(r.getRoomId())).toList();
       }
+    } else {
+      readings = meterReadingRepository.findAll();
+    }
+
+    if (page == null) {
       return readings;
     }
-    return meterReadingRepository.findAll();
+    int total = readings.size();
+    int safeSize = size <= 0 ? 50 : size;
+    int from = Math.max(page, 0) * safeSize;
+    int to = Math.min(total, from + safeSize);
+    List<MeterReading> content = from >= total ? List.of() : readings.subList(from, to);
+
+    java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+    result.put("content", content);
+    result.put("totalElements", total);
+    result.put("page", page);
+    result.put("size", safeSize);
+    return result;
   }
 
   @GetMapping("/export-csv")

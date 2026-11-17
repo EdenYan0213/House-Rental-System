@@ -24,6 +24,10 @@ public class BillService {
 
   private static final Logger log = LoggerFactory.getLogger(BillService.class);
 
+  /** 账单应缴宽限天数：账期起始日 + N 天 = 应缴截止日。 */
+  @org.springframework.beans.factory.annotation.Value("${app.billing.grace-days:5}")
+  private int billingGraceDays;
+
   private final ContractRepository contractRepository;
   private final MeterReadingRepository meterReadingRepository;
   private final FeeItemRepository feeItemRepository;
@@ -297,6 +301,8 @@ public class BillService {
     bill.setTotalAmount(total);
     bill.setStatus("PENDING");
     bill.setGeneratedDate(LocalDateTime.now());
+    // 应缴截止日 = 账期起始日 + 宽限天数（默认 5 天），用于逾期判断与催收
+    bill.setDueDate(start.plusDays(billingGraceDays));
 
     // 设置房间和租户信息
     if (c.getRoomId() != null) {

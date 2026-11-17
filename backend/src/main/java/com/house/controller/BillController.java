@@ -180,6 +180,11 @@ public class BillController {
       for (Bill b : list) {
         // 归一化历史数据的中文状态，保证前端映射表能命中
         b.setStatus(BillStatus.normalize(b.getStatus()));
+        // 填充已付金额：列表页的「已付」「待收」「批量收款」都依赖该字段
+        double paidSum = paymentRecordRepository.findByBillId(b.getId()).stream()
+            .mapToDouble(pr -> pr.getPaidAmount() == null ? 0 : pr.getPaidAmount())
+            .sum();
+        b.setPaidAmount(paidSum);
         List<BillDetail> details = billDetailRepository.findByBillId(b.getId());
         double waterUsage = 0.0;
         double electricUsage = 0.0;
@@ -387,6 +392,31 @@ public class BillController {
           "data", saved,
           "billStatus", bill != null ? BillStatus.normalize(bill.getStatus()) : BillStatus.PENDING));
     } catch (IllegalArgumentException | IllegalStateException e) {
+      return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+    }
+  }
+
+  /**
+   * 批量收款：对所选账单按剩余应收金额全额收款。
+   */
+  @PostMapping("/batch-payments")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+  public ResponseEntity<?> batchPayments(@RequestBody Map<String, Object> body,
+      HttpServletRequest request) {
+    try {
+      List<?> raw = (List<?>) body.get("billIds");
+      if (raw == null || raw.isEmpty()) {
+        return ResponseEntity.badRequest().body(Map.of("message", "请选择要收款的账单"));
+      }
+      List<Long> billIds = raw.stream().map(v -> ((Number) v).longValue()).toList();
+      String method = body.get("paymentMethod") == null ? "CASH" : body.get("paymentMethod").toString();
+      String remark = body.get("remark") == null ? "批量收款" : body.get("remark").toString();
+
+      var result = paymentService.recordBatchPayment(billIds, method, null, remark);
+      operationLogService.log("账单管理",
+          "批量收款: " + result.get("successCount") + " 张, 合计 " + result.get("totalPaid"), request);
+      return ResponseEntity.ok(result);
+    } catch (Exception e) {
       return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
     }
   }

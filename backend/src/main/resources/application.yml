@@ -76,6 +76,9 @@ app:
     cleanup-cron: ${SNAPSHOT_CLEANUP_CRON:0 0 */6 * * *}
   qr:
     base-url: ${QR_BASE_URL:http://localhost:5173}
+  billing:
+    # 账单应缴宽限天数：账期起始日 + N 天 = 应缴截止日
+    grace-days: ${BILLING_GRACE_DAYS:5}
   backup:
     storage-path: ${BACKUP_STORAGE_PATH:./backups}
     # 命令行工具路径，留默认值则从 PATH 查找

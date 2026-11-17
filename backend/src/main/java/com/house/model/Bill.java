@@ -79,6 +79,13 @@ public class Bill {
   @Transient
   private Double electricUnitPrice;
 
+  /**
+   * 应缴截止日。生成账单时按「账期起始日 + 宽限天数」自动计算，
+   * 用于逾期判断与催收提醒。历史数据可为空。
+   */
+  @Column(name = "due_date")
+  private java.time.LocalDate dueDate;
+
   private Integer deleted;
 
   public void setId(Long id) {
