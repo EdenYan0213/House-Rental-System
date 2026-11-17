@@ -71,8 +71,8 @@ public class BuildingController {
       b.setCode(building.getCode());
       b.setAddress(building.getAddress());
       b.setImageUrl(building.getImageUrl());
-      if (building.getImageUrls() != null) {
-        b.setImageUrls(building.getImageUrls());
+      if (building.getImageIds() != null) {
+        b.setImageIds(building.getImageIds());
       }
       b.setTotalFloors(building.getTotalFloors());
       b.setWaterUnitPrice(building.getWaterUnitPrice());

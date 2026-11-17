@@ -169,6 +169,17 @@ export const getComplaintHandlers = () => api.get('/complaints/handlers')
 export const getTenantComplaints = (tenantId) => api.get(`/complaints/tenant/${tenantId}`)
 export const getComplaintStats = (params) => api.get('/complaints/stats', { params })
 
+// 图片存 MySQL：上传只返回 id，业务数据保存时再提交 id 列表
+export const uploadImage = (file) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return api.post('/images/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 30000
+  })
+}
+export const imageUrl = (id) => `/api/images/${id}`
+
 export const uploadFile = (file) => {
   const formData = new FormData()
   formData.append('file', file)

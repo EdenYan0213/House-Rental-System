@@ -47,6 +47,9 @@ public class SecurityConfig {
                         .requestMatchers("/api/payment/callback").permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/files/**").permitAll()
+                        // 图片以 <img src> 方式加载，无法携带 Authorization 头；
+                        // 图片本身不敏感，ID 亦不可枚举，这里放开只读访问
+                        .requestMatchers(HttpMethod.GET, "/api/images/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/notice/**").permitAll()
                         .requestMatchers("/internal/**").permitAll()
                         .requestMatchers(HttpMethod.PUT, "/api/users/profile").authenticated()

@@ -17,8 +17,8 @@
               arrow="hover"
               @click.stop
             >
-              <el-carousel-item v-for="(img, i) in imagesOf(building)" :key="i">
-                <img :src="resolveImageUrl(img)" alt="楼栋图片" class="cover-img" />
+              <el-carousel-item v-for="id in imagesOf(building)" :key="id">
+                <img :src="imageSrc(id)" alt="楼栋图片" class="cover-img" />
               </el-carousel-item>
             </el-carousel>
             <div v-else class="building-placeholder">
@@ -69,8 +69,8 @@
               </div>
             </el-upload>
             <div class="image-grid">
-              <div v-for="(img, i) in formImages" :key="img + i" class="image-item">
-                <img :src="resolveImageUrl(img)" />
+              <div v-for="(id, i) in formImages" :key="id" class="image-item">
+                <img :src="imageSrc(id)" />
                 <div class="image-mask">
                   <el-tag v-if="i === 0" size="small" type="success" effect="dark">封面</el-tag>
                   <el-button
@@ -139,6 +139,7 @@ import {
   uploadFile,
   updateBuilding,
   uploadFileByUrl,
+  uploadImage,
   getErrorMessage
 } from '../api'
 import { showUndoToast } from '../utils/undo'
@@ -158,8 +159,7 @@ const form = ref({
   name: '',
   code: '',
   address: '',
-  imageUrl: '',
-  imageUrls: '',
+  imageIds: '',
   totalFloors: 1,
   waterUnitPrice: 0,
   electricUnitPrice: 0
@@ -168,32 +168,32 @@ const form = ref({
 // 表单中的图片列表（本地状态），保存时序列化到 imageUrls
 const formImages = ref([])
 
-/** 卡片展示用：优先 imageList（后端合并后的列表），回退单图 */
+/** 图片 URL：存的是图片 ID */
+function imageSrc(id) {
+  return `/api/images/${id}`
+}
+
+/** 卡片展示用：后端返回 imageIdList（图片ID数组） */
 function imagesOf(building) {
-  if (Array.isArray(building?.imageList) && building.imageList.length) {
-    return building.imageList
-  }
-  return building?.imageUrl ? [building.imageUrl] : []
+  return Array.isArray(building?.imageIdList) ? building.imageIdList : []
 }
 
 /** 把当前 formImages 同步到表单字段 */
 function syncFormImages() {
-  form.value.imageUrls = formImages.value.length
+  form.value.imageIds = formImages.value.length
     ? JSON.stringify(formImages.value)
     : ''
-  // 封面始终取第一张，保持与旧字段兼容
-  form.value.imageUrl = formImages.value[0] || ''
 }
 
-function addImage(url) {
-  if (!url) return
-  if (formImages.value.includes(url)) {
+function addImage(imageId) {
+  if (imageId == null) return
+  if (formImages.value.includes(imageId)) {
     return ElMessage.warning('该图片已添加')
   }
   if (formImages.value.length >= 9) {
     return ElMessage.warning('最多上传 9 张图片')
   }
-  formImages.value.push(url)
+  formImages.value.push(imageId)
   syncFormImages()
 }
 
@@ -220,8 +220,7 @@ function openCreate() {
     name: '',
     code: '',
     address: '',
-    imageUrl: '',
-    imageUrls: '',
+    imageIds: '',
     totalFloors: 1,
     waterUnitPrice: 0,
     electricUnitPrice: 0
@@ -282,10 +281,10 @@ function handleUploadError(error) {
 
 async function customUpload(options) {
   try {
-    const res = await uploadFile(options.file)
-    const url = res.data?.url || res.data?.data?.url
-    if (url) {
-      addImage(url)
+    const res = await uploadImage(options.file)
+    const id = res.data?.id
+    if (id != null) {
+      addImage(id)
       ElMessage.success('图片上传成功')
     } else {
       ElMessage.error(res.data?.message || '图片上传失败')

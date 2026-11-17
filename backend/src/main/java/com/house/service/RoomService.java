@@ -188,7 +188,7 @@ public class RoomService {
         if (room.getArea() != null) existing.setArea(room.getArea());
         if (room.getStatus() != null) existing.setStatus(RoomStatus.normalize(room.getStatus()));
         if (room.getImageUrl() != null) existing.setImageUrl(room.getImageUrl());
-        if (room.getImageUrls() != null) existing.setImageUrls(room.getImageUrls());
+        if (room.getImageIds() != null) existing.setImageIds(room.getImageIds());
         if (room.getWaterMeterId() != null) existing.setWaterMeterId(room.getWaterMeterId());
         if (room.getElectricMeterId() != null) existing.setElectricMeterId(room.getElectricMeterId());
 

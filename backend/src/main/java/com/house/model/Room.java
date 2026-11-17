@@ -37,33 +37,30 @@ public class Room {
   private String imageUrl;
 
   /**
-   * 全部图片（JSON 数组字符串）。imageUrl 作为封面保留，
-   * 前端用 getImageList() 拿到合并后的列表做轮播。
+   * 图片 ID 列表（JSON 数组字符串，如 "[1,2,3]"）。
+   * 图片二进制存 image_blob 表，这里只存引用。
    */
-  @Column(name = "image_urls", columnDefinition = "text")
-  @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
-  private String imageUrls;
+  @Column(name = "image_ids")
+  private String imageIds;
 
-  /** 对外输出：优先用 image_urls，为空时回退到单张 imageUrl。 */
+  /** 对外输出：图片 ID 数组，前端据此拼接 /api/images/{id}。 */
   @Transient
-  public java.util.List<String> getImageList() {
-    java.util.List<String> list = new java.util.ArrayList<>();
-    if (imageUrls != null && !imageUrls.isBlank()) {
-      try {
-        com.fasterxml.jackson.databind.ObjectMapper mapper =
-            new com.fasterxml.jackson.databind.ObjectMapper();
-        String[] arr = mapper.readValue(imageUrls, String[].class);
-        for (String u : arr) {
-          if (u != null && !u.isBlank() && !list.contains(u)) {
-            list.add(u);
-          }
-        }
-      } catch (Exception ignore) {
-        // 解析失败时退回封面图
-      }
+  public java.util.List<Long> getImageIdList() {
+    java.util.List<Long> list = new java.util.ArrayList<>();
+    if (imageIds == null || imageIds.isBlank()) {
+      return list;
     }
-    if (list.isEmpty() && imageUrl != null && !imageUrl.isBlank()) {
-      list.add(imageUrl);
+    try {
+      com.fasterxml.jackson.databind.ObjectMapper mapper =
+          new com.fasterxml.jackson.databind.ObjectMapper();
+      Long[] arr = mapper.readValue(imageIds, Long[].class);
+      for (Long id : arr) {
+        if (id != null && !list.contains(id)) {
+          list.add(id);
+        }
+      }
+    } catch (Exception ignore) {
+      // 解析失败返回空列表
     }
     return list;
   }

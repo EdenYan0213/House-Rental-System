@@ -65,8 +65,8 @@
               indicator-position="none"
               arrow="hover"
             >
-              <el-carousel-item v-for="(img, i) in imagesOf(room)" :key="i">
-                <img :src="resolveImageUrl(img)" alt="房间图片" />
+              <el-carousel-item v-for="id in imagesOf(room)" :key="id">
+                <img :src="imageSrc(id)" alt="房间图片" />
               </el-carousel-item>
             </el-carousel>
             <img v-else :src="getRoomImage(room)" alt="房间图片" />
@@ -119,8 +119,8 @@
             <el-button type="primary" @click="handleUrlUpload" :loading="urlUploading">添加</el-button>
           </div>
           <div class="image-grid">
-            <div v-for="(img, i) in formImages" :key="img + i" class="image-item">
-              <img :src="resolveImageUrl(img)" />
+            <div v-for="(id, i) in formImages" :key="id" class="image-item">
+              <img :src="imageSrc(id)" />
               <div class="image-mask">
                 <el-tag v-if="i === 0" size="small" type="success" effect="dark">封面</el-tag>
                 <el-button v-else size="small" link class="mask-btn" @click="setAsCover(i)">设为封面</el-button>
@@ -297,6 +297,7 @@ import {
   createRoomsBatchOverride,
   uploadFile,
   uploadFileByUrl,
+  uploadImage,
   batchAdjustRoomRent,
   getRoomQrPng,
   exportRoomQrsPdf,
@@ -326,24 +327,25 @@ const imageUrlInput = ref('')
 // 房间图片列表（本地状态），保存时序列化到 imageUrls
 const formImages = ref([])
 
-/** 卡片展示用：优先后端合并后的 imageList，回退单图 */
+/** 图片 URL：存的是图片 ID，拼成接口地址 */
+function imageSrc(id) {
+  return `/api/images/${id}`
+}
+
+/** 卡片展示用：后端返回 imageIdList（图片ID数组） */
 function imagesOf(room) {
-  if (Array.isArray(room?.imageList) && room.imageList.length) {
-    return room.imageList
-  }
-  return room?.imageUrl ? [room.imageUrl] : []
+  return Array.isArray(room?.imageIdList) ? room.imageIdList : []
 }
 
 function syncFormImages() {
-  form.value.imageUrls = formImages.value.length ? JSON.stringify(formImages.value) : ''
-  form.value.imageUrl = formImages.value[0] || ''
+  form.value.imageIds = formImages.value.length ? JSON.stringify(formImages.value) : ''
 }
 
-function addImage(url) {
-  if (!url) return
-  if (formImages.value.includes(url)) return ElMessage.warning('该图片已添加')
+function addImage(imageId) {
+  if (imageId == null) return
+  if (formImages.value.includes(imageId)) return ElMessage.warning('该图片已添加')
   if (formImages.value.length >= 9) return ElMessage.warning('最多上传 9 张图片')
-  formImages.value.push(url)
+  formImages.value.push(imageId)
   syncFormImages()
 }
 
@@ -508,8 +510,7 @@ function openCreate() {
     layout: '',
     area: 0,
     status: 'IDLE',
-    imageUrl: '',
-    imageUrls: ''
+    imageIds: ''
   }
   formImages.value = []
   uploadType.value = 'local'
@@ -658,11 +659,10 @@ function handleUploadError(error) {
 
 async function customUpload(options) {
   try {
-    const res = await uploadFile(options.file)
-    // 直接把返回的 URL 加入图片列表，不依赖 el-upload 的 on-success 回调
-    const url = res.data?.url || res.data?.data?.url
-    if (url) {
-      addImage(url)
+    const res = await uploadImage(options.file)
+    const id = res.data?.id
+    if (id != null) {
+      addImage(id)
       ElMessage.success('图片上传成功')
     } else {
       ElMessage.error(res.data?.message || '图片上传失败')
