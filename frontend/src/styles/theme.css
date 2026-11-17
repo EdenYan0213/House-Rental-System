@@ -205,3 +205,48 @@ body,
   background: var(--accent-color);
   color: #fff;
 }
+
+/* ---- 全局细节优化 ---- */
+
+/* 表格行 hover 更明显，便于横向扫读 */
+.el-table--enable-row-hover .el-table__body tr:hover > td.el-table__cell {
+  background: var(--el-fill-color) !important;
+}
+
+/* 表格单元格内边距略收紧，信息密度更高 */
+.el-table .el-table__cell {
+  padding: 9px 0;
+}
+
+/* 卡片 header 与正文的分隔更柔和 */
+.el-card__header {
+  font-weight: 600;
+}
+
+/* 滚动条样式（Webkit） */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--el-border-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 页面切换轻微淡入，减少生硬感 */
+.page-enter-active {
+  transition: opacity 0.18s ease;
+}
+
+.page-enter-from {
+  opacity: 0;
+}

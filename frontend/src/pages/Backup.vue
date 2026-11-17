@@ -80,6 +80,9 @@
         </div>
       </template>
       <el-table :data="backups" stripe>
+              <template #empty>
+                <EmptyState icon="document" title="还没有备份记录" description="建议先创建一次手动备份，确保数据安全" compact />
+              </template>
         <el-table-column prop="backupTime" label="备份时间" width="180">
           <template #default="{ row }">
             {{ formatDateTime(row.backupTime) }}

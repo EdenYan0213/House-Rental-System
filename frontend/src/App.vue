@@ -93,6 +93,11 @@
             <div v-else class="header-title">{{ pageTitle }}</div>
           </div>
           <div class="header-right">
+          <el-button text class="search-trigger" @click="openQuickSearch">
+            <el-icon><Search /></el-icon>
+            <span class="search-label">搜索</span>
+            <kbd class="search-kbd">{{ isMac ? '⌘' : 'Ctrl' }}K</kbd>
+          </el-button>
           <el-dropdown @command="handleThemeCommand" trigger="click">
             <el-button text class="theme-trigger">
               <el-icon v-if="themePreference === 'dark'"><Sunny /></el-icon>
@@ -137,6 +142,7 @@
       </el-container>
     </el-container>
     <router-view v-if="isLoginPage" :key="'bare'" />
+    <QuickSearch ref="quickSearchRef" />
     <el-dialog v-model="showWelcomeDialog" title="欢迎使用" width="520px" :close-on-click-modal="false">
       <p class="welcome-text">这是你的首次登录。建议按顺序完成关键功能，系统会在页面中提供上下文提示。</p>
       <template #footer>
@@ -193,8 +199,10 @@ import {
   Monitor,
   QuestionFilled,
   Expand,
-  Fold
+  Fold,
+  Search
 } from '@element-plus/icons-vue'
+import QuickSearch from '@/components/QuickSearch.vue'
 import {
   getUser,
   removeToken,
@@ -355,6 +363,22 @@ const breadcrumbs = computed(() => {
   return trail
 })
 
+// 全局快速搜索：⌘K / Ctrl+K 唤起
+const quickSearchRef = ref(null)
+const isMac = computed(() => /Mac|iPhone|iPad/.test(navigator.platform || ''))
+
+function openQuickSearch() {
+  quickSearchRef.value?.open()
+}
+
+function handleGlobalKeydown(e) {
+  const isCmdK = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k'
+  if (isCmdK) {
+    e.preventDefault()
+    openQuickSearch()
+  }
+}
+
 const SIDEBAR_KEY = 'sidebarCollapsed'
 const sidebarCollapsed = ref(localStorage.getItem(SIDEBAR_KEY) === '1')
 
@@ -491,6 +515,11 @@ onMounted(() => {
   }
 
   window.addEventListener('storage', refreshCurrentUser)
+  window.addEventListener('keydown', handleGlobalKeydown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleGlobalKeydown)
 })
 
 watch(() => route.fullPath, () => {
@@ -618,6 +647,23 @@ body {
 
 .theme-trigger {
   color: var(--text-main);
+}
+
+.search-trigger {
+  gap: 6px;
+  color: var(--text-muted);
+}
+
+.search-label {
+  font-size: 13px;
+}
+
+.search-kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 11px;
+  background: var(--el-fill-color-light);
 }
 
 .el-dropdown-menu__item.active {

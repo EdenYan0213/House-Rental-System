@@ -155,6 +155,26 @@ export const ALERT_RULE_TYPE = {
   sensitive_operation: '敏感操作'
 }
 
+// ---------------- 操作动作 ----------------
+export const LOG_ACTION = {
+  login: '登录',
+  logout: '登出',
+  add: '新增',
+  create: '新增',
+  edit: '编辑',
+  update: '编辑',
+  delete: '删除',
+  remove: '删除',
+  void: '作废',
+  terminate: '解约',
+  move_out: '退租',
+  renew: '续租',
+  pay: '收款',
+  export: '导出',
+  import: '导入',
+  custom: '其他操作'
+}
+
 // ---------------- 用户角色 ----------------
 export const USER_ROLE = {
   SUPER_ADMIN: '超级管理员',
@@ -206,3 +226,4 @@ export const backupStatusText = (v) => label(BACKUP_STATUS, v)
 export const depositTypeText = (v) => label(DEPOSIT_TYPE, v)
 export const complaintPriorityText = (v) => label(COMPLAINT_PRIORITY, v)
 export const alertRuleTypeText = (v) => label(ALERT_RULE_TYPE, v)
+export const logActionText = (v) => label(LOG_ACTION, v)

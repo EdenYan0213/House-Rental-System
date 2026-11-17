@@ -17,6 +17,9 @@
     </el-row>
 
     <el-table :data="tableData" style="width: 100%; margin-top: 16px" v-loading="loading">
+      <template #empty>
+        <EmptyState icon="user" title="还没有用户" description="创建用户并分配角色，控制各模块的访问权限" compact />
+      </template>
       <el-table-column prop="username" label="用户名" min-width="100" />
       <el-table-column prop="realName" label="姓名" min-width="80" />
       <el-table-column prop="phone" label="手机号" min-width="110" />

@@ -60,6 +60,9 @@
       v-loading="loading"
       @selection-change="onSelectionChange"
     >
+      <template #empty>
+        <EmptyState icon="document" title="还没有合同" description="创建合同后，房间会自动标记为已租，账单将按月生成" primary-text="新建合同" @primary="openCreateFromEmpty" compact />
+      </template>
       <el-table-column type="selection" width="50" />
       <el-table-column label="合同编号" width="160">
         <template #default="{ row }">
@@ -245,6 +248,7 @@ import {
   terminateContract,
   getErrorMessage
 } from '../api'
+import EmptyState from '../components/EmptyState.vue'
 import { contractStatusText, contractStatusTag, paymentCycleText } from '../utils/labels'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import MoveOutWizard from '../components/MoveOutWizard.vue'
@@ -274,6 +278,11 @@ const showMoveOut = ref(false)
 const moveOutContractId = ref(null)
 
 // 打开退租向导：预检 + 一次性完成退押金/解约/房间置空/加黑名单
+// 空态引导：直接跳转新建合同
+function openCreateFromEmpty() {
+  router.push('/contracts/new')
+}
+
 function openMoveOut(row) {
   if (!row?.id) return
   moveOutContractId.value = row.id

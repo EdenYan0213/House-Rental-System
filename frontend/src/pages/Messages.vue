@@ -28,6 +28,9 @@
     </el-row>
 
     <el-table :data="messages" v-loading="loading" style="width: 100%" @row-click="handleRowClick">
+      <template #empty>
+        <EmptyState icon="bell" title="暂无消息" description="合同到期、逾期欠费等提醒会推送到这里" compact />
+      </template>
       <el-table-column label="类型" width="130">
         <template #default="{ row }">
           <el-tag :type="typeTagType(row.type)" size="small">{{ typeText(row.type) }}</el-tag>
@@ -103,6 +106,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getMessages, markMessageRead, markAllMessagesRead, getUnreadCount, getErrorMessage } from '../api'
+import EmptyState from '../components/EmptyState.vue'
 import { ElMessage } from 'element-plus'
 import { Bell } from '@element-plus/icons-vue'
 

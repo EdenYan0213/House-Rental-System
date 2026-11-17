@@ -24,6 +24,9 @@
     <el-tabs style="margin-top: 16px">
       <el-tab-pane label="器具清单">
         <el-table :data="appliances" border>
+              <template #empty>
+                <EmptyState icon="box" title="还没有器具记录" description="登记房间器具后，可实现入住/退租核对单导出" compact />
+              </template>
           <el-table-column prop="applianceName" label="器具名称" />
           <el-table-column prop="brand" label="品牌" />
           <el-table-column prop="quantity" label="数量" width="80" />
@@ -126,6 +129,7 @@ import {
   generateBillForRoom,
   getErrorMessage,
 } from '../api'
+import EmptyState from '../components/EmptyState.vue'
 import { applianceStatusText, repairStatusText } from '../utils/labels'
 
 const route = useRoute()

@@ -36,6 +36,9 @@
       style="width: 100%; margin-top: 16px"
       v-loading="loading"
     >
+      <template #empty>
+        <EmptyState icon="user" title="黑名单为空" description="租户退租时可选择加入黑名单，或在此手动拉黑" compact />
+      </template>
       <el-table-column prop="name" label="租户姓名" width="150">
         <template #default="{ row }">
           <el-link type="primary" @click="viewTenant(row)">{{
@@ -116,7 +119,8 @@ import {
   removeFromBlacklist as apiRemoveFromBlacklist,
   getTenants,
   getErrorMessage,
-} from "../api";
+} from "../api"
+import EmptyState from "../components/EmptyState.vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { showUndoToast } from "../utils/undo";
 

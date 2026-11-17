@@ -14,7 +14,12 @@
         </el-col>
         <el-col :span="4">
           <el-select v-model="filters.action" placeholder="类型" clearable>
-            <el-option v-for="item in optionData.actions" :key="item" :label="item" :value="item" />
+            <el-option
+              v-for="item in optionData.actions"
+              :key="item"
+              :label="logActionText(item)"
+              :value="item"
+            />
           </el-select>
         </el-col>
         <el-col :span="4">
@@ -64,12 +69,17 @@
     </el-card>
 
     <el-table :data="logs" v-loading="loading" border>
+      <template #empty>
+        <EmptyState icon="document" title="暂无操作日志" description="系统会自动记录登录、增删改等关键操作" compact />
+      </template>
       <el-table-column prop="operationTime" label="时间" width="170" />
       <el-table-column label="操作人" width="120">
         <template #default="scope">{{ scope.row.username || scope.row.operator }}</template>
       </el-table-column>
       <el-table-column prop="module" label="模块" width="120" />
-      <el-table-column prop="action" label="类型" width="100" />
+      <el-table-column label="类型" width="110">
+        <template #default="{ row }">{{ logActionText(row.action) }}</template>
+      </el-table-column>
       <el-table-column prop="businessName" label="业务对象" width="160" />
       <el-table-column prop="changeSummary" label="变更摘要" min-width="220" show-overflow-tooltip />
       <el-table-column label="结果" width="80">
@@ -107,7 +117,7 @@
             <el-descriptions-item label="时间">{{ currentDetail?.operationTime }}</el-descriptions-item>
             <el-descriptions-item label="操作人">{{ currentDetail?.username || currentDetail?.operator }}</el-descriptions-item>
             <el-descriptions-item label="模块">{{ currentDetail?.module }}</el-descriptions-item>
-            <el-descriptions-item label="类型">{{ currentDetail?.action }}</el-descriptions-item>
+            <el-descriptions-item label="类型">{{ logActionText(currentDetail?.action) }}</el-descriptions-item>
             <el-descriptions-item label="业务ID">{{ currentDetail?.businessId }}</el-descriptions-item>
             <el-descriptions-item label="业务名称">{{ currentDetail?.businessName }}</el-descriptions-item>
             <el-descriptions-item label="请求IP">{{ currentDetail?.requestIp || currentDetail?.ip }}</el-descriptions-item>
@@ -142,6 +152,8 @@
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { exportLogs, getLogFilters, getOperationLogs, getErrorMessage } from '../api'
+import EmptyState from '../components/EmptyState.vue'
+import { logActionText } from '../utils/labels'
 
 const logs = ref([])
 const loading = ref(false)

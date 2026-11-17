@@ -22,6 +22,9 @@
     </el-row>
 
     <el-table :data="orders" v-loading="loading" style="margin-top: 12px" border>
+      <template #empty>
+        <EmptyState icon="tools" title="还没有维修工单" description="租户通过扫码即可发起报修，工单会出现在这里" compact />
+      </template>
       <el-table-column prop="orderNo" label="工单号" width="170" />
       <el-table-column prop="roomNumber" label="房间号" width="100" />
       <el-table-column prop="tenantName" label="租户" width="120" />
@@ -155,6 +158,7 @@ import {
   uploadFile,
   getErrorMessage
 } from '../api'
+import EmptyState from '../components/EmptyState.vue'
 import { repairStatusText, repairStatusTag } from '../utils/labels'
 
 const route = useRoute()

@@ -7,6 +7,9 @@
           <el-button type="primary" @click="openWorkerCreate">新增维修工</el-button>
         </el-row>
         <el-table :data="workers" v-loading="loading" border>
+      <template #empty>
+        <EmptyState icon="tools" title="还没有维修工" description="添加维修工后即可派单，并跟踪处理进度" compact />
+      </template>
           <el-table-column prop="name" label="姓名" />
           <el-table-column prop="phone" label="手机号" />
           <el-table-column prop="totalOrders" label="工单数量" width="100" />
@@ -90,6 +93,7 @@ import {
   deleteApplianceTemplate,
   getErrorMessage,
 } from '../api'
+import EmptyState from '../components/EmptyState.vue'
 
 const workers = ref([])
 const templates = ref([])

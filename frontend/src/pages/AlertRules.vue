@@ -10,6 +10,9 @@
             </div>
           </template>
           <el-table :data="rules" border>
+              <template #empty>
+                <EmptyState icon="bell" title="还没有预警规则" description="设置规则后，异常操作会自动触发预警" compact />
+              </template>
             <el-table-column prop="title" label="规则" />
             <el-table-column label="类型" width="150">
               <template #default="scope">{{ alertRuleTypeText(scope.row.ruleType) }}</template>
@@ -97,6 +100,7 @@ import { onMounted, ref } from 'vue'
 import { alertRuleTypeText } from '../utils/labels'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { deleteAlertRule, getAlertRecords, getAlertRules, handleAlertRecord, saveAlertRule } from '../api'
+import EmptyState from '../components/EmptyState.vue'
 
 const rules = ref([])
 const records = ref([])

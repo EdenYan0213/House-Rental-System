@@ -299,7 +299,11 @@ public class OperationLogService {
 
   private String resolveOperator() {
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-    if (auth == null || auth.getName() == null) {
+    // Spring Security 会为未认证请求注入匿名 Authentication，
+    // 其 getName() 返回 "anonymousUser"，这里统一归为「未登录用户」。
+    if (auth == null || auth.getName() == null
+        || !auth.isAuthenticated()
+        || "anonymousUser".equals(auth.getName())) {
       return "未登录用户";
     }
     return auth.getName();

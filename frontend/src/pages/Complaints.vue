@@ -35,6 +35,9 @@
     </el-row>
 
     <el-table :data="list" style="margin-top: 12px" border v-loading="loading">
+      <template #empty>
+        <EmptyState icon="bell" title="暂无投诉记录" description="租户提交投诉后可在此受理与跟进" compact />
+      </template>
       <el-table-column prop="complaintNo" label="投诉编号" width="180" />
       <el-table-column prop="createdAt" label="投诉时间" width="170" />
       <el-table-column prop="tenantDisplayName" label="租户" width="110" />
@@ -240,6 +243,7 @@ import {
   replyComplaint,
   uploadComplaintFile
 } from '../api'
+import EmptyState from '../components/EmptyState.vue'
 
 const route = useRoute()
 
