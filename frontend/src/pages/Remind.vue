@@ -48,7 +48,10 @@
           <td>{{ l.roomNumber }}</td>
           <td>{{ l.overdueDays }}</td>
           <td>{{ l.totalAmount }}</td>
-          <td>{{ l.status }} {{ l.isDebug ? '（调试）' : '' }}</td>
+          <td>
+            <el-tag :type="smsStatusTag(l.status)" size="small">{{ smsStatusText(l.status) }}</el-tag>
+            <span v-if="l.isDebug" style="margin-left:6px;color:var(--text-muted)">（调试）</span>
+          </td>
         </tr>
       </tbody>
     </table>
@@ -57,6 +60,7 @@
 
 <script>
 import { getRemindRules, saveRemindRule, getSmsConfig, saveSmsConfig, getRemindLogs, testSendSms, triggerRemindNow } from '../api/remind'
+import { smsStatusText, smsStatusTag } from '../utils/labels'
 
 export default {
   data() {
@@ -71,6 +75,10 @@ export default {
     this.load()
   },
   methods: {
+    // Options API 无法直接访问模块级导入，这里显式挂到实例方法上
+    smsStatusText,
+    smsStatusTag,
+
     async load() {
       try {
         const r = await getRemindRules()

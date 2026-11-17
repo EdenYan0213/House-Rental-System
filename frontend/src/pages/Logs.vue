@@ -19,9 +19,9 @@
         </el-col>
         <el-col :span="4">
           <el-select v-model="filters.logLevel" placeholder="级别" clearable>
-            <el-option label="INFO" :value="1" />
-            <el-option label="WARN" :value="2" />
-            <el-option label="ERROR" :value="3" />
+            <el-option label="正常" :value="1" />
+            <el-option label="警告" :value="2" />
+            <el-option label="错误" :value="3" />
           </el-select>
         </el-col>
         <el-col :span="4">
@@ -111,7 +111,7 @@
             <el-descriptions-item label="业务ID">{{ currentDetail?.businessId }}</el-descriptions-item>
             <el-descriptions-item label="业务名称">{{ currentDetail?.businessName }}</el-descriptions-item>
             <el-descriptions-item label="请求IP">{{ currentDetail?.requestIp || currentDetail?.ip }}</el-descriptions-item>
-            <el-descriptions-item label="UserAgent">{{ currentDetail?.userAgent }}</el-descriptions-item>
+            <el-descriptions-item label="浏览器标识">{{ currentDetail?.userAgent }}</el-descriptions-item>
             <el-descriptions-item label="请求参数">
               <pre class="json-box">{{ formatJson(currentDetail?.requestParams) }}</pre>
             </el-descriptions-item>
@@ -165,9 +165,9 @@ const filters = ref({
 })
 
 function levelText(value) {
-  if (value === 2) return 'WARN'
-  if (value === 3) return 'ERROR'
-  return 'INFO'
+  if (value === 2) return '警告'
+  if (value === 3) return '错误'
+  return '正常'
 }
 
 function levelTag(value) {

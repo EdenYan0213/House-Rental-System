@@ -87,7 +87,7 @@
         <el-descriptions-item label="状态">
           {{ currentMessage.isRead ? '已读' : '未读' }}
         </el-descriptions-item>
-        <el-descriptions-item label="类型">{{ currentMessage.type || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="类型">{{ typeText(currentMessage.type) }}</el-descriptions-item>
         <el-descriptions-item label="内容">
           <div class="message-content" v-html="renderMessageContent(currentMessage.content)"></div>
         </el-descriptions-item>

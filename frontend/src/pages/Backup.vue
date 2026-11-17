@@ -88,14 +88,14 @@
         <el-table-column prop="type" label="类型" width="100">
           <template #default="{ row }">
             <el-tag :type="row.type === 'auto' ? 'info' : 'success'">
-              {{ row.type === 'auto' ? '自动' : '手动' }}
+              {{ backupTypeText(row.type) }}
             </el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
             <el-tag :type="row.status === 'success' ? 'success' : 'danger'">
-              {{ row.status === 'success' ? '成功' : '失败' }}
+              {{ backupStatusText(row.status) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -186,6 +186,7 @@ import {
   getBackupConfig,
   updateBackupConfig
 } from '@/api'
+import { backupTypeText, backupStatusText } from '@/utils/labels'
 
 const config = ref({
   enabled: false,

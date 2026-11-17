@@ -110,6 +110,51 @@ export const COMPLAINT_STATUS_TAG = {
   closed: 'danger'
 }
 
+// ---------------- 短信发送状态 ----------------
+export const SMS_STATUS = {
+  success: '发送成功',
+  failed: '发送失败',
+  pending: '待发送',
+  skipped: '已跳过'
+}
+
+export const SMS_STATUS_TAG = {
+  success: 'success',
+  failed: 'danger',
+  pending: 'info',
+  skipped: 'info'
+}
+
+// ---------------- 备份类型 / 状态 ----------------
+export const BACKUP_TYPE = {
+  auto: '自动',
+  manual: '手动'
+}
+
+export const BACKUP_STATUS = {
+  success: '成功',
+  failed: '失败'
+}
+
+// ---------------- 押金类型 ----------------
+export const DEPOSIT_TYPE = {
+  RECEIVE: '收取',
+  REFUND: '退还'
+}
+
+// ---------------- 投诉紧急程度 ----------------
+export const COMPLAINT_PRIORITY = {
+  normal: '一般',
+  urgent: '紧急'
+}
+
+// ---------------- 预警规则类型 ----------------
+export const ALERT_RULE_TYPE = {
+  high_frequency: '短时高频操作',
+  login_failures: '连续登录失败',
+  sensitive_operation: '敏感操作'
+}
+
 // ---------------- 用户角色 ----------------
 export const USER_ROLE = {
   SUPER_ADMIN: '超级管理员',
@@ -154,3 +199,10 @@ export const applianceStatusText = (v) => label(APPLIANCE_STATUS, v)
 export const userRoleText = (v) => label(USER_ROLE, v)
 export const complaintStatusText = (v) => label(COMPLAINT_STATUS, v)
 export const complaintStatusTag = (v) => label(COMPLAINT_STATUS_TAG, v, 'info')
+export const smsStatusText = (v) => label(SMS_STATUS, v)
+export const smsStatusTag = (v) => label(SMS_STATUS_TAG, v, 'info')
+export const backupTypeText = (v) => label(BACKUP_TYPE, v)
+export const backupStatusText = (v) => label(BACKUP_STATUS, v)
+export const depositTypeText = (v) => label(DEPOSIT_TYPE, v)
+export const complaintPriorityText = (v) => label(COMPLAINT_PRIORITY, v)
+export const alertRuleTypeText = (v) => label(ALERT_RULE_TYPE, v)

@@ -20,4 +20,12 @@ public class DepositRecord {
   private Double amount;
   private LocalDateTime date;
   private String remark;
+
+  // 列表展示用的关联信息，查询时填充，不落库
+  @Transient
+  private String contractNo;
+  @Transient
+  private String tenantName;
+  @Transient
+  private String roomNumber;
 }

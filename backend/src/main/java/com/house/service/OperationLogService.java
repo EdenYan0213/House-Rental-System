@@ -300,7 +300,7 @@ public class OperationLogService {
   private String resolveOperator() {
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
     if (auth == null || auth.getName() == null) {
-      return "anonymous";
+      return "未登录用户";
     }
     return auth.getName();
   }

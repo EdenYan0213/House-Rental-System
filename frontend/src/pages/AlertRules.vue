@@ -11,7 +11,9 @@
           </template>
           <el-table :data="rules" border>
             <el-table-column prop="title" label="规则" />
-            <el-table-column prop="ruleType" label="类型" width="150" />
+            <el-table-column label="类型" width="150">
+              <template #default="scope">{{ alertRuleTypeText(scope.row.ruleType) }}</template>
+            </el-table-column>
             <el-table-column prop="thresholdValue" label="阈值" width="90" />
             <el-table-column prop="windowMinutes" label="窗口(分钟)" width="110" />
             <el-table-column label="级别" width="90">
@@ -92,6 +94,7 @@
 
 <script setup>
 import { onMounted, ref } from 'vue'
+import { alertRuleTypeText } from '../utils/labels'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { deleteAlertRule, getAlertRecords, getAlertRules, handleAlertRecord, saveAlertRule } from '../api'
 
