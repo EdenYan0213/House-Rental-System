@@ -148,11 +148,11 @@ onMounted(load)
 .title {
   font-size: 22px;
   font-weight: 700;
-  color: #1a3365;
+  color: var(--text-main);
 }
 
 .subtitle {
-  color: #6c7b97;
+  color: var(--text-muted);
   margin-top: 4px;
 }
 
@@ -171,7 +171,7 @@ onMounted(load)
 }
 
 .label {
-  color: #6b7a99;
+  color: var(--text-muted);
   font-size: 12px;
 }
 
@@ -221,9 +221,17 @@ onMounted(load)
   border-bottom: none;
 }
 
+/* 小屏保持两列：按钮文字较短，单列会让首屏只看到 4 个入口，
+ * 需要滑动才能看到「扫码进房间」等高频操作。 */
 @media (max-width: 420px) {
   .actions {
-    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .actions :deep(.el-button) {
+    min-height: 40px;
+    padding: 8px 6px;
+    font-size: 13px;
   }
 }
 </style>

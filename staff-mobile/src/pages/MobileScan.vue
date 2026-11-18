@@ -183,7 +183,7 @@ onBeforeUnmount(stopCamera)
 .title {
   font-size: 20px;
   font-weight: 700;
-  color: #1d3266;
+  color: var(--text-main);
 }
 
 .preview {

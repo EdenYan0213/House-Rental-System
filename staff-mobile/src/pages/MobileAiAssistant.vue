@@ -102,7 +102,7 @@ async function send() {
   justify-content: space-between;
   align-items: center;
   padding: 12px;
-  border-bottom: 1px solid #d9e5ff;
+  border-bottom: 1px solid var(--border-color);
   background: rgba(255, 255, 255, 0.96);
   backdrop-filter: blur(8px);
 }
@@ -110,13 +110,13 @@ async function send() {
 .title {
   font-size: 18px;
   font-weight: 700;
-  color: #1a3365;
+  color: var(--text-main);
 }
 
 .back-btn,
 .clear-btn {
   border: none;
-  background: #eaf0ff;
+  background: var(--bg-surface);
   color: #1a4cc8;
   border-radius: 8px;
   height: 32px;
@@ -142,7 +142,7 @@ async function send() {
   max-width: 92%;
   border-radius: 12px;
   border: 1px solid #dce5ff;
-  background: #f4f7ff;
+  background: var(--bg-surface);
   padding: 10px 12px;
 }
 
@@ -161,7 +161,7 @@ async function send() {
 
 .composer {
   padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
-  border-top: 1px solid #d9e5ff;
+  border-top: 1px solid var(--border-color);
   background: var(--bg-surface);
 }
 

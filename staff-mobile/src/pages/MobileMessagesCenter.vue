@@ -224,7 +224,7 @@ onMounted(() => {
 .title {
   font-size: 20px;
   font-weight: 700;
-  color: #1d3266;
+  color: var(--text-main);
 }
 
 .panel {
@@ -247,13 +247,13 @@ onMounted(() => {
 }
 
 .muted {
-  color: #7685a4;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
 .todo-title {
   font-weight: 600;
-  color: #1d3266;
+  color: var(--text-main);
 }
 
 .line-clamp {

@@ -157,7 +157,7 @@ onMounted(load)
 .title {
   font-size: 20px;
   font-weight: 700;
-  color: #1d3266;
+  color: var(--text-main);
 }
 
 .panel {
@@ -166,7 +166,7 @@ onMounted(load)
 }
 
 .meta {
-  color: #6d7b97;
+  color: var(--text-muted);
   font-size: 13px;
   margin: 8px 2px;
 }
@@ -188,14 +188,14 @@ onMounted(load)
 }
 
 .muted {
-  color: #7584a3;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
 .reading {
   display: flex;
   gap: 18px;
-  color: #3258a5;
+  color: var(--text-muted);
   font-weight: 600;
 }
 </style>

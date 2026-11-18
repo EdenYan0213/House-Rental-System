@@ -132,3 +132,121 @@ body,
 .el-empty__description p {
   color: var(--text-muted);
 }
+
+/* ---- 提示条：深色下 el-alert 的浅色底会与主题冲突 ---- */
+.el-alert {
+  border: 1px solid var(--border-color);
+}
+
+/* 所有语义色的浅色变体在深色主题下都要显式给背景与文字色，
+ * 否则 Element Plus 默认的白底 + 浅色文字会变成不可读。 */
+.el-alert.is-light {
+  background: var(--el-fill-color-light);
+  color: var(--text-main);
+}
+
+.el-alert.is-light .el-alert__title,
+.el-alert.is-light .el-alert__description {
+  color: var(--text-main);
+}
+
+.el-alert--info.is-light {
+  background: var(--el-fill-color-light);
+  border-color: var(--border-color);
+}
+
+.el-alert--warning.is-light {
+  background: rgba(217, 119, 6, 0.12);
+  border-color: rgba(217, 119, 6, 0.35);
+}
+
+.el-alert--warning.is-light .el-alert__title,
+.el-alert--warning.is-light .el-alert__description {
+  color: #f0b429;
+}
+
+.el-alert--success.is-light {
+  background: rgba(104, 211, 145, 0.12);
+  border-color: rgba(104, 211, 145, 0.3);
+}
+
+.el-alert--success.is-light .el-alert__title,
+.el-alert--success.is-light .el-alert__description {
+  color: var(--success-color);
+}
+
+.el-alert--error.is-light {
+  background: rgba(252, 129, 129, 0.12);
+  border-color: rgba(252, 129, 129, 0.35);
+}
+
+.el-alert--error.is-light .el-alert__title,
+.el-alert--error.is-light .el-alert__description {
+  color: var(--danger-color);
+}
+
+.el-alert__title {
+  color: var(--text-main);
+}
+
+/* 分页与空态在深色下的文字对比 */
+.el-pagination {
+  --el-pagination-button-color: var(--text-main);
+  --el-pagination-text-color: var(--text-muted);
+  color: var(--text-muted);
+}
+
+.el-pagination.is-background .el-pager li {
+  background: var(--el-fill-color-light);
+  color: var(--text-main);
+}
+
+.el-pagination.is-background .el-pager li.is-active {
+  background: var(--accent-color);
+  color: #fff;
+}
+
+/* ---- 全局细节优化 ---- */
+
+/* 表格行 hover 更明显，便于横向扫读 */
+.el-table--enable-row-hover .el-table__body tr:hover > td.el-table__cell {
+  background: var(--el-fill-color) !important;
+}
+
+/* 表格单元格内边距略收紧，信息密度更高 */
+.el-table .el-table__cell {
+  padding: 9px 0;
+}
+
+/* 卡片 header 与正文的分隔更柔和 */
+.el-card__header {
+  font-weight: 600;
+}
+
+/* 滚动条样式（Webkit） */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--el-border-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 页面切换轻微淡入，减少生硬感 */
+.page-enter-active {
+  transition: opacity 0.18s ease;
+}
+
+.page-enter-from {
+  opacity: 0;
+}

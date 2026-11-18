@@ -25,9 +25,14 @@
     <el-card v-for="group in groups" :key="group.key" class="panel" shadow="never">
       <div class="row top">
         <div>{{ group.tenantName || '-' }} · {{ group.roomNumber || '-' }}</div>
-        <el-tag type="danger">待支付 {{ money(group.unpaidAmount) }}</el-tag>
+        <el-tag v-if="group.unpaidAmount > 0" type="danger">
+          待支付 {{ money(group.unpaidAmount) }}
+        </el-tag>
+        <el-tag v-else type="success">已结清</el-tag>
       </div>
-      <div class="muted">逾期天数：{{ group.maxOverdueDays }}</div>
+      <div v-if="group.maxOverdueDays > 0" class="overdue">
+        已逾期 {{ group.maxOverdueDays }} 天
+      </div>
 
       <div v-for="bill in group.bills" :key="bill.id" class="bill-row" @click="openDetail(bill)">
         <div>{{ bill.billMonth || '-' }}</div>
@@ -359,7 +364,7 @@ onMounted(() => {
 .title {
   font-size: 20px;
   font-weight: 700;
-  color: #1d3266;
+  color: var(--text-main);
 }
 
 .panel {
@@ -385,7 +390,7 @@ onMounted(() => {
 }
 
 .muted {
-  color: #7785a3;
+  color: var(--text-muted);
   font-size: 13px;
 }
 

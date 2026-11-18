@@ -144,7 +144,7 @@ onMounted(load)
 .title {
   font-size: 18px;
   font-weight: 700;
-  color: #1d3266;
+  color: var(--text-main);
 }
 
 .filters {
@@ -175,7 +175,7 @@ onMounted(load)
 }
 
 .muted {
-  color: #7584a3;
+  color: var(--text-muted);
   font-size: 13px;
   margin-bottom: 4px;
 }

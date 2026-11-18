@@ -84,7 +84,7 @@ function go(path) {
   border: none;
   border-radius: 10px;
   background: transparent;
-  color: #4f5d75;
+  color: var(--text-muted);
   font-size: 12px;
   line-height: 34px;
 }

@@ -176,12 +176,12 @@ apiBaseUrl.value = ''
 .name {
   font-size: 20px;
   font-weight: 700;
-  color: #1d3266;
+  color: var(--text-main);
 }
 
 .role {
   margin-top: 6px;
-  color: #6b7896;
+  color: var(--text-muted);
 }
 
 .switch-row {
@@ -199,7 +199,7 @@ apiBaseUrl.value = ''
 
 .muted {
   margin-top: 8px;
-  color: #7182a2;
+  color: var(--text-muted);
   font-size: 12px;
 }
 

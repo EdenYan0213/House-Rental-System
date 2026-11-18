@@ -17,7 +17,7 @@
         <el-tag :type="tagType(item.status)">{{ statusText(item.status) }}</el-tag>
       </div>
       <div class="line muted">工单号：{{ item.orderNo || '-' }}</div>
-      <div class="line muted">报修时间：{{ item.createdAt || '-' }}</div>
+      <div class="line muted">报修时间：{{ formatDateTime(item.createdAt) }}</div>
       <div class="line">{{ item.description || '-' }}</div>
       <div class="actions">
         <el-button size="small" @click="showDetail(item)">详情</el-button>
@@ -124,6 +124,7 @@ import {
   getRooms
 } from '@/api'
 import { unwrapList } from '@/utils/mobileApi'
+import { formatDateTime } from '@/utils/format'
 import { syncOfflineRepairs } from '@/utils/mobileOffline'
 
 const route = useRoute()
@@ -375,7 +376,7 @@ onMounted(load)
 .title {
   font-size: 20px;
   font-weight: 700;
-  color: #1d3266;
+  color: var(--text-main);
 }
 
 .status {
@@ -399,7 +400,7 @@ onMounted(load)
 }
 
 .muted {
-  color: #7382a1;
+  color: var(--text-muted);
   font-size: 13px;
 }
 

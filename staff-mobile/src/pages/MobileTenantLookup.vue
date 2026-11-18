@@ -142,7 +142,7 @@ onMounted(load)
 .title {
   font-size: 20px;
   font-weight: 700;
-  color: #1d3266;
+  color: var(--text-main);
 }
 
 .panel {
@@ -161,7 +161,7 @@ onMounted(load)
 }
 
 .muted {
-  color: #7382a1;
+  color: var(--text-muted);
   font-size: 13px;
 }
 

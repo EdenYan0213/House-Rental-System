@@ -182,7 +182,7 @@ function goBack() {
 
 .hint {
   margin-top: 2px;
-  color: #7785a2;
+  color: var(--text-muted);
   font-size: 12px;
 }
 

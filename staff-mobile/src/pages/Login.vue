@@ -191,7 +191,7 @@ function resetApiBase() {
 
 .api-tip {
   margin-top: 8px;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 12px;
 }
 </style>
