@@ -1,5 +1,6 @@
 <template>
-  <div class="mobile-page" v-loading="loading">
+  <PullRefresh :on-refresh="load">
+    <div class="mobile-page" v-loading="loading">
     <div class="head">
       <div class="title">楼栋信息</div>
       <el-button text @click="load">刷新</el-button>
@@ -7,7 +8,7 @@
 
     <el-empty v-if="!loading && buildings.length === 0" description="暂无楼栋" />
 
-    <el-card v-for="item in buildings" :key="item.id" class="panel" shadow="never" @click="openRooms(item)">
+    <el-card v-for="item in pagedBuildings" :key="item.id" class="panel" shadow="never" @click="openRooms(item)">
       <div class="row top">
         <div class="name">{{ item.name || '-' }}</div>
         <el-tag size="small" type="info">查看房间</el-tag>
@@ -16,9 +17,19 @@
       <div class="muted">水价：{{ money(item.waterUnitPrice) }} / 电价：{{ money(item.electricUnitPrice) }}</div>
     </el-card>
   </div>
+
+      <div v-if="hasMoreBuildings" class="load-more">
+        <el-button text type="primary" @click="showMoreBuildings">
+          加载更多（还有 {{ remainingBuildings }} 条）
+        </el-button>
+      </div>
+  </PullRefresh>
+
 </template>
 
 <script setup>
+import { useIncrementalList } from '@/utils/incrementalList'
+import PullRefresh from '../components/PullRefresh.vue'
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -28,6 +39,14 @@ import { unwrapList } from '@/utils/mobileApi'
 const router = useRouter()
 const loading = ref(false)
 const buildings = ref([])
+const {
+  visible: pagedBuildings,
+  hasMore: hasMoreBuildings,
+  remaining: remainingBuildings,
+  showMore: showMoreBuildings,
+  reset: resetBuildings
+} =
+  useIncrementalList(buildings, 20)
 
 function money(v) {
   return Number(v || 0).toFixed(2)
@@ -54,6 +73,12 @@ onMounted(load)
 </script>
 
 <style scoped>
+.load-more {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0 4px;
+}
+
 .mobile-page {
   padding: 14px;
   max-width: 760px;

@@ -1,5 +1,6 @@
 <template>
-  <div class="mobile-page" v-loading="loading">
+  <PullRefresh :on-refresh="loadAll">
+    <div class="mobile-page" v-loading="loading">
     <div class="head">
       <div class="title">消息中心</div>
       <el-badge :value="unreadCount" :hidden="unreadCount === 0">
@@ -46,7 +47,7 @@
       <template v-if="currentNotice">
         <el-descriptions :column="1" border>
           <el-descriptions-item label="标题">{{ currentNotice.title || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="时间">{{ formatTime(currentNotice.createdAt) }}</el-descriptions-item>
+          <el-descriptions-item label="时间">{{ formatExactTime(currentNotice.createdAt) }}</el-descriptions-item>
           <el-descriptions-item label="内容">{{ currentNotice.content || '-' }}</el-descriptions-item>
         </el-descriptions>
         <div class="notice-actions">
@@ -56,9 +57,12 @@
       </template>
     </el-drawer>
   </div>
+  </PullRefresh>
 </template>
 
 <script setup>
+import { formatDateTime, formatRelative } from '@/utils/format'
+import PullRefresh from '../components/PullRefresh.vue'
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -80,10 +84,13 @@ const removedIds = ref(new Set())
 const showNotice = ref(false)
 const currentNotice = ref(null)
 
+// 列表用相对时间（更适合消息场景），详情用精确时间
 function formatTime(value) {
-  if (!value) return '-'
-  const d = new Date(value)
-  return d.toLocaleString('zh-CN')
+  return formatRelative(value)
+}
+
+function formatExactTime(value) {
+  return formatDateTime(value)
 }
 
 function readCacheFirst() {
@@ -101,7 +108,7 @@ function buildTodos({ repairs, bills, contracts }) {
       type: 'repair_pending',
       title: '新工单待分配',
       content: `${item.roomNumber || '-'} ${item.faultType || ''}`,
-      time: item.createdAt || '-',
+      time: formatRelative(item.createdAt),
       route: '/mobile/repairs'
     })
   })

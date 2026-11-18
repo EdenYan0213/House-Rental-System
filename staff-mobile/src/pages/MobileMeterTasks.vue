@@ -1,5 +1,6 @@
 <template>
-  <div class="mobile-page" v-loading="loading">
+  <PullRefresh :on-refresh="refresh">
+    <div class="mobile-page" v-loading="loading">
     <div class="head">
       <div class="title">抄表任务</div>
       <el-button text @click="refresh">刷新</el-button>
@@ -33,9 +34,12 @@
 
     <el-empty v-if="!loading && filteredRows.length === 0" description="暂无待抄房间" />
   </div>
+  </PullRefresh>
+
 </template>
 
 <script setup>
+import PullRefresh from '../components/PullRefresh.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'

@@ -1,5 +1,6 @@
 <template>
-  <div class="mobile-page" v-loading="loading">
+  <PullRefresh :on-refresh="load">
+    <div class="mobile-page" v-loading="loading">
     <div class="head">
       <div class="title">租户与合同</div>
       <el-button text @click="load">刷新</el-button>
@@ -7,7 +8,7 @@
 
     <el-input v-model="keyword" clearable placeholder="输入姓名/手机号/房间号" @keyup.enter="load" />
 
-    <el-card v-for="item in tenants" :key="item.id" class="panel" shadow="never" @click="openTenant(item)">
+    <el-card v-for="item in pagedTenants" :key="item.id" class="panel" shadow="never" @click="openTenant(item)">
       <div class="line top">
         <div>{{ item.name || '-' }}</div>
         <el-tag size="small">{{ item.phone || '-' }}</el-tag>
@@ -53,9 +54,18 @@
       </template>
     </el-drawer>
   </div>
+
+      <div v-if="hasMoreTenants" class="load-more">
+        <el-button text type="primary" @click="showMoreTenants">
+          加载更多（还有 {{ remainingTenants }} 条）
+        </el-button>
+      </div>
+  </PullRefresh>
 </template>
 
 <script setup>
+import { useIncrementalList } from '@/utils/incrementalList'
+import PullRefresh from '../components/PullRefresh.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -69,6 +79,14 @@ const router = useRouter()
 const loading = ref(false)
 const keyword = ref('')
 const tenants = ref([])
+const {
+  visible: pagedTenants,
+  hasMore: hasMoreTenants,
+  remaining: remainingTenants,
+  showMore: showMoreTenants,
+  reset: resetTenants
+} =
+  useIncrementalList(tenants, 20)
 const showDetail = ref(false)
 const currentTenant = ref(null)
 const contractHistory = ref([])
@@ -126,6 +144,12 @@ onMounted(load)
 </script>
 
 <style scoped>
+.load-more {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0 4px;
+}
+
 .mobile-page {
   padding: 14px;
   max-width: 760px;

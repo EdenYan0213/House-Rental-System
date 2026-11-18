@@ -1,5 +1,6 @@
 <template>
-  <div class="mobile-page" v-loading="loading">
+  <PullRefresh :on-refresh="load">
+    <div class="mobile-page" v-loading="loading">
     <div class="head">
       <div class="title">报修工单</div>
       <el-button type="primary" plain @click="openCreate">新建</el-button>
@@ -11,13 +12,16 @@
       </el-radio-button>
     </el-radio-group>
 
-    <el-card v-for="item in orders" :key="item.id" class="panel" shadow="never">
+    <el-card v-for="item in pagedOrders" :key="item.id" class="panel" shadow="never">
       <div class="line top">
         <div>{{ item.roomNumber || '-' }} · {{ item.faultType || '-' }}</div>
         <el-tag :type="tagType(item.status)">{{ statusText(item.status) }}</el-tag>
       </div>
       <div class="line muted">工单号：{{ item.orderNo || '-' }}</div>
-      <div class="line muted">报修时间：{{ formatDateTime(item.createdAt) }}</div>
+      <div class="line muted">
+        报修时间：{{ formatDateTime(item.createdAt) }}
+        <span class="relative">（{{ formatRelative(item.createdAt) }}）</span>
+      </div>
       <div class="line">{{ item.description || '-' }}</div>
       <div class="actions">
         <el-button size="small" @click="showDetail(item)">详情</el-button>
@@ -106,9 +110,18 @@
       </template>
     </el-dialog>
   </div>
+
+      <div v-if="hasMoreOrders" class="load-more">
+        <el-button text type="primary" @click="showMoreOrders">
+          加载更多（还有 {{ remainingOrders }} 条）
+        </el-button>
+      </div>
+  </PullRefresh>
 </template>
 
 <script setup>
+import { useIncrementalList } from '@/utils/incrementalList'
+import PullRefresh from '../components/PullRefresh.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -124,7 +137,7 @@ import {
   getRooms
 } from '@/api'
 import { unwrapList } from '@/utils/mobileApi'
-import { formatDateTime } from '@/utils/format'
+import { formatDateTime, formatRelative } from '@/utils/format'
 import { syncOfflineRepairs } from '@/utils/mobileOffline'
 
 const route = useRoute()
@@ -132,6 +145,14 @@ const loading = ref(false)
 const saving = ref(false)
 const status = ref(route.query.status || '')
 const orders = ref([])
+const {
+  visible: pagedOrders,
+  hasMore: hasMoreOrders,
+  remaining: remainingOrders,
+  showMore: showMoreOrders,
+  reset: resetOrders
+} =
+  useIncrementalList(orders, 20)
 const workers = ref([])
 const buildings = ref([])
 const rooms = ref([])
@@ -360,6 +381,17 @@ onMounted(load)
 </script>
 
 <style scoped>
+.relative {
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
+.load-more {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0 4px;
+}
+
 .mobile-page {
   padding: 14px;
   max-width: 760px;
