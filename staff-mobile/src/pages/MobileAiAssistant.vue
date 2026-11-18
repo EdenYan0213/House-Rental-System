@@ -91,7 +91,7 @@ async function send() {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, #f2f7ff 0%, #ffffff 40%);
+  background: var(--bg-main);
 }
 
 .head {
@@ -162,7 +162,7 @@ async function send() {
 .composer {
   padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
   border-top: 1px solid #d9e5ff;
-  background: #fff;
+  background: var(--bg-surface);
 }
 
 .send-btn {

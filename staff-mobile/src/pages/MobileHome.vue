@@ -166,7 +166,7 @@ onMounted(load)
 .card {
   padding: 12px;
   border-radius: 12px;
-  background: #fff;
+  background: var(--bg-surface);
   border: 1px solid #e8efff;
 }
 

@@ -52,7 +52,10 @@ function go(path) {
 <style scoped>
 .mobile-shell {
   min-height: 100vh;
-  background: linear-gradient(180deg, #f6f9ff 0%, #ffffff 30%);
+  background: var(--bg-main);
+  /* 桌面浏览器预览时约束成手机宽度，避免内容被拉宽 */
+  max-width: 520px;
+  margin: 0 auto;
 }
 
 .mobile-body {
@@ -68,10 +71,13 @@ function go(path) {
   grid-template-columns: repeat(6, 1fr);
   gap: 4px;
   padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
-  border-top: 1px solid #e6ecff;
-  background: rgba(255, 255, 255, 0.95);
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-surface);
   backdrop-filter: blur(8px);
   z-index: 20;
+  /* 与 shell 同宽并居中 */
+  max-width: 520px;
+  margin: 0 auto;
 }
 
 .tab {
