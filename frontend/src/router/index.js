@@ -67,6 +67,11 @@ const routes = [
     meta: { title: '账单详情', breadcrumb: true }
   },
   { path: '/deposits', component: () => import('../pages/Deposits.vue'), meta: { title: '押金管理' } },
+  {
+    path: '/finance',
+    component: () => import('../pages/FinanceReport.vue'),
+    meta: { title: '财务报表', roles: ['SUPER_ADMIN', 'ADMIN'] }
+  },
 
   { path: '/messages', component: () => import('../pages/Messages.vue'), meta: { title: '消息中心' } },
   { path: '/settings', component: () => import('../pages/Settings.vue'), meta: { title: '个人设置' } },

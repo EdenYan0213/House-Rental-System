@@ -13,6 +13,10 @@ export default defineConfig({
   },
   server: {
     host: true,
+    // 不要把构建产物当成源码监听，否则 npm run build 会触发 dev server 重载
+    watch: {
+      ignored: ['**/dist/**']
+    },
     port: 5173,
     proxy: {
       '/api': {

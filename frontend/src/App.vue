@@ -41,6 +41,10 @@
           <el-icon><Wallet /></el-icon>
           <span>账单管理</span>
         </el-menu-item>
+        <el-menu-item index="/finance" v-if="canAccessFinance">
+          <el-icon><DataAnalysis /></el-icon>
+          <span>财务报表</span>
+        </el-menu-item>
         <el-menu-item index="/deposits">
           <el-icon><Money /></el-icon>
           <span>押金管理</span>
@@ -200,7 +204,8 @@ import {
   QuestionFilled,
   Expand,
   Fold,
-  Search
+  Search,
+  DataAnalysis
 } from '@element-plus/icons-vue'
 import QuickSearch from '@/components/QuickSearch.vue'
 import {
@@ -211,7 +216,8 @@ import {
   getThemePreference,
   setThemePreference,
   getCurrentUser,
-  dismissGuide
+  dismissGuide,
+  hasRole
 } from '@/api'
 import { applyThemePreference } from './utils/theme'
 
@@ -305,6 +311,7 @@ const canAccessMeterReadings = computed(() => hasAnyRole(['ADMIN', 'SUPER_ADMIN'
 const canAccessLogs = computed(() => hasAnyRole(['SUPER_ADMIN']))
 const canAccessRepairs = computed(() => hasAnyRole(['ADMIN', 'SUPER_ADMIN']))
 const canAccessSettings = computed(() => true)
+const canAccessFinance = computed(() => hasRole('ADMIN') || hasRole('SUPER_ADMIN'))
 const canManageBackup = computed(() => hasAnyRole(['ADMIN', 'SUPER_ADMIN']))
 
 const pageTitleMap = {
@@ -316,6 +323,7 @@ const pageTitleMap = {
   '/meter-readings': '水电录入',
   '/bills': '账单管理',
   '/deposits': '押金管理',
+  '/finance': '财务报表',
   '/messages': '消息中心',
   '/repairs/orders': '维修工单',
   '/repairs/workers': '维修管理',
@@ -516,10 +524,6 @@ onMounted(() => {
 
   window.addEventListener('storage', refreshCurrentUser)
   window.addEventListener('keydown', handleGlobalKeydown)
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('keydown', handleGlobalKeydown)
 })
 
 watch(() => route.fullPath, () => {

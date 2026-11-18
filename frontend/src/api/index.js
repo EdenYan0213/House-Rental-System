@@ -285,6 +285,8 @@ export const getDeposits = (params) => api.get('/deposits', { params })
 export const createDeposit = (data) => api.post('/deposits', data)
 export const updateDeposit = (id, data) => api.put(`/deposits/${id}`, data)
 
+export const getFinanceReport = (params) => api.get('/finance/report', { params, timeout: 30000 })
+
 export const getDashboardStats = () => api.get('/dashboard/stats')
 export const getDashboardCharts = () => api.get('/dashboard/charts')
 export const getExpiringContracts = (days) => api.get(`/dashboard/expiring-contracts?days=${days}`)
