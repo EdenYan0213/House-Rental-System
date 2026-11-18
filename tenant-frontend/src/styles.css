@@ -52,10 +52,19 @@ body {
 }
 
 .btn {
+  display: block;
+  width: 100%;
   height: 42px;
   border: none;
   border-radius: 10px;
   cursor: pointer;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+/* grid-two 内的按钮已经是等分布局，无需再撑满 */
+.grid-two .btn {
+  width: 100%;
 }
 
 .btn-primary {

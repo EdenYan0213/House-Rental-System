@@ -1,0 +1,45 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ''
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    open-in-view: false
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+  sql:
+    init:
+      mode: never
+
+# 测试环境关闭定时任务副作用
+app:
+  billing:
+    grace-days: 5
+  snapshot:
+    undo-window-minutes: 30
+    history-retention-days: 30
+  file:
+    upload-dir: ./target/test-uploads
+    allowed-extensions: jpg,jpeg,png,gif,webp
+    max-size: 10485760
+  security:
+    jwt:
+      secret: test-secret-key-at-least-256-bits-long-enough-for-hmac
+      expiration: 86400000
+      header: Authorization
+      prefix: Bearer
+  crypto:
+    secret: TestCryptoSecretForUnitTests
+    algorithm: AES/GCM/NoPadding
+  qr:
+    base-url: http://localhost:5173
+
+logging:
+  level:
+    root: WARN
+    com.house: INFO

@@ -141,15 +141,83 @@
         <el-descriptions-item label="结束日期">{{ currentContract.endDate }}</el-descriptions-item>
         <el-descriptions-item label="月租金">¥{{ currentContract.monthlyRent?.toLocaleString() }}</el-descriptions-item>
         <el-descriptions-item label="押金">¥{{ currentContract.deposit?.toLocaleString() }}</el-descriptions-item>
-        <el-descriptions-item label="付款方式">{{ currentContract.paymentMethod }}</el-descriptions-item>
+        <el-descriptions-item label="付款方式">{{ paymentCycleText(currentContract.paymentMethod) }}</el-descriptions-item>
         <el-descriptions-item label="状态">
           <el-tag :type="getStatusType(currentContract.status)">{{ getStatusText(currentContract.status) }}</el-tag>
         </el-descriptions-item>
         <el-descriptions-item label="备注" :span="2">{{ currentContract.remark || '-' }}</el-descriptions-item>
       </el-descriptions>
-      <div v-if="currentContract?.attachmentUrl" style="margin-top: 15px">
-        <el-link :href="currentContract.attachmentUrl" target="_blank" type="primary">查看附件</el-link>
+      <!-- 合同附件：支持多版本归档，可追溯「当时签的是哪版」 -->
+      <el-divider content-position="left">合同附件</el-divider>
+
+      <div class="attach-bar">
+        <el-upload
+          :show-file-list="false"
+          :http-request="uploadContractAttachment"
+          :before-upload="beforeAttachUpload"
+        >
+          <el-button type="primary" size="small" :icon="Upload" :loading="attachUploading">
+            上传新版本
+          </el-button>
+        </el-upload>
+        <span class="attach-hint">
+          每次上传都会保留一个版本，合同当前附件自动指向最新版
+        </span>
       </div>
+
+      <el-table
+        v-if="attachments.length"
+        :data="attachments"
+        size="small"
+        border
+        max-height="220"
+        style="margin-top: 10px"
+      >
+        <el-table-column label="版本" width="80" align="center">
+          <template #default="{ row }">
+            <el-tag size="small" :type="row.id === attachments[0]?.id ? 'success' : 'info'" effect="plain">
+              v{{ row.version }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="文件" min-width="180">
+          <template #default="{ row }">
+            <el-link :href="row.fileUrl" target="_blank" type="primary">{{ row.fileName || '查看附件' }}</el-link>
+          </template>
+        </el-table-column>
+        <el-table-column label="类别" width="100">
+          <template #default="{ row }">{{ attachCategoryText(row.category) }}</template>
+        </el-table-column>
+        <el-table-column label="上传人" width="100">
+          <template #default="{ row }">{{ row.operator || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="时间" width="160">
+          <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="80" align="center">
+          <template #default="{ row }">
+            <el-button
+              v-if="row.id !== attachments[0]?.id"
+              size="small"
+              link
+              type="danger"
+              @click="removeAttachment(row)"
+            >删除</el-button>
+            <span v-else class="attach-current">当前</span>
+          </template>
+        </el-table-column>
+        <template #empty>
+          <EmptyState icon="document" title="还没有上传附件" description="上传合同扫描件后可按版本追溯" compact />
+        </template>
+      </el-table>
+      <EmptyState
+        v-else
+        icon="document"
+        title="还没有上传附件"
+        description="上传合同扫描件后，每次替换都会保留历史版本"
+        compact
+      />
+
       <template #footer>
         <el-button @click="showDetail = false">关闭</el-button>
       </template>
@@ -246,13 +314,17 @@ import {
   getContracts,
   renewContract,
   terminateContract,
-  getErrorMessage
+  getErrorMessage,
+  getContractAttachments,
+  addContractAttachment,
+  deleteContractAttachment,
+  uploadFile
 } from '../api'
 import EmptyState from '../components/EmptyState.vue'
 import { contractStatusText, contractStatusTag, paymentCycleText } from '../utils/labels'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import MoveOutWizard from '../components/MoveOutWizard.vue'
-import { Search, Plus, Download } from '@element-plus/icons-vue'
+import { Search, Plus, Download, Upload } from '@element-plus/icons-vue'
 import { showUndoToast } from '../utils/undo'
 
 const router = useRouter()
@@ -274,6 +346,78 @@ const showDetail = ref(false)
 const showRenew = ref(false)
 const renewing = ref(false)
 const currentContract = ref(null)
+// 合同附件版本
+const attachments = ref([])
+const attachUploading = ref(false)
+
+const ATTACH_CATEGORY = { CONTRACT: '合同正文', ID_CARD: '证件', OTHER: '其他' }
+
+function attachCategoryText(c) {
+  return ATTACH_CATEGORY[c] || c || '其他'
+}
+
+function formatDateTime(v) {
+  if (!v) return '-'
+  const d = new Date(v)
+  return Number.isNaN(d.getTime()) ? String(v).replace('T', ' ').slice(0, 19)
+    : d.toLocaleString('zh-CN', { hour12: false })
+}
+
+async function loadAttachments(contractId) {
+  try {
+    const res = await getContractAttachments(contractId)
+    attachments.value = res.data || []
+  } catch {
+    attachments.value = []
+  }
+}
+
+function beforeAttachUpload(file) {
+  const maxMb = 20
+  if (file.size / 1024 / 1024 > maxMb) {
+    ElMessage.warning(`文件不能超过 ${maxMb}MB`)
+    return false
+  }
+  return true
+}
+
+async function uploadContractAttachment(options) {
+  if (!currentContract.value?.id) return
+  attachUploading.value = true
+  try {
+    const uploaded = await uploadFile(options.file)
+    const url = uploaded.data?.url
+    if (!url) {
+      ElMessage.error('文件上传失败')
+      return
+    }
+    await addContractAttachment(currentContract.value.id, {
+      fileUrl: url,
+      fileName: options.file.name,
+      fileSize: options.file.size,
+      category: 'CONTRACT'
+    })
+    ElMessage.success('新版本已上传')
+    await loadAttachments(currentContract.value.id)
+    await loadContracts()
+  } catch (e) {
+    ElMessage.error(getErrorMessage(e, '附件上传失败'))
+  } finally {
+    attachUploading.value = false
+  }
+}
+
+async function removeAttachment(row) {
+  try {
+    await ElMessageBox.confirm(`确定删除 v${row.version} 这个附件版本吗？`, '确认删除', { type: 'warning' })
+    await deleteContractAttachment(currentContract.value.id, row.id)
+    ElMessage.success('已删除')
+    await loadAttachments(currentContract.value.id)
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error(getErrorMessage(e, '删除失败'))
+  }
+}
+
 const showMoveOut = ref(false)
 const moveOutContractId = ref(null)
 
@@ -382,6 +526,7 @@ function onSelectionChange(rows) {
 function viewDetail(row) {
   currentContract.value = row
   showDetail.value = true
+  loadAttachments(row.id)
 }
 
 async function openDetailById(id) {
@@ -579,6 +724,23 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.attach-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.attach-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.attach-current {
+  font-size: 12px;
+  color: var(--success-color);
+}
+
 .page {
   padding: 20px;
 }

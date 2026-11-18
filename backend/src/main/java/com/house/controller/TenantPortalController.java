@@ -339,13 +339,14 @@ public class TenantPortalController {
     Tenant tenant = (Tenant) context.get("tenant");
     Long roomId = (Long) context.get("roomId");
     if (Boolean.TRUE.equals(context.get("isProspect"))) {
-      return ResponseEntity.ok(Map.of(
-          "tenantName", tenant.getName(),
-          "currentRoom", Map.of(),
-          "unpaidCount", 0,
-          "unpaidAmount", 0,
-          "latestNotice", null,
-          "isProspect", true));
+      Map<String, Object> prospect = new LinkedHashMap<>();
+      prospect.put("tenantName", tenant.getName());
+      prospect.put("currentRoom", Map.of());
+      prospect.put("unpaidCount", 0);
+      prospect.put("unpaidAmount", 0);
+      prospect.put("latestNotice", null);
+      prospect.put("isProspect", true);
+      return ResponseEntity.ok(prospect);
     }
 
     List<Contract> roomContracts = contractRepository.findByTenantIdAndRoomId(tenant.getId(), roomId);
@@ -374,12 +375,14 @@ public class TenantPortalController {
             "title", latest.getTitle(),
             "createdAt", latest.getCreatedAt());
 
-    return ResponseEntity.ok(Map.of(
-        "tenantName", tenant.getName(),
-        "currentRoom", buildRoomInfo(roomId),
-        "unpaidCount", unpaidCount,
-        "unpaidAmount", round(unpaidAmount),
-        "latestNotice", latestNotice));
+    // 注意：Map.of 不接受 null 值，无公告时会抛 NPE，这里用 LinkedHashMap
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("tenantName", tenant.getName());
+    body.put("currentRoom", buildRoomInfo(roomId));
+    body.put("unpaidCount", unpaidCount);
+    body.put("unpaidAmount", round(unpaidAmount));
+    body.put("latestNotice", latestNotice);
+    return ResponseEntity.ok(body);
   }
 
   @GetMapping("/vacant-rooms")

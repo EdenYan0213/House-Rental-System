@@ -223,6 +223,12 @@ export const getContract = (id) => api.get(`/contracts/${id}`)
 export const createContract = (data) => api.post('/contracts', data)
 export const updateContract = (id, data) => api.put(`/contracts/${id}`, data)
 export const terminateContract = (id, data) => api.post(`/contracts/${id}/terminate`, data)
+
+// 合同附件版本历史
+export const getContractAttachments = (contractId) => api.get(`/contracts/${contractId}/attachments`)
+export const addContractAttachment = (contractId, data) => api.post(`/contracts/${contractId}/attachments`, data)
+export const deleteContractAttachment = (contractId, attachmentId) =>
+  api.delete(`/contracts/${contractId}/attachments/${attachmentId}`)
 // 退租一条龙：预检 + 一次事务完成退押金/解约/房间置空/加黑名单
 export const checkMoveOut = (id) => api.get(`/contracts/${id}/move-out-check`)
 export const submitMoveOut = (id, data) => api.post(`/contracts/${id}/move-out`, data)

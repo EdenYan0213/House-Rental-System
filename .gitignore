@@ -109,3 +109,10 @@ staff-mobile/android/app/build/
 # runtime backup files
 backend/backups/
 backups/
+
+# tenant-frontend
+tenant-frontend/node_modules/
+tenant-frontend/dist/
+
+# test artifacts
+backend/target/test-uploads/

@@ -29,16 +29,19 @@ public class ContractService {
   private final RoomRepository roomRepository;
   private final BuildingRepository buildingRepository;
   private final BillRepository billRepository;
+  private final com.house.repo.ContractAttachmentRepository attachmentRepository;
 
   public ContractService(ContractRepository contractRepository, RoomService roomService,
       TenantService tenantService, RoomRepository roomRepository, BuildingRepository buildingRepository,
-      BillRepository billRepository) {
+      BillRepository billRepository,
+      com.house.repo.ContractAttachmentRepository attachmentRepository) {
     this.contractRepository = contractRepository;
     this.roomService = roomService;
     this.tenantService = tenantService;
     this.roomRepository = roomRepository;
     this.buildingRepository = buildingRepository;
     this.billRepository = billRepository;
+    this.attachmentRepository = attachmentRepository;
   }
 
   @Transactional
@@ -299,7 +302,20 @@ public class ContractService {
           .remark(oldContract.getRemark())
           .attachmentUrl(oldContract.getAttachmentUrl())
           .build();
-      created.add(contractRepository.save(newContract));
+      Contract savedNew = contractRepository.save(newContract);
+      created.add(savedNew);
+
+      // 续租生成的合同继承旧合同的附件版本，保证「当时签的是哪版」可追溯
+      if (oldContract.getAttachmentUrl() != null && !oldContract.getAttachmentUrl().isBlank()) {
+        attachmentRepository.save(com.house.model.ContractAttachment.builder()
+            .contractId(savedNew.getId())
+            .version(1)
+            .fileUrl(oldContract.getAttachmentUrl())
+            .category("CONTRACT")
+            .remark("续租继承自 " + oldContract.getContractNo())
+            .operator("系统")
+            .build());
+      }
     }
 
     return Map.of(

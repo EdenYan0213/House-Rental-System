@@ -39,7 +39,7 @@ npm run android:apk:debug    # build a debug APK
 
 **Requires JDK 17.** Lombok 1.18.36 crashes on JDK 21+ with `com.sun.tools.javac.code.TypeTag :: UNKNOWN`. On a machine with multiple JDKs use `JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn ...`.
 
-There is **no test suite, no linter, and no typechecker**. There are no `src/test` directories and no `lint`/`test` npm scripts. Verify changes by building both apps and exercising them by hand — `npm run build` and `mvn clean compile` are the only automated gates available.
+**Backend has JUnit tests** (`backend/src/test/`, run with `mvn test` on JDK 17) covering status normalization, payment state transitions and move-out settlement — 64 cases, all Mockito-based unit tests with no DB. **Frontend has no tests, no linter, and no typechecker**; verify those changes by building and exercising by hand. `npm run build` and `mvn test` are the automated gates.
 
 ## Database: schema is manual, `ddl-auto: none`
 

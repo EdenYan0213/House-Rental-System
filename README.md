@@ -1,12 +1,13 @@
 # 房屋租赁管理系统
 
-包含后端（Spring Boot 3.4.2，Java 17）和 **两个独立前端**：
+包含后端（Spring Boot 3.4.2，Java 17）和 **三个独立前端**：
 
 | 目录 | 说明 | 端口 |
 |---|---|---|
 | `backend/` | 后端服务，唯一 API 提供方 | 8081 |
 | `frontend/` | 管理端（桌面浏览器） | 5173 |
 | `staff-mobile/` | 员工移动端（扫码录入/报修，Capacitor 打 APK） | 5180 |
+| `tenant-frontend/` | 租户自助端（查账单/报修/续租申请/合同签署） | 5188 |
 
 移动端已从 `frontend/` 完全拆出：独立依赖、独立构建产物、独立 Android 工程（`com.house.staff`），可单独部署与发版。
 
@@ -111,9 +112,24 @@ npm run android:apk:debug
 - 主题色使用 `src/styles/theme.css` 中的 CSS 变量，避免硬编码颜色（否则暗色模式不可读）。
 - 搜索输入使用 `src/utils/debounce.js` 做防抖。
 
+## 测试
+
+```bash
+cd backend
+JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn test
+```
+
+覆盖范围（64 个用例）：
+
+- `StatusNormalizeTest` — 房间/账单状态中英归一化与终态判定（39 例）
+- `PaymentServiceTest` — 收款状态流转、重复收款拦截、批量收款（11 例）
+- `MoveOutServiceTest` — 退租预检押金计算、欠费拦截、扣款与强制退租（14 例）
+
+测试使用 Mockito 纯单测，不依赖数据库。
+
 ## 已知限制
 
-- 无自动化测试（无 `src/test`、无 lint/typecheck 脚本），改动后需手工验证。
+- 前端无自动化测试（无 lint/typecheck 脚本），改动后需手工验证。
 - 部分列表接口（楼栋、房间、账单、水电）返回全量数据，账单页采用前端分页；数据量大时需改为后端分页。
 - 数据库迁移脚本按顺序手工执行，尚未接入 Flyway/Liquibase。
 
