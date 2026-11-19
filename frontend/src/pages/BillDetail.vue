@@ -23,7 +23,7 @@
           <h2>房屋租赁账单</h2>
           <div class="bill-info">
             <p><strong>账单月份：</strong>{{ bill?.billMonth }}</p>
-            <p><strong>生成时间：</strong>{{ bill?.createTime }}</p>
+            <p><strong>生成时间：</strong>{{ formatDateTime(bill?.createTime) }}</p>
           </div>
         </div>
 
@@ -172,6 +172,7 @@
 </template>
 
 <script setup>
+import { formatDateTime } from '../utils/format'
 import { computed, ref, reactive, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'

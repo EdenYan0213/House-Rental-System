@@ -42,7 +42,7 @@
       </thead>
       <tbody>
         <tr v-for="l in logs" :key="l.id">
-          <td>{{ l.createdAt }}</td>
+          <td>{{ formatDateTime(l.createdAt) }}</td>
           <td>{{ l.tenantName }}</td>
           <td>{{ l.phone }}</td>
           <td>{{ l.roomNumber }}</td>
@@ -59,6 +59,7 @@
 </template>
 
 <script>
+import { formatDateTime } from '../utils/format'
 import { getRemindRules, saveRemindRule, getSmsConfig, saveSmsConfig, getRemindLogs, testSendSms, triggerRemindNow } from '../api/remind'
 import { smsStatusText, smsStatusTag } from '../utils/labels'
 
@@ -78,6 +79,7 @@ export default {
     // Options API 无法直接访问模块级导入，这里显式挂到实例方法上
     smsStatusText,
     smsStatusTag,
+    formatDateTime,
 
     async load() {
       try {

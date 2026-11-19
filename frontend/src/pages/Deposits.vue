@@ -8,6 +8,7 @@
             <span class="page-subtitle">共 {{ total }} 条记录</span>
           </div>
           <div class="page-actions">
+            <el-button :icon="Refresh" @click="reload">刷新</el-button>
             <el-button type="primary" :icon="Plus" @click="openCreate('RECEIVE')">收取押金</el-button>
             <el-button type="warning" plain :icon="RefreshLeft" @click="openCreate('REFUND')">退还押金</el-button>
           </div>
@@ -159,7 +160,7 @@
 <script setup>
 import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Plus, RefreshLeft } from '@element-plus/icons-vue'
+import { Plus, RefreshLeft, Refresh } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import {
   getDeposits,

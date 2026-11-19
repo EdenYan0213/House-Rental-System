@@ -11,6 +11,7 @@
             </span>
           </div>
           <div class="page-actions">
+            <el-button :icon="Refresh" @click="loadBills">刷新</el-button>
             <el-button :icon="Download" @click="handleExportCsv">导出 CSV</el-button>
             <el-button type="primary" plain :icon="Plus" @click="openRoomGenerate" v-if="canGenerate">
               单房间补生成
@@ -317,7 +318,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Download, Plus, DocumentAdd, Wallet } from '@element-plus/icons-vue'
+import { Download, Plus, DocumentAdd, Wallet, Refresh } from '@element-plus/icons-vue'
 import {
   getBills,
   generateBill,

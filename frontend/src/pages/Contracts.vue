@@ -8,6 +8,7 @@
             <span class="page-subtitle">共 {{ total }} 份合同</span>
           </div>
           <div class="page-actions">
+            <el-button :icon="Refresh" @click="loadContracts">刷新</el-button>
             <el-button :icon="Download" @click="exportCurrent">导出</el-button>
             <el-button type="primary" :icon="Plus" @click="$router.push('/contracts/new')" v-if="canAdd">
               新建合同
@@ -321,10 +322,11 @@ import {
   uploadFile
 } from '../api'
 import EmptyState from '../components/EmptyState.vue'
+import { formatDateTime } from '../utils/format'
 import { contractStatusText, contractStatusTag, paymentCycleText } from '../utils/labels'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import MoveOutWizard from '../components/MoveOutWizard.vue'
-import { Search, Plus, Download, Upload } from '@element-plus/icons-vue'
+import { Search, Plus, Download, Upload, Refresh } from '@element-plus/icons-vue'
 import { showUndoToast } from '../utils/undo'
 
 const router = useRouter()
@@ -354,13 +356,6 @@ const ATTACH_CATEGORY = { CONTRACT: '合同正文', ID_CARD: '证件', OTHER: '�
 
 function attachCategoryText(c) {
   return ATTACH_CATEGORY[c] || c || '其他'
-}
-
-function formatDateTime(v) {
-  if (!v) return '-'
-  const d = new Date(v)
-  return Number.isNaN(d.getTime()) ? String(v).replace('T', ' ').slice(0, 19)
-    : d.toLocaleString('zh-CN', { hour12: false })
 }
 
 async function loadAttachments(contractId) {

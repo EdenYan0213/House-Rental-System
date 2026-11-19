@@ -18,7 +18,8 @@
       <el-select v-model="query.workerId" clearable filterable placeholder="维修工" style="width: 150px">
         <el-option v-for="w in workers" :key="w.id" :label="w.name" :value="w.id" />
       </el-select>
-      <el-button @click="load">查询</el-button>
+      <el-button type="primary" plain @click="load">查询</el-button>
+      <el-button :icon="Refresh" @click="load">刷新</el-button>
     </el-row>
 
     <el-table :data="orders" v-loading="loading" style="margin-top: 12px" border>
@@ -33,7 +34,12 @@
         <template #default="{ row }"><el-tag :type="statusType(row.status)">{{ statusText(row.status) }}</el-tag></template>
       </el-table-column>
       <el-table-column prop="workerName" label="维修工" width="120" />
-      <el-table-column prop="createdAt" label="报修时间" width="170" />
+      <el-table-column label="报修时间" width="170">
+        <template #default="{ row }">
+          {{ formatDateTime(row.createdAt) }}
+          <div class="time-rel">{{ formatRelative(row.createdAt) }}</div>
+        </template>
+      </el-table-column>
       <el-table-column label="操作" min-width="430">
         <template #default="{ row }">
           <el-button size="small" @click="showDetail(row)">详情</el-button>
@@ -138,6 +144,8 @@
 </template>
 
 <script setup>
+import { Refresh } from '@element-plus/icons-vue'
+import { formatDateTime, formatRelative } from '../utils/format'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -373,3 +381,11 @@ onMounted(async () => {
   }
 })
 </script>
+
+<style scoped>
+.time-rel {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+</style>

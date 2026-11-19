@@ -72,7 +72,9 @@
       <template #empty>
         <EmptyState icon="document" title="暂无操作日志" description="系统会自动记录登录、增删改等关键操作" compact />
       </template>
-      <el-table-column prop="operationTime" label="时间" width="170" />
+      <el-table-column label="时间" width="170">
+        <template #default="{ row }">{{ formatDateTime(row.operationTime) }}</template>
+      </el-table-column>
       <el-table-column label="操作人" width="120">
         <template #default="scope">{{ scope.row.username || scope.row.operator }}</template>
       </el-table-column>
@@ -149,6 +151,7 @@
 </template>
 
 <script setup>
+import { formatDateTime, formatRelative } from '../utils/format'
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { exportLogs, getLogFilters, getOperationLogs, getErrorMessage } from '../api'

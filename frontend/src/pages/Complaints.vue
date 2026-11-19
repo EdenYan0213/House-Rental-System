@@ -128,7 +128,7 @@
       <div v-if="current">
         <el-descriptions :column="2" border>
           <el-descriptions-item label="投诉编号">{{ current.complaintNo }}</el-descriptions-item>
-          <el-descriptions-item label="提交时间">{{ current.createdAt }}</el-descriptions-item>
+          <el-descriptions-item label="提交时间">{{ formatDateTime(current.createdAt) }}</el-descriptions-item>
           <el-descriptions-item label="租户">{{ current.tenantDisplayName || '-' }}</el-descriptions-item>
           <el-descriptions-item label="联系电话">{{ current.tenantPhone || '-' }}</el-descriptions-item>
           <el-descriptions-item label="房间号">{{ current.roomNumber || '-' }}</el-descriptions-item>
@@ -222,6 +222,7 @@
 </template>
 
 <script setup>
+import { formatDateTime } from '../utils/format'
 import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { complaintStatusText, complaintStatusTag } from '../utils/labels'

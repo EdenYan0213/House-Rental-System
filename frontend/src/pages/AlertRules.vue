@@ -46,7 +46,9 @@
             </div>
           </template>
           <el-table :data="records" border>
-            <el-table-column prop="createdAt" label="时间" width="160" />
+            <el-table-column label="时间" width="160">
+              <template #default="scope">{{ formatDateTime(scope.row.createdAt) }}</template>
+            </el-table-column>
             <el-table-column prop="title" label="标题" min-width="160" show-overflow-tooltip />
             <el-table-column label="级别" width="80">
               <template #default="scope">{{ levelText(scope.row.level) }}</template>
@@ -96,6 +98,7 @@
 </template>
 
 <script setup>
+import { formatDateTime, formatRelative } from '../utils/format'
 import { onMounted, ref } from 'vue'
 import { alertRuleTypeText } from '../utils/labels'
 import { ElMessage, ElMessageBox } from 'element-plus'

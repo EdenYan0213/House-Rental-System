@@ -64,7 +64,9 @@
             <template #default="{ row }"><el-tag>{{ statusText(row.status) }}</el-tag></template>
           </el-table-column>
           <el-table-column prop="totalFee" label="费用" width="100" />
-          <el-table-column prop="createdAt" label="报修时间" width="170" />
+          <el-table-column label="报修时间" width="170">
+            <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>
+          </el-table-column>
           <el-table-column prop="repairResult" label="维修结果" />
         </el-table>
       </el-tab-pane>
@@ -112,6 +114,7 @@
 </template>
 
 <script setup>
+import { formatDateTime, formatRelative } from '../utils/format'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'

@@ -36,7 +36,8 @@
       </el-table-column>
       <el-table-column label="最后登录" min-width="130">
         <template #default="{ row }">
-          <span>{{ row.lastLoginTime || '-' }}</span>
+          <span>{{ formatDateTime(row.lastLoginTime) }}</span>
+          <div v-if="row.lastLoginTime" class="time-rel">{{ formatRelative(row.lastLoginTime) }}</div>
         </template>
       </el-table-column>
       <el-table-column label="操作" min-width="220" fixed="right" v-if="isSuperAdmin">
@@ -99,6 +100,7 @@
 </template>
 
 <script setup>
+import { formatDateTime, formatRelative } from '../utils/format'
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getUsers, createUser, updateUser, deleteUser, enableUser, disableUser, resetUserPassword, getUser, getErrorMessage } from '@/api'
@@ -262,6 +264,12 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.time-rel {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
 .action-btns {
   white-space: nowrap;
 }

@@ -31,7 +31,9 @@
     </el-row>
 
     <el-table :data="rows" style="width: 100%" v-loading="loading">
-      <el-table-column prop="createdAt" label="操作时间" width="180" />
+      <el-table-column label="操作时间" width="180">
+        <template #default="{ row }">{{ formatDateTime(row.createdAt) }}</template>
+      </el-table-column>
       <el-table-column prop="username" label="操作人" width="120" />
       <el-table-column prop="module" label="模块" width="120" />
       <el-table-column prop="operation" label="操作类型" width="120" />
@@ -88,6 +90,7 @@
 </template>
 
 <script setup>
+import { formatDateTime, formatRelative } from '../utils/format'
 import { ref, onMounted, onUnmounted } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import {

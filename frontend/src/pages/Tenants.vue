@@ -8,6 +8,7 @@
             <span class="page-subtitle">共 {{ total }} 位租户</span>
           </div>
           <div class="page-actions">
+            <el-button :icon="Refresh" @click="loadTenants">刷新</el-button>
             <el-button :icon="Download" @click="exportCurrent">导出</el-button>
             <el-button
               v-if="canManageBlacklist"
@@ -348,7 +349,7 @@
 <script setup>
 import { ref, onMounted, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Search, Plus, Download } from '@element-plus/icons-vue'
+import { Search, Plus, Download, Refresh } from '@element-plus/icons-vue'
 import {
   addToBlacklist as apiAddToBlacklist,
   batchSendMessages,
