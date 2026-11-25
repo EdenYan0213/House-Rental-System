@@ -20,7 +20,14 @@
         <span class="muted">{{ room.layout || '-' }}</span>
       </div>
       <p class="muted" style="margin:8px 0 0">楼层：{{ room.floor || '-' }} | 面积：{{ room.area || '-' }}</p>
-      <img v-if="room.imageUrl" :src="room.imageUrl" class="thumb" alt="房间图片" style="margin-top:8px;max-width:220px" />
+      <img
+        v-if="coverOf(room)"
+        :src="coverOf(room)"
+        class="thumb"
+        alt="房间图片"
+        style="margin-top:8px;max-width:220px"
+        @error="markBroken(room.roomId)"
+      />
       <textarea
         class="textarea"
         style="margin-top:8px"
@@ -42,6 +49,28 @@ import { getVacantRooms, submitRentIntent } from '../api'
 
 const rooms = ref([])
 const messages = ref({})
+
+/** 记录图片加载失败的房间，避免露出破损图标 */
+const brokenRooms = ref(new Set())
+
+/**
+ * 房源封面地址。
+ *
+ * <p>图片实际存在 image_blob 表，房间只持有 imageIds。
+ * 已废弃的 imageUrl 字段不再读取——它可能是失效的旧路径，
+ * 回退过去只会渲染出破损图。
+ */
+function coverOf(room) {
+  if (brokenRooms.value.has(room.roomId)) return ''
+  const ids = Array.isArray(room.imageIds) ? room.imageIds : []
+  return ids.length > 0 ? `/api/images/${ids[0]}` : ''
+}
+
+function markBroken(roomId) {
+  const next = new Set(brokenRooms.value)
+  next.add(roomId)
+  brokenRooms.value = next
+}
 
 onMounted(refresh)
 

@@ -1,8 +1,13 @@
 <template>
-  <div style="padding: 20px">
-    <h2>系统设置</h2>
+  <div class="page">
+    <div class="page-head">
+      <div>
+        <h2>系统设置</h2>
+        <p class="page-sub">管理个人资料、登录密码与新手引导偏好。</p>
+      </div>
+    </div>
 
-    <el-tabs v-model="activeTab" style="margin-top: 20px">
+    <el-tabs v-model="activeTab">
       <el-tab-pane label="个人信息" name="profile">
         <el-card style="max-width: 500px">
           <el-form :model="profileForm" label-width="100px">
@@ -168,7 +173,6 @@
 <script setup>
 import { ref, onMounted, computed } from "vue";
 import {
-  getCurrentUser,
   changePassword as apiChangePassword,
   getReminderSettings,
   updateReminderSettings,
@@ -177,8 +181,7 @@ import {
   getUser,
   setUser,
   hasRole,
-  getErrorMessage,
-} from "../api";
+  getErrorMessage} from "../api";
 import { ElMessage } from "element-plus";
 import Logs from "./Logs.vue";
 import OperationHistory from "./OperationHistory.vue";

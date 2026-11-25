@@ -149,33 +149,90 @@ public class ContractService {
           .collect(Collectors.toList());
     }
 
-    for (Contract c : all) {
-      if (c.getRoomId() != null) {
-        Optional<Room> roomOpt = roomService.findById(c.getRoomId());
-        if (roomOpt.isPresent()) {
-          Room room = roomOpt.get();
-          c.setRoomNumber(room.getRoomNumber());
-          if (room.getBuildingId() != null) {
-            Optional<Building> b = buildingRepository.findById(room.getBuildingId());
-            b.ifPresent(bldg -> c.setBuildingName(bldg.getName()));
-          }
-        }
-      }
-      if (c.getTenantId() != null) {
-        Optional<Tenant> tenantOpt = tenantService.findById(c.getTenantId());
-        if (tenantOpt.isPresent()) {
-          Tenant tenant = tenantOpt.get();
-          c.setTenantName(tenant.getName());
-          c.setTenantPhone(tenant.getPhone());
-        }
-      }
-    }
+    fillDisplayFields(all);
 
     int start = page * size;
     int end = Math.min(start + size, all.size());
     if (start >= all.size())
       return new ArrayList<>();
     return all.subList(start, end);
+  }
+
+  /**
+   * 分页查询，额外返回筛选后的总条数。
+   *
+   * <p>前端要靠 totalElements 算总页数；原 {@link #search} 只返回当前页，
+   * 调用方无法翻页。
+   */
+  public Map<String, Object> searchPaged(String status, String q, int page, int size, String expiring) {
+    // 先取全量完成筛选与展示字段填充，再切片（与 search 共用同一套规则）
+    List<Contract> all = search(status, q, 0, Integer.MAX_VALUE, expiring);
+    int total = all.size();
+    int safeSize = Math.max(size, 1);
+    int safePage = Math.max(page, 0);
+    int from = Math.min(safePage * safeSize, total);
+    int to = Math.min(from + safeSize, total);
+
+    Map<String, Object> body = new java.util.LinkedHashMap<>();
+    body.put("content", all.subList(from, to));
+    body.put("totalElements", total);
+    body.put("totalPages", safeSize == 0 ? 0 : (int) Math.ceil((double) total / safeSize));
+    body.put("page", safePage);
+    body.put("size", safeSize);
+    return body;
+  }
+
+  /**
+   * 批量填充合同的展示字段（房间号、楼栋名、租户姓名/电话）。
+   *
+   * <p>原实现逐条查 room / building / tenant，100 条合同就是 300 次查询。
+   * 这里改为各查一次后回填。
+   */
+  private void fillDisplayFields(List<Contract> contracts) {
+    if (contracts == null || contracts.isEmpty()) {
+      return;
+    }
+    List<Long> roomIds = contracts.stream()
+        .map(Contract::getRoomId).filter(java.util.Objects::nonNull).distinct().toList();
+    List<Long> tenantIds = contracts.stream()
+        .map(Contract::getTenantId).filter(java.util.Objects::nonNull).distinct().toList();
+
+    Map<Long, Room> roomMap = new java.util.HashMap<>();
+    if (!roomIds.isEmpty()) {
+      for (Room r : roomRepository.findAllById(roomIds)) {
+        roomMap.put(r.getId(), r);
+      }
+    }
+    List<Long> buildingIds = roomMap.values().stream()
+        .map(Room::getBuildingId).filter(java.util.Objects::nonNull).distinct().toList();
+    Map<Long, Building> buildingMap = new java.util.HashMap<>();
+    if (!buildingIds.isEmpty()) {
+      for (Building b : buildingRepository.findAllById(buildingIds)) {
+        buildingMap.put(b.getId(), b);
+      }
+    }
+    Map<Long, Tenant> tenantMap = new java.util.HashMap<>();
+    if (!tenantIds.isEmpty()) {
+      for (Tenant t : tenantService.findAllByIds(tenantIds)) {
+        tenantMap.put(t.getId(), t);
+      }
+    }
+
+    for (Contract c : contracts) {
+      Room room = roomMap.get(c.getRoomId());
+      if (room != null) {
+        c.setRoomNumber(room.getRoomNumber());
+        Building b = buildingMap.get(room.getBuildingId());
+        if (b != null) {
+          c.setBuildingName(b.getName());
+        }
+      }
+      Tenant tenant = tenantMap.get(c.getTenantId());
+      if (tenant != null) {
+        c.setTenantName(tenant.getName());
+        c.setTenantPhone(tenant.getPhone());
+      }
+    }
   }
 
   @Transactional

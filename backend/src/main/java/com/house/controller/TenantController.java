@@ -31,11 +31,37 @@ public class TenantController {
     this.operationLogService = operationLogService;
   }
 
+  /**
+   * 租户列表。
+   *
+   * <p>传 {@code paged=true} 返回分页结构，否则返回纯数组（兼容旧调用）。
+   * 租户表数据量大，前端列表应优先使用分页模式。
+   */
   @GetMapping
-  public List<Tenant> list(@RequestParam(required = false) String q) {
-    if (q == null || q.isBlank())
-      return tenantService.search("");
-    return tenantService.search(q);
+  public Object list(@RequestParam(required = false) String q,
+      @RequestParam(defaultValue = "0") int page,
+      @RequestParam(defaultValue = "20") int size,
+      @RequestParam(defaultValue = "false") boolean paged) {
+    List<Tenant> all = (q == null || q.isBlank())
+        ? tenantService.search("")
+        : tenantService.search(q);
+
+    if (!paged) {
+      return all;
+    }
+    int total = all.size();
+    int safeSize = Math.max(size, 1);
+    int safePage = Math.max(page, 0);
+    int from = Math.min(safePage * safeSize, total);
+    int to = Math.min(from + safeSize, total);
+
+    Map<String, Object> body = new java.util.LinkedHashMap<>();
+    body.put("content", all.subList(from, to));
+    body.put("totalElements", total);
+    body.put("totalPages", (int) Math.ceil((double) total / safeSize));
+    body.put("page", safePage);
+    body.put("size", safeSize);
+    return body;
   }
 
   @GetMapping("/{id}")
@@ -56,11 +82,7 @@ public class TenantController {
       tenant.setId(id);
       Tenant saved = tenantService.update(tenant);
       operationSnapshotService.complete(snapshot.getId(), saved);
-      return ResponseEntity.ok(Map.of(
-          "data", saved,
-          "undoSnapshotId", snapshot.getId(),
-          "undoExpireAt", snapshot.getExpiredAt(),
-          "undoTip", "操作成功，可在30分钟内撤销"));
+      return ResponseEntity.ok(UndoResponse.withData("data", saved, snapshot));
     }).orElse(ResponseEntity.notFound().build());
   }
 
@@ -78,10 +100,7 @@ public class TenantController {
     operationLogService.log(
         "tenant", "delete", String.valueOf(id), before.getName(), before, after,
         "删除租户: " + before.getName(), request, true, null, null, Map.of("tenantId", id));
-    return ResponseEntity.ok(Map.of(
-        "undoSnapshotId", snapshot.getId(),
-        "undoExpireAt", snapshot.getExpiredAt(),
-        "undoTip", "操作成功，可在30分钟内撤销"));
+    return ResponseEntity.ok(UndoResponse.of(snapshot));
   }
 
   @GetMapping("/blacklist")
@@ -137,10 +156,7 @@ public class TenantController {
       operationLogService.log(
           "tenant", "remove_blacklist", String.valueOf(id), before.getName(), before, after,
           "移出黑名单: " + before.getName(), request, true, null, null, Map.of("tenantId", id));
-      return ResponseEntity.ok(Map.of(
-          "undoSnapshotId", snapshot.getId(),
-          "undoExpireAt", snapshot.getExpiredAt(),
-          "undoTip", "操作成功，可在30分钟内撤销"));
+      return ResponseEntity.ok(UndoResponse.of(snapshot));
     } catch (Exception e) {
       return ResponseEntity.badRequest().body(e.getMessage());
     }

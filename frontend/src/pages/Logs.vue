@@ -1,6 +1,13 @@
 <template>
-  <div>
-    <el-card shadow="never" style="margin-bottom: 12px">
+  <div class="page">
+    <div class="page-head">
+      <div>
+        <h2>操作日志</h2>
+        <p class="page-sub">记录系统内的关键操作，可按模块、操作人和时间筛选追溯。</p>
+      </div>
+    </div>
+
+    <el-card shadow="never" style="margin-bottom: 0">
       <el-row :gutter="10">
         <el-col :span="4">
           <el-select v-model="filters.operator" placeholder="操作人" clearable filterable>
@@ -146,12 +153,39 @@
           </el-row>
         </el-col>
       </el-row>
+
+      <!-- AI 助手专用区块：普通日志没有这些字段，按需显示 -->
+      <el-card v-if="currentDetail?.aiIntent" shadow="never" class="ai-log-card">
+        <template #header>
+          <div class="ai-log-head">
+            <span>AI 助手执行详情</span>
+            <el-tag :type="currentDetail.aiStatus === 'SUCCESS' ? 'success' : 'danger'" size="small">
+              {{ currentDetail.aiStatus === 'SUCCESS' ? '成功' : (currentDetail.aiStatus === 'FAILED' ? '失败' : currentDetail.aiStatus) }}
+            </el-tag>
+          </div>
+        </template>
+        <el-descriptions :column="2" border size="small">
+          <el-descriptions-item label="用户指令" :span="2">
+            {{ currentDetail.aiInstruction || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="识别意图">{{ currentDetail.aiIntent || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="模型">{{ currentDetail.aiModelName || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="解析实体" :span="2">
+            <pre class="json-box">{{ formatJson(currentDetail.aiEntities) }}</pre>
+          </el-descriptions-item>
+          <el-descriptions-item label="AI 回复" :span="2">
+            {{ currentDetail.aiResponseMessage || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="模型耗时">{{ currentDetail.aiDurationMs != null ? currentDetail.aiDurationMs + ' ms' : '-' }}</el-descriptions-item>
+          <el-descriptions-item label="总耗时">{{ currentDetail.durationMs != null ? currentDetail.durationMs + ' ms' : '-' }}</el-descriptions-item>
+        </el-descriptions>
+      </el-card>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { formatDateTime, formatRelative } from '../utils/format'
+import { formatDateTime} from '../utils/format'
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { exportLogs, getLogFilters, getOperationLogs, getErrorMessage } from '../api'
@@ -306,5 +340,23 @@ onMounted(async () => {
   word-break: break-all;
   font-size: 12px;
   line-height: 1.5;
+}
+
+.ai-log-card {
+  margin-top: 14px;
+  border-color: var(--accent-2);
+}
+
+.ai-log-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.ai-log-card .json-box {
+  max-height: 120px;
+  margin: 0;
 }
 </style>

@@ -1,21 +1,50 @@
 <template>
   <div class="mobile-page">
-    <div class="head">
-      <div class="title">扫码进入房间</div>
-      <el-button text @click="toggleCamera">{{ scanning ? '停止' : '开始' }}</el-button>
-    </div>
+    <header class="m-head">
+      <h1 class="m-head-title">扫码进入房间</h1>
+      <p class="m-head-sub">扫描房间二维码，或手动输入房间号。</p>
+    </header>
 
-    <el-alert
-      type="info"
-      :closable="false"
-      title="二维码内容支持：/qr/room/{id}、/mobile/room/{id}，也支持手动输入“楼栋+房号”"
-      style="margin-bottom: 12px"
-    />
+    <!-- 摄像头预览 -->
+    <section class="camera-block">
+      <div class="camera-frame" :class="{ 'is-scanning': scanning }">
+        <video ref="videoRef" class="preview" autoplay playsinline muted />
+        <div v-if="!scanning" class="camera-idle">
+          <el-icon :size="40"><Camera /></el-icon>
+          <p>摄像头未开启</p>
+        </div>
+        <div v-else class="scan-line"></div>
+      </div>
+      <el-button
+        :type="scanning ? 'default' : 'primary'"
+        class="camera-btn"
+        @click="toggleCamera"
+      >{{ scanning ? '停止扫描' : '开始扫描' }}</el-button>
+    </section>
 
-    <video ref="videoRef" class="preview" autoplay playsinline muted />
-
-    <el-input v-model="manualText" placeholder="手动粘贴二维码文本，或输入如“A栋101 / A栋 101”" style="margin-top: 12px" />
-    <el-button type="primary" style="width: 100%; margin-top: 10px" @click="resolveAndGo(manualText)">进入房间</el-button>
+    <!-- 手动输入 -->
+    <section>
+      <div class="m-section-title">手动输入</div>
+      <div class="m-card">
+        <el-input
+          v-model="manualText"
+          placeholder="如 A栋101，或粘贴二维码链接"
+          clearable
+          class="manual-input"
+          @keyup.enter="resolveAndGo(manualText)"
+        />
+        <el-button
+          type="primary"
+          class="manual-btn"
+          :loading="resolving"
+          :disabled="!manualText.trim()"
+          @click="resolveAndGo(manualText)"
+        >进入房间</el-button>
+        <p class="manual-hint">
+          支持格式：<span class="m-num">/qr/room/12</span>、<span class="m-num">/mobile/room/12</span>，或「楼栋名 + 房号」
+        </p>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -23,6 +52,7 @@
 import { onBeforeUnmount, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Camera } from '@element-plus/icons-vue'
 import { getBuildings, getRooms } from '@/api'
 import { unwrapList } from '@/utils/mobileApi'
 
@@ -167,31 +197,94 @@ onBeforeUnmount(stopCamera)
 </script>
 
 <style scoped>
-.mobile-page {
-  padding: 14px;
-  max-width: 760px;
-  margin: 0 auto;
-}
-
-.head {
+.camera-block {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.title {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--text-main);
+/* 取景框：固定 4:3，扫描中显示扫描线 */
+.camera-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--m-radius);
+  overflow: hidden;
+  background: #0f1412;
+  border: 1px solid var(--border-color);
+}
+
+.camera-frame.is-scanning {
+  border-color: var(--accent-3);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-3) 25%, transparent);
 }
 
 .preview {
   width: 100%;
-  min-height: 260px;
-  border-radius: 12px;
-  border: 1px solid #e3ebff;
-  background: #111;
+  height: 100%;
   object-fit: cover;
+  display: block;
+}
+
+.camera-idle {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+}
+
+.camera-idle p {
+  margin: 0;
+}
+
+/* 扫描线动画 */
+.scan-line {
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  height: 2px;
+  background: var(--accent-3);
+  box-shadow: 0 0 12px var(--accent-3);
+  animation: scan 2.2s ease-in-out infinite;
+}
+
+@keyframes scan {
+  0%, 100% { top: 12%; opacity: 0.4; }
+  50% { top: 88%; opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-line { animation: none; top: 50%; }
+}
+
+.camera-btn {
+  width: 100%;
+  min-height: var(--m-tap);
+  border-radius: 10px;
+}
+
+/* 手动输入 */
+.manual-input :deep(.el-input__wrapper) {
+  min-height: var(--m-tap);
+  border-radius: 10px;
+}
+
+.manual-btn {
+  width: 100%;
+  min-height: var(--m-tap);
+  border-radius: 10px;
+  margin-top: 10px;
+}
+
+.manual-hint {
+  margin: 10px 0 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.6;
 }
 </style>

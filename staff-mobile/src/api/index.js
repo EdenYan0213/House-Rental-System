@@ -222,6 +222,10 @@ export const updateFeeItem = (id, data) => api.put(`/fee-items/${id}`, data)
 export const deleteFeeItem = (id) => api.delete(`/fee-items/${id}`)
 
 export const getMeterReadings = (params) => api.get('/meter-readings', { params })
+
+/** 各房间最近一次读数，用于录入页显示「上次读数」并计算本次用量 */
+export const getLastMeterReadings = (params) =>
+  api.get('/meter-readings/last-by-room', { params })
 export const exportMeterReadingsCsv = (params) => api.get('/meter-readings/export-csv', { params, responseType: 'blob' })
 export const saveMeterReadings = (data) => api.post('/meter-readings', data)
 export const deleteMeterReading = (id) => api.delete(`/meter-readings/${id}`)
@@ -388,5 +392,6 @@ export const canExportBill = () => hasRole('ADMIN') || hasRole('SUPER_ADMIN')
 
 export const canRefundDeposit = () => hasRole('ADMIN') || hasRole('SUPER_ADMIN')
 export const canManageUsers = () => hasRole('SUPER_ADMIN')
+
 
 export default api

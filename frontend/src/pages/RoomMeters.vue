@@ -1,5 +1,5 @@
 <template>
-  <div style="padding: 20px">
+  <div>
     <el-page-header @back="goBack" :content="pageTitle" />
 
     <el-row style="margin-top: 16px">

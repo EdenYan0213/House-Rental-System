@@ -2,8 +2,17 @@ package com.house.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.house.model.*;
-import com.house.repo.*;
+import com.house.model.ComplaintLog;
+import com.house.model.ComplaintSuggestion;
+import com.house.model.Contract;
+import com.house.model.Handler;
+import com.house.model.Room;
+import com.house.model.User;
+import com.house.repo.ComplaintLogRepository;
+import com.house.repo.ComplaintSuggestionRepository;
+import com.house.repo.ContractRepository;
+import com.house.repo.HandlerRepository;
+import com.house.repo.RoomRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.AccessDeniedException;
@@ -11,21 +20,45 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Random;
+import java.util.Set;
 
+/**
+ * 投诉业务：查询、创建、状态流转、统计。
+ *
+ * <p>拆分后本类只保留业务规则，两块横向能力已外置：
+ * <ul>
+ *   <li>{@link ComplaintScope} —— 可见楼栋范围与查询条件构建</li>
+ *   <li>{@link ComplaintEnricher} —— 展示字段与操作日志（批量填充，无 N+1）</li>
+ * </ul>
+ *
+ * <p>状态机：pending → processing → pending_confirm → completed；
+ * 任意非终态可 → closed。
+ */
 @Service
 public class ComplaintService {
+
+  private static final String STATUS_PENDING = "pending";
+  private static final String STATUS_PROCESSING = "processing";
+  private static final String STATUS_PENDING_CONFIRM = "pending_confirm";
+  private static final String STATUS_COMPLETED = "completed";
+  private static final String STATUS_CLOSED = "closed";
+
   private final ComplaintSuggestionRepository complaintSuggestionRepository;
   private final ComplaintLogRepository complaintLogRepository;
   private final HandlerRepository handlerRepository;
   private final RoomRepository roomRepository;
-  private final TenantRepository tenantRepository;
-  private final BuildingRepository buildingRepository;
-  private final AdminBuildingScopeRepository adminBuildingScopeRepository;
   private final ContractRepository contractRepository;
+  private final ComplaintScope scope;
+  private final ComplaintEnricher enricher;
   private final UserService userService;
   private final OperationLogService operationLogService;
   private final ObjectMapper objectMapper = new ObjectMapper();
@@ -34,23 +67,23 @@ public class ComplaintService {
       ComplaintLogRepository complaintLogRepository,
       HandlerRepository handlerRepository,
       RoomRepository roomRepository,
-      TenantRepository tenantRepository,
-      BuildingRepository buildingRepository,
-      AdminBuildingScopeRepository adminBuildingScopeRepository,
       ContractRepository contractRepository,
+      ComplaintScope scope,
+      ComplaintEnricher enricher,
       UserService userService,
       OperationLogService operationLogService) {
     this.complaintSuggestionRepository = complaintSuggestionRepository;
     this.complaintLogRepository = complaintLogRepository;
     this.handlerRepository = handlerRepository;
     this.roomRepository = roomRepository;
-    this.tenantRepository = tenantRepository;
-    this.buildingRepository = buildingRepository;
-    this.adminBuildingScopeRepository = adminBuildingScopeRepository;
     this.contractRepository = contractRepository;
+    this.scope = scope;
+    this.enricher = enricher;
     this.userService = userService;
     this.operationLogService = operationLogService;
   }
+
+  // ---------------- 查询 ----------------
 
   public Map<String, Object> search(String status,
       String type,
@@ -62,69 +95,31 @@ public class ComplaintService {
       int page,
       int size) {
     User currentUser = getCurrentUser();
-    Set<Long> scopedBuildingIds = resolveScopedBuildingIds(currentUser);
+    Set<Long> scopedBuildingIds = scope.resolveScopedBuildingIds(currentUser);
 
-    Specification<ComplaintSuggestion> spec = (root, query, cb) -> cb.conjunction();
-
-    if (scopedBuildingIds != null) {
-      if (scopedBuildingIds.isEmpty()) {
-        return Map.of("content", List.of(), "totalElements", 0, "totalPages", 0);
-      }
-      List<Long> scopedRoomIds = roomRepository.findAll().stream()
-          .filter(r -> r.getBuildingId() != null && scopedBuildingIds.contains(r.getBuildingId()))
-          .map(Room::getId)
-          .toList();
-      if (scopedRoomIds.isEmpty()) {
-        return Map.of("content", List.of(), "totalElements", 0, "totalPages", 0);
-      }
-      spec = spec.and((root, query, cb) -> root.get("roomId").in(scopedRoomIds));
-    }
-
-    if (status != null && !status.isBlank()) {
-      spec = spec.and((root, query, cb) -> cb.equal(root.get("status"), status));
-    }
-    if (type != null && !type.isBlank()) {
-      spec = spec.and((root, query, cb) -> cb.equal(root.get("type"), type));
-    }
-    if (priority != null && !priority.isBlank()) {
-      spec = spec.and((root, query, cb) -> cb.equal(root.get("priority"), priority));
-    }
-    if (startDate != null && !startDate.isBlank()) {
-      LocalDateTime start = LocalDate.parse(startDate).atStartOfDay();
-      spec = spec.and((root, query, cb) -> cb.greaterThanOrEqualTo(root.get("createdAt"), start));
-    }
-    if (endDate != null && !endDate.isBlank()) {
-      LocalDateTime end = LocalDate.parse(endDate).atTime(23, 59, 59);
-      spec = spec.and((root, query, cb) -> cb.lessThanOrEqualTo(root.get("createdAt"), end));
-    }
-    if (buildingId != null) {
-      if (scopedBuildingIds != null && !scopedBuildingIds.contains(buildingId)) {
-        return Map.of("content", List.of(), "totalElements", 0, "totalPages", 0);
-      }
-      List<Long> roomIds = roomRepository.findByBuildingId(buildingId).stream().map(Room::getId).toList();
-      if (roomIds.isEmpty()) {
-        return Map.of("content", List.of(), "totalElements", 0, "totalPages", 0);
-      }
-      spec = spec.and((root, query, cb) -> root.get("roomId").in(roomIds));
+    Specification<ComplaintSuggestion> spec =
+        scope.buildSpec(scopedBuildingIds, status, type, priority, startDate, endDate, buildingId);
+    if (spec == null) {
+      return emptyPage();
     }
 
     List<ComplaintSuggestion> list = complaintSuggestionRepository.findAll(spec).stream()
-        .sorted(Comparator.comparing(ComplaintSuggestion::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder()))
+        .sorted(Comparator.comparing(ComplaintSuggestion::getCreatedAt,
+                Comparator.nullsLast(Comparator.naturalOrder()))
             .reversed())
         .toList();
 
-    List<ComplaintSuggestion> enriched = new ArrayList<>();
-    for (ComplaintSuggestion item : list) {
-      fillDisplayFields(item);
-      enriched.add(item);
-    }
+    // 先批量补展示字段（关键词搜索依赖已填充的 tenantName / roomNumber）
+    List<ComplaintSuggestion> enriched = new ArrayList<>(list);
+    enricher.fill(enriched);
 
     if (q != null && !q.isBlank()) {
       String keyword = q.trim().toLowerCase();
-      enriched = enriched.stream().filter(c -> contains(c.getTitle(), keyword)
-          || contains(c.getComplaintNo(), keyword)
-          || contains(c.getTenantName(), keyword)
-          || contains(c.getRoomNumber(), keyword))
+      enriched = enriched.stream()
+          .filter(c -> contains(c.getTitle(), keyword)
+              || contains(c.getComplaintNo(), keyword)
+              || contains(c.getTenantName(), keyword)
+              || contains(c.getRoomNumber(), keyword))
           .toList();
     }
 
@@ -147,23 +142,28 @@ public class ComplaintService {
       if (!canAccessComplaint(item, getCurrentUser())) {
         throw new AccessDeniedException("无权查看该投诉");
       }
-      fillDisplayFields(item);
-      item.setLogs(fillLogs(item.getId()));
+      enricher.fill(item);
+      item.setLogs(enricher.fillLogs(item.getId()));
     });
     return optional;
   }
 
   public List<ComplaintSuggestion> listByTenant(Long tenantId) {
-    List<ComplaintSuggestion> list = complaintSuggestionRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
+    List<ComplaintSuggestion> list =
+        complaintSuggestionRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
     User currentUser = getCurrentUser();
-    List<ComplaintSuggestion> scoped = list.stream().filter(v -> canAccessComplaint(v, currentUser)).toList();
-    scoped.forEach(this::fillDisplayFields);
+    List<ComplaintSuggestion> scoped = list.stream()
+        .filter(v -> canAccessComplaint(v, currentUser))
+        .toList();
+    enricher.fill(scoped);
     return scoped;
   }
 
   public List<Handler> listEnabledHandlers() {
     return handlerRepository.findByStatusOrderByIdAsc(1);
   }
+
+  // ---------------- 创建 ----------------
 
   @Transactional
   public ComplaintSuggestion create(Map<String, Object> body, HttpServletRequest request) {
@@ -178,7 +178,9 @@ public class ComplaintService {
 
     Long tenantId = parseLong(body.get("tenantId"));
     if (tenantId == null) {
-      Contract active = contractRepository.findByRoomIdAndStatus(roomId, "ACTIVE").stream().findFirst().orElse(null);
+      // 未指定租户时，取该房间当前生效合同的租户
+      Contract active = contractRepository.findByRoomIdAndStatus(roomId, "ACTIVE")
+          .stream().findFirst().orElse(null);
       if (active != null) {
         tenantId = active.getTenantId();
       }
@@ -202,7 +204,8 @@ public class ComplaintService {
     }
 
     item.setComplaintNo(generateComplaintNo());
-    item.setReporterType(toText(body.get("reporterType")).isBlank() ? "admin" : toText(body.get("reporterType")));
+    item.setReporterType(toText(body.get("reporterType")).isBlank()
+        ? "admin" : toText(body.get("reporterType")));
 
     Long reportedBy = parseLong(body.get("reportedBy"));
     if (reportedBy == null) {
@@ -216,8 +219,9 @@ public class ComplaintService {
     item.setContent(content);
     item.setImages(toJsonArray(body.get("images")));
     item.setIsAnonymous(parseIntOrDefault(body.get("isAnonymous"), 0));
-    item.setPriority(toText(body.get("priority")).isBlank() ? "normal" : toText(body.get("priority")));
-    item.setStatus("pending");
+    item.setPriority(toText(body.get("priority")).isBlank()
+        ? "normal" : toText(body.get("priority")));
+    item.setStatus(STATUS_PENDING);
 
     LocalDateTime now = LocalDateTime.now();
     item.setCreatedAt(now);
@@ -227,17 +231,15 @@ public class ComplaintService {
     addLog(saved.getId(), "admin", reportedBy, "submit", "提交投诉: " + saved.getTitle());
     operationLogService.log("投诉管理", "创建投诉: " + saved.getComplaintNo(), request);
 
-    fillDisplayFields(saved);
-    saved.setLogs(fillLogs(saved.getId()));
-    return saved;
+    return respond(saved);
   }
+
+  // ---------------- 状态流转 ----------------
 
   @Transactional
   public ComplaintSuggestion accept(Long id, String note, Long assignedTo, HttpServletRequest request) {
     ComplaintSuggestion item = requireById(id);
-    if (!"pending".equals(item.getStatus())) {
-      throw new IllegalStateException("仅待受理状态可受理");
-    }
+    requireStatus(item, STATUS_PENDING, "仅待受理状态可受理");
 
     User current = getCurrentUser();
     Long target = assignedTo;
@@ -245,27 +247,26 @@ public class ComplaintService {
       target = current.getId();
     }
 
-    item.setStatus("processing");
+    item.setStatus(STATUS_PROCESSING);
     item.setAssignedTo(target);
     item.setAssignedAt(LocalDateTime.now());
     item.setUpdatedAt(LocalDateTime.now());
     ComplaintSuggestion saved = complaintSuggestionRepository.save(item);
 
-    String assignName = resolveAssigneeName(target);
+    String assignName = enricher.resolveAssigneeName(target);
     String content = "已受理" + (note == null || note.isBlank() ? "" : "，受理意见: " + note)
         + (assignName == null || assignName.isBlank() ? "" : "，处理人: " + assignName);
     addLog(saved.getId(), "admin", current == null ? null : current.getId(), "accept", content);
     operationLogService.log("投诉管理", "受理投诉: " + saved.getComplaintNo(), request);
 
-    fillDisplayFields(saved);
-    saved.setLogs(fillLogs(saved.getId()));
-    return saved;
+    return respond(saved);
   }
 
   @Transactional
   public ComplaintSuggestion reply(Long id, String content, HttpServletRequest request) {
     ComplaintSuggestion item = requireById(id);
-    if (!"processing".equals(item.getStatus()) && !"pending_confirm".equals(item.getStatus())) {
+    if (!STATUS_PROCESSING.equals(item.getStatus())
+        && !STATUS_PENDING_CONFIRM.equals(item.getStatus())) {
       throw new IllegalStateException("当前状态不可回复");
     }
     if (content == null || content.isBlank()) {
@@ -279,20 +280,17 @@ public class ComplaintService {
     addLog(saved.getId(), "admin", current == null ? null : current.getId(), "reply", content);
     operationLogService.log("投诉管理", "回复投诉: " + saved.getComplaintNo(), request);
 
-    fillDisplayFields(saved);
-    saved.setLogs(fillLogs(saved.getId()));
-    return saved;
+    return respond(saved);
   }
 
   @Transactional
-  public ComplaintSuggestion complete(Long id, String result, boolean requireConfirm, HttpServletRequest request) {
+  public ComplaintSuggestion complete(Long id, String result, boolean requireConfirm,
+      HttpServletRequest request) {
     ComplaintSuggestion item = requireById(id);
-    if (!"processing".equals(item.getStatus())) {
-      throw new IllegalStateException("仅处理中状态可完成处理");
-    }
+    requireStatus(item, STATUS_PROCESSING, "仅处理中状态可完成处理");
 
     item.setCompletedAt(LocalDateTime.now());
-    item.setStatus(requireConfirm ? "pending_confirm" : "completed");
+    item.setStatus(requireConfirm ? STATUS_PENDING_CONFIRM : STATUS_COMPLETED);
     item.setUpdatedAt(LocalDateTime.now());
     ComplaintSuggestion saved = complaintSuggestionRepository.save(item);
 
@@ -302,17 +300,13 @@ public class ComplaintService {
             + (requireConfirm ? "（待确认）" : "（已完成）"));
     operationLogService.log("投诉管理", "完成投诉处理: " + saved.getComplaintNo(), request);
 
-    fillDisplayFields(saved);
-    saved.setLogs(fillLogs(saved.getId()));
-    return saved;
+    return respond(saved);
   }
 
   @Transactional
   public ComplaintSuggestion reassign(Long id, Long assignedTo, String note, HttpServletRequest request) {
     ComplaintSuggestion item = requireById(id);
-    if (!"processing".equals(item.getStatus())) {
-      throw new IllegalStateException("仅处理中状态可转派");
-    }
+    requireStatus(item, STATUS_PROCESSING, "仅处理中状态可转派");
     if (assignedTo == null) {
       throw new IllegalArgumentException("处理人不能为空");
     }
@@ -323,25 +317,23 @@ public class ComplaintService {
     ComplaintSuggestion saved = complaintSuggestionRepository.save(item);
 
     User current = getCurrentUser();
-    String assignName = resolveAssigneeName(assignedTo);
+    String assignName = enricher.resolveAssigneeName(assignedTo);
     addLog(saved.getId(), "admin", current == null ? null : current.getId(), "reassign",
         "转派给: " + (assignName == null || assignName.isBlank() ? assignedTo : assignName)
             + (note == null || note.isBlank() ? "" : ("，备注: " + note)));
     operationLogService.log("投诉管理", "转派投诉: " + saved.getComplaintNo(), request);
 
-    fillDisplayFields(saved);
-    saved.setLogs(fillLogs(saved.getId()));
-    return saved;
+    return respond(saved);
   }
 
   @Transactional
   public ComplaintSuggestion close(Long id, String reason, HttpServletRequest request) {
     ComplaintSuggestion item = requireById(id);
-    if ("completed".equals(item.getStatus()) || "closed".equals(item.getStatus())) {
+    if (STATUS_COMPLETED.equals(item.getStatus()) || STATUS_CLOSED.equals(item.getStatus())) {
       throw new IllegalStateException("当前状态不可关闭");
     }
 
-    item.setStatus("closed");
+    item.setStatus(STATUS_CLOSED);
     item.setClosedAt(LocalDateTime.now());
     item.setClosedReason(reason);
     item.setUpdatedAt(LocalDateTime.now());
@@ -352,19 +344,15 @@ public class ComplaintService {
         "关闭投诉" + (reason == null || reason.isBlank() ? "" : ("，原因: " + reason)));
     operationLogService.log("投诉管理", "关闭投诉: " + saved.getComplaintNo(), request);
 
-    fillDisplayFields(saved);
-    saved.setLogs(fillLogs(saved.getId()));
-    return saved;
+    return respond(saved);
   }
 
   @Transactional
   public ComplaintSuggestion confirmComplete(Long id, HttpServletRequest request) {
     ComplaintSuggestion item = requireById(id);
-    if (!"pending_confirm".equals(item.getStatus())) {
-      throw new IllegalStateException("仅待确认状态可确认完成");
-    }
+    requireStatus(item, STATUS_PENDING_CONFIRM, "仅待确认状态可确认完成");
 
-    item.setStatus("completed");
+    item.setStatus(STATUS_COMPLETED);
     item.setUpdatedAt(LocalDateTime.now());
     ComplaintSuggestion saved = complaintSuggestionRepository.save(item);
 
@@ -372,79 +360,23 @@ public class ComplaintService {
     addLog(saved.getId(), "admin", current == null ? null : current.getId(), "confirm", "确认完成");
     operationLogService.log("投诉管理", "确认完成投诉: " + saved.getComplaintNo(), request);
 
-    fillDisplayFields(saved);
-    saved.setLogs(fillLogs(saved.getId()));
-    return saved;
+    return respond(saved);
   }
+
+  // ---------------- 统计 ----------------
 
   public Map<String, Object> stats(String startDate, String endDate, Long buildingId) {
     User currentUser = getCurrentUser();
-    Set<Long> scopedBuildingIds = resolveScopedBuildingIds(currentUser);
-    Specification<ComplaintSuggestion> spec = (root, query, cb) -> cb.conjunction();
+    Set<Long> scopedBuildingIds = scope.resolveScopedBuildingIds(currentUser);
 
-    if (scopedBuildingIds != null) {
-      if (scopedBuildingIds.isEmpty()) {
-        return Map.of(
-            "typeDistribution", Map.of(),
-            "statusDistribution", Map.of(),
-            "buildingDistribution", Map.of(),
-            "avgHandleHours", 0,
-            "timeoutCount", 0,
-            "avgRating", 0,
-            "total", 0);
-      }
-      List<Long> scopedRoomIds = roomRepository.findAll().stream()
-          .filter(r -> r.getBuildingId() != null && scopedBuildingIds.contains(r.getBuildingId()))
-          .map(Room::getId)
-          .toList();
-      if (scopedRoomIds.isEmpty()) {
-        return Map.of(
-            "typeDistribution", Map.of(),
-            "statusDistribution", Map.of(),
-            "buildingDistribution", Map.of(),
-            "avgHandleHours", 0,
-            "timeoutCount", 0,
-            "avgRating", 0,
-            "total", 0);
-      }
-      spec = spec.and((root, query, cb) -> root.get("roomId").in(scopedRoomIds));
+    Specification<ComplaintSuggestion> spec =
+        scope.buildSpec(scopedBuildingIds, null, null, null, startDate, endDate, buildingId);
+    if (spec == null) {
+      return emptyStats();
     }
 
-    if (startDate != null && !startDate.isBlank()) {
-      LocalDateTime start = LocalDate.parse(startDate).atStartOfDay();
-      spec = spec.and((root, query, cb) -> cb.greaterThanOrEqualTo(root.get("createdAt"), start));
-    }
-    if (endDate != null && !endDate.isBlank()) {
-      LocalDateTime end = LocalDate.parse(endDate).atTime(23, 59, 59);
-      spec = spec.and((root, query, cb) -> cb.lessThanOrEqualTo(root.get("createdAt"), end));
-    }
-    if (buildingId != null) {
-      if (scopedBuildingIds != null && !scopedBuildingIds.contains(buildingId)) {
-        return Map.of(
-            "typeDistribution", Map.of(),
-            "statusDistribution", Map.of(),
-            "buildingDistribution", Map.of(),
-            "avgHandleHours", 0,
-            "timeoutCount", 0,
-            "avgRating", 0,
-            "total", 0);
-      }
-      List<Long> roomIds = roomRepository.findByBuildingId(buildingId).stream().map(Room::getId).toList();
-      if (roomIds.isEmpty()) {
-        return Map.of(
-            "typeDistribution", Map.of(),
-            "statusDistribution", Map.of(),
-            "buildingDistribution", Map.of(),
-            "avgHandleHours", 0,
-            "timeoutCount", 0,
-            "avgRating", 0,
-            "total", 0);
-      }
-      spec = spec.and((root, query, cb) -> root.get("roomId").in(roomIds));
-    }
-
-    List<ComplaintSuggestion> list = complaintSuggestionRepository.findAll(spec);
-    list.forEach(this::fillDisplayFields);
+    List<ComplaintSuggestion> list = new ArrayList<>(complaintSuggestionRepository.findAll(spec));
+    enricher.fill(list);
 
     Map<String, Long> typeDistribution = new LinkedHashMap<>();
     Map<String, Long> statusDistribution = new LinkedHashMap<>();
@@ -455,10 +387,10 @@ public class ComplaintService {
     List<Integer> ratings = new ArrayList<>();
 
     for (ComplaintSuggestion item : list) {
-      typeDistribution.put(item.getType(), typeDistribution.getOrDefault(item.getType(), 0L) + 1);
-      statusDistribution.put(item.getStatus(), statusDistribution.getOrDefault(item.getStatus(), 0L) + 1);
+      typeDistribution.merge(item.getType(), 1L, Long::sum);
+      statusDistribution.merge(item.getStatus(), 1L, Long::sum);
       String building = item.getBuildingName() == null ? "未分配楼栋" : item.getBuildingName();
-      buildingDistribution.put(building, buildingDistribution.getOrDefault(building, 0L) + 1);
+      buildingDistribution.merge(building, 1L, Long::sum);
 
       if (item.getCreatedAt() != null && item.getCompletedAt() != null) {
         long h = Duration.between(item.getCreatedAt(), item.getCompletedAt()).toHours();
@@ -466,6 +398,7 @@ public class ComplaintService {
           hours.add(h);
         }
       }
+      // 未完成且未关闭、超过 48 小时视为超时
       if (item.getCreatedAt() != null && item.getCompletedAt() == null && item.getClosedAt() == null) {
         if (Duration.between(item.getCreatedAt(), LocalDateTime.now()).toHours() > 48) {
           timeoutCount++;
@@ -489,6 +422,15 @@ public class ComplaintService {
         "total", list.size());
   }
 
+  // ---------------- 内部 ----------------
+
+  /** 状态变更后统一回填展示字段与日志，避免每个方法各写一遍。 */
+  private ComplaintSuggestion respond(ComplaintSuggestion saved) {
+    enricher.fill(saved);
+    saved.setLogs(enricher.fillLogs(saved.getId()));
+    return saved;
+  }
+
   private ComplaintSuggestion requireById(Long id) {
     ComplaintSuggestion item = complaintSuggestionRepository.findById(id)
         .orElseThrow(() -> new IllegalArgumentException("投诉不存在"));
@@ -498,88 +440,43 @@ public class ComplaintService {
     return item;
   }
 
+  /** 状态前置条件校验，统一错误文案。 */
+  private void requireStatus(ComplaintSuggestion item, String expected, String message) {
+    if (!expected.equals(item.getStatus())) {
+      throw new IllegalStateException(message);
+    }
+  }
+
   private boolean canAccessComplaint(ComplaintSuggestion item, User currentUser) {
     if (item == null) {
       return false;
     }
-    Set<Long> scopedBuildingIds = resolveScopedBuildingIds(currentUser);
+    Set<Long> scopedBuildingIds = scope.resolveScopedBuildingIds(currentUser);
     if (scopedBuildingIds == null) {
       return true;
     }
-    if (scopedBuildingIds.isEmpty()) {
-      return false;
-    }
-    if (item.getRoomId() == null) {
+    if (scopedBuildingIds.isEmpty() || item.getRoomId() == null) {
       return false;
     }
     Room room = roomRepository.findById(item.getRoomId()).orElse(null);
-    return room != null && room.getBuildingId() != null && scopedBuildingIds.contains(room.getBuildingId());
+    return room != null && room.getBuildingId() != null
+        && scopedBuildingIds.contains(room.getBuildingId());
   }
 
   private void ensureCanAccessRoom(Long roomId) {
-    User currentUser = getCurrentUser();
-    Set<Long> scopedBuildingIds = resolveScopedBuildingIds(currentUser);
+    Set<Long> scopedBuildingIds = scope.resolveScopedBuildingIds(getCurrentUser());
     if (scopedBuildingIds == null) {
       return;
     }
-    Room room = roomRepository.findById(roomId).orElseThrow(() -> new IllegalArgumentException("房间不存在"));
+    Room room = roomRepository.findById(roomId)
+        .orElseThrow(() -> new IllegalArgumentException("房间不存在"));
     if (room.getBuildingId() == null || !scopedBuildingIds.contains(room.getBuildingId())) {
       throw new AccessDeniedException("无权操作该楼栋投诉");
     }
   }
 
-  private Set<Long> resolveScopedBuildingIds(User currentUser) {
-    if (currentUser == null || currentUser.getRole() == null) {
-      return Set.of();
-    }
-    if (currentUser.getRole() == Role.SUPER_ADMIN) {
-      return null;
-    }
-    if (currentUser.getRole() != Role.ADMIN) {
-      return Set.of();
-    }
-    Set<Long> ids = adminBuildingScopeRepository.findByAdminId(currentUser.getId()).stream()
-        .map(AdminBuildingScope::getBuildingId)
-        .filter(Objects::nonNull)
-        .collect(java.util.stream.Collectors.toSet());
-    // Backward-compatible fallback: no explicit scope rows means unrestricted.
-    return ids.isEmpty() ? null : ids;
-  }
-
-  private void fillDisplayFields(ComplaintSuggestion item) {
-    Room room = item.getRoomId() == null ? null : roomRepository.findById(item.getRoomId()).orElse(null);
-    if (room != null) {
-      item.setRoomNumber(room.getRoomNumber());
-      item.setBuildingId(room.getBuildingId());
-      if (room.getBuildingId() != null) {
-        Building building = buildingRepository.findById(room.getBuildingId()).orElse(null);
-        if (building != null) {
-          item.setBuildingName(building.getName());
-        }
-      }
-    }
-
-    Tenant tenant = item.getTenantId() == null ? null : tenantRepository.findById(item.getTenantId()).orElse(null);
-    if (tenant != null) {
-      item.setTenantName(tenant.getName());
-      item.setTenantPhone(maskPhone(tenant.getPhone()));
-      item.setTenantDisplayName(Objects.equals(item.getIsAnonymous(), 1) ? "匿名" : tenant.getName());
-    } else {
-      item.setTenantDisplayName("-");
-    }
-
-    item.setAssignedName(resolveAssigneeName(item.getAssignedTo()));
-  }
-
-  private List<ComplaintLog> fillLogs(Long complaintId) {
-    List<ComplaintLog> logs = complaintLogRepository.findByComplaintIdOrderByCreatedAtDesc(complaintId);
-    for (ComplaintLog log : logs) {
-      log.setOperatorName(resolveOperatorName(log.getOperatorType(), log.getOperatorId()));
-    }
-    return logs;
-  }
-
-  private void addLog(Long complaintId, String operatorType, Long operatorId, String action, String content) {
+  private void addLog(Long complaintId, String operatorType, Long operatorId,
+      String action, String content) {
     ComplaintLog log = ComplaintLog.builder()
         .complaintId(complaintId)
         .operatorType(operatorType)
@@ -591,41 +488,10 @@ public class ComplaintService {
     complaintLogRepository.save(log);
   }
 
-  private String resolveAssigneeName(Long assignedTo) {
-    if (assignedTo == null) {
-      return "";
-    }
-    Handler handler = handlerRepository.findById(assignedTo).orElse(null);
-    if (handler != null && handler.getName() != null) {
-      return handler.getName();
-    }
-    User user = userService.findById(assignedTo);
-    if (user == null) {
-      return "";
-    }
-    if (user.getRealName() != null && !user.getRealName().isBlank()) {
-      return user.getRealName();
-    }
-    return user.getUsername();
-  }
-
-  private String resolveOperatorName(String operatorType, Long operatorId) {
-    if ("system".equalsIgnoreCase(operatorType)) {
-      return "系统";
-    }
-    if (operatorId == null) {
-      return "管理员";
-    }
-    User user = userService.findById(operatorId);
-    if (user == null) {
-      return "管理员";
-    }
-    return user.getRealName() != null && !user.getRealName().isBlank() ? user.getRealName() : user.getUsername();
-  }
-
   private User getCurrentUser() {
     try {
-      var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+      var auth = org.springframework.security.core.context.SecurityContextHolder
+          .getContext().getAuthentication();
       if (auth == null || auth.getName() == null) {
         return null;
       }
@@ -641,6 +507,23 @@ public class ComplaintService {
     return "CP" + date + suffix;
   }
 
+  private Map<String, Object> emptyPage() {
+    return Map.of("content", List.of(), "totalElements", 0, "totalPages", 0);
+  }
+
+  private Map<String, Object> emptyStats() {
+    return Map.of(
+        "typeDistribution", Map.of(),
+        "statusDistribution", Map.of(),
+        "buildingDistribution", Map.of(),
+        "avgHandleHours", 0,
+        "timeoutCount", 0,
+        "avgRating", 0,
+        "total", 0);
+  }
+
+  // ---------------- 解析与序列化 ----------------
+
   private String toJsonArray(Object raw) {
     try {
       if (raw == null) {
@@ -651,6 +534,7 @@ public class ComplaintService {
           return "[]";
         }
         if (text.startsWith("[")) {
+          // 已是 JSON 数组，校验后原样返回
           objectMapper.readTree(text);
           return text;
         }
@@ -717,12 +601,5 @@ public class ComplaintService {
 
   private boolean contains(String raw, String q) {
     return raw != null && raw.toLowerCase().contains(q);
-  }
-
-  private String maskPhone(String phone) {
-    if (phone == null || phone.length() < 7) {
-      return phone == null ? "" : phone;
-    }
-    return phone.substring(0, 3) + "****" + phone.substring(phone.length() - 4);
   }
 }

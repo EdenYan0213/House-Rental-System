@@ -33,9 +33,6 @@ public class Room {
   @Column(name = "electric_meter_id")
   private Long electricMeterId;
 
-  @Column(name = "image_url")
-  private String imageUrl;
-
   /**
    * 图片 ID 列表（JSON 数组字符串，如 "[1,2,3]"）。
    * 图片二进制存 image_blob 表，这里只存引用。
@@ -86,8 +83,6 @@ public class Room {
   public Long getWaterMeterId() { return waterMeterId; }
   public void setElectricMeterId(Long electricMeterId) { this.electricMeterId = electricMeterId; }
   public Long getElectricMeterId() { return electricMeterId; }
-  public void setImageUrl(String imageUrl) { this.imageUrl = imageUrl; }
-  public String getImageUrl() { return imageUrl; }
   public void setDeleted(Integer deleted) { this.deleted = deleted; }
   public Integer getDeleted() { return deleted; }
 

@@ -1,9 +1,14 @@
 <template>
-  <div style="padding: 20px">
-    <el-row justify="space-between" align="middle">
-      <h2>维修工单</h2>
-      <el-button type="primary" @click="openCreate">发起报修</el-button>
-    </el-row>
+  <div class="page">
+    <div class="page-head">
+      <div>
+        <h2>维修工单</h2>
+        <p class="page-sub">从报修到验收的完整流程，包含派单、费用与租户评价。</p>
+      </div>
+      <div class="page-actions">
+        <el-button type="primary" :icon="Plus" @click="openCreate">发起报修</el-button>
+      </div>
+    </div>
 
     <el-row :gutter="10" style="margin-top: 12px">
       <el-select v-model="query.status" clearable placeholder="状态" style="width: 140px">
@@ -144,7 +149,7 @@
 </template>
 
 <script setup>
-import { Refresh } from '@element-plus/icons-vue'
+import { Refresh, Plus } from '@element-plus/icons-vue'
 import { formatDateTime, formatRelative } from '../utils/format'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
@@ -163,9 +168,7 @@ import {
   rejectRepairOrder,
   cancelRepairOrder,
   generateRepairBill,
-  uploadFile,
-  getErrorMessage
-} from '../api'
+  uploadFile} from '../api'
 import EmptyState from '../components/EmptyState.vue'
 import { repairStatusText, repairStatusTag } from '../utils/labels'
 

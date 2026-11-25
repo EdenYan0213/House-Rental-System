@@ -1,5 +1,5 @@
 <template>
-  <div style="padding: 20px">
+  <div>
     <el-page-header @back="goBack" content="新建合同" />
     
     <el-steps :active="step" finish-status="success" style="margin: 30px 0">

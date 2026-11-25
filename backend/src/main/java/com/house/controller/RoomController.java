@@ -270,10 +270,7 @@ public class RoomController {
     operationLogService.log(
         "room", "delete", String.valueOf(id), before.getRoomNumber(), before, null,
         "删除房间: " + before.getRoomNumber(), request, true, null, null, Map.of("roomId", id));
-    return ResponseEntity.ok(Map.of(
-        "undoSnapshotId", snapshot.getId(),
-        "undoExpireAt", snapshot.getExpiredAt(),
-        "undoTip", "操作成功，可在30分钟内撤销"));
+    return ResponseEntity.ok(UndoResponse.of(snapshot));
   }
 
   @PostMapping("/batch-delete")

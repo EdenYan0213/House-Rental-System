@@ -8,6 +8,7 @@ import com.house.repo.BuildingRepository;
 import com.house.repo.MeterReadingRepository;
 import com.house.repo.RoomRepository;
 import com.house.service.MeterReadingBatchService;
+import com.house.service.MeterReadingGenerateService;
 import com.house.service.OperationSnapshotService;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -45,17 +46,20 @@ public class MeterReadingController {
   private final RoomRepository roomRepository;
   private final BuildingRepository buildingRepository;
   private final MeterReadingBatchService meterReadingBatchService;
+  private final MeterReadingGenerateService meterReadingGenerateService;
   private final OperationSnapshotService operationSnapshotService;
 
   public MeterReadingController(MeterReadingRepository meterReadingRepository,
       RoomRepository roomRepository,
       BuildingRepository buildingRepository,
       MeterReadingBatchService meterReadingBatchService,
+      MeterReadingGenerateService meterReadingGenerateService,
       OperationSnapshotService operationSnapshotService) {
     this.meterReadingRepository = meterReadingRepository;
     this.roomRepository = roomRepository;
     this.buildingRepository = buildingRepository;
     this.meterReadingBatchService = meterReadingBatchService;
+    this.meterReadingGenerateService = meterReadingGenerateService;
     this.operationSnapshotService = operationSnapshotService;
   }
 
@@ -100,6 +104,47 @@ public class MeterReadingController {
     result.put("totalElements", total);
     result.put("page", page);
     result.put("size", safeSize);
+    return result;
+  }
+
+  /**
+   * 各房间「最近一次」读数。
+   *
+   * <p>抄表页需要显示「上次读数」用于算用量。原实现取「抄表日期的前一天」，
+   * 但租户常隔月抄表，前一天往往没有记录，界面就显示「无记录」。
+   * 这里改为取每个房间在指定日期之前**最后一次**的读数，语义更符合实际。
+   *
+   * @param buildingId 可选，限定楼栋
+   * @param beforeDate 可选，只取该日期（不含）之前的记录；不传则取全部历史
+   * @return roomId → {waterReading, electricReading, recordDate}
+   */
+  @GetMapping("/last-by-room")
+  public java.util.Map<String, Object> lastByRoom(
+      @RequestParam(required = false) Long buildingId,
+      @RequestParam(required = false) String beforeDate) {
+    java.time.LocalDate before = (beforeDate == null || beforeDate.isBlank())
+        ? null : java.time.LocalDate.parse(beforeDate);
+
+    List<Room> rooms = buildingId != null
+        ? roomRepository.findByBuildingId(buildingId)
+        : roomRepository.findAll();
+
+    java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+    for (Room room : rooms) {
+      MeterReading last = before != null
+          ? meterReadingRepository.findTopByRoomIdAndRecordDateLessThanOrderByRecordDateDesc(room.getId(), before)
+          : meterReadingRepository.findTopByRoomIdAndRecordDateLessThanOrderByRecordDateDesc(
+              room.getId(), java.time.LocalDate.of(9999, 12, 31));
+
+      if (last == null) {
+        continue;
+      }
+      java.util.Map<String, Object> item = new java.util.LinkedHashMap<>();
+      item.put("waterReading", last.getWaterReading());
+      item.put("electricReading", last.getElectricReading());
+      item.put("recordDate", last.getRecordDate());
+      result.put(String.valueOf(room.getId()), item);
+    }
     return result;
   }
 
@@ -388,6 +433,44 @@ public class MeterReadingController {
     return result;
   }
 
+  /**
+   * 按「上期读数 + 增量」批量生成抄表。
+   *
+   * <p>与 Excel 导入互补：导入要求精确读数，这里只给增量，
+   * 适合先批量出一版、个别房间再修正的场景。
+   *
+   * <p>基线取「目标日期之前」的最后一条记录：补录历史月份时不会
+   * 误用更晚的读数，从而避免生成倒退的读数。
+   */
+  @PostMapping("/generate-by-delta")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+  public Map<String, Object> generateByDelta(@RequestBody GenerateByDeltaRequest request) {
+    if (request == null) {
+      throw new IllegalArgumentException("请求不能为空");
+    }
+    LocalDate date;
+    try {
+      date = LocalDate.parse(request.getRecordDate() == null ? "" : request.getRecordDate());
+    } catch (Exception e) {
+      throw new IllegalArgumentException("抄表日期格式应为 yyyy-MM-dd");
+    }
+
+    MeterReadingGenerateService.GenerateResult result = meterReadingGenerateService.generateByDelta(
+        request.getRoomIds(),
+        date,
+        request.getWaterDelta(),
+        request.getElectricDelta(),
+        Boolean.TRUE.equals(request.getOverwrite()));
+
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("recordDate", date.toString());
+    body.put("created", result.getCreated());
+    body.put("updated", result.getUpdated());
+    body.put("skipped", result.getSkipped());
+    body.put("affectedRoomIds", result.getAffectedRoomIds());
+    return body;
+  }
+
   @DeleteMapping("/{id}")
   @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public ResponseEntity<?> delete(@PathVariable Long id) {
@@ -399,10 +482,7 @@ public class MeterReadingController {
     OperationSnapshot snapshot = operationSnapshotService.capture(
         "水电读数", "delete", "meter_reading", id, targetName, before);
     meterReadingRepository.deleteById(id);
-    return ResponseEntity.ok(Map.of(
-        "undoSnapshotId", snapshot.getId(),
-        "undoExpireAt", snapshot.getExpiredAt(),
-        "undoTip", "操作成功，可在30分钟内撤销"));
+    return ResponseEntity.ok(UndoResponse.of(snapshot));
   }
 
   @ExceptionHandler(IllegalArgumentException.class)
@@ -636,6 +716,56 @@ public class MeterReadingController {
           .roomNumber(roomNumber)
           .errorReason(errorReason)
           .build();
+    }
+  }
+
+  /** 批量按增量生成抄表的请求体。 */
+  public static class GenerateByDeltaRequest {
+    private List<Long> roomIds;
+    /** yyyy-MM-dd */
+    private String recordDate;
+    private Double waterDelta;
+    private Double electricDelta;
+    private Boolean overwrite;
+
+    public List<Long> getRoomIds() {
+      return roomIds;
+    }
+
+    public void setRoomIds(List<Long> roomIds) {
+      this.roomIds = roomIds;
+    }
+
+    public String getRecordDate() {
+      return recordDate;
+    }
+
+    public void setRecordDate(String recordDate) {
+      this.recordDate = recordDate;
+    }
+
+    public Double getWaterDelta() {
+      return waterDelta;
+    }
+
+    public void setWaterDelta(Double waterDelta) {
+      this.waterDelta = waterDelta;
+    }
+
+    public Double getElectricDelta() {
+      return electricDelta;
+    }
+
+    public void setElectricDelta(Double electricDelta) {
+      this.electricDelta = electricDelta;
+    }
+
+    public Boolean getOverwrite() {
+      return overwrite;
+    }
+
+    public void setOverwrite(Boolean overwrite) {
+      this.overwrite = overwrite;
     }
   }
 }

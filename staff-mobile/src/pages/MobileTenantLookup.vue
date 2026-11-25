@@ -1,23 +1,107 @@
 <template>
   <PullRefresh :on-refresh="load">
     <div class="mobile-page" v-loading="loading">
-    <div class="head">
-      <div class="title">租户与合同</div>
-      <el-button text @click="load">刷新</el-button>
-    </div>
+      <!-- 页头 -->
+      <header class="m-head">
+        <div class="head-row">
+          <div>
+            <h1 class="m-head-title">租户查询</h1>
+            <p class="m-head-sub">共 <span class="m-num count">{{ tenants.length }}</span> 位租户</p>
+          </div>
+          <el-button
+            v-if="canAdd"
+            type="primary"
+            :icon="Plus"
+            class="head-btn"
+            @click="openCreate"
+          >新建</el-button>
+        </div>
+      </header>
 
-    <el-input v-model="keyword" clearable placeholder="输入姓名/手机号/房间号" @keyup.enter="load" />
+      <!-- 搜索 -->
+      <el-input
+        v-model="keyword"
+        clearable
+        placeholder="姓名 / 手机号 / 房间号"
+        :prefix-icon="Search"
+        class="search-input"
+        @keyup.enter="load"
+        @clear="load"
+      />
 
-    <el-card v-for="item in pagedTenants" :key="item.id" class="panel" shadow="never" @click="openTenant(item)">
-      <div class="line top">
-        <div>{{ item.name || '-' }}</div>
-        <el-tag size="small">{{ item.phone || '-' }}</el-tag>
+      <!-- 租户卡 -->
+      <div v-if="pagedTenants.length > 0" class="tenant-list">
+        <article
+          v-for="item in pagedTenants"
+          :key="item.id"
+          class="m-card tenant-card"
+          @click="openTenant(item)"
+        >
+          <div class="tenant-top">
+            <div class="tenant-name-row">
+              <span class="tenant-avatar">{{ (item.name || '?').slice(0, 1) }}</span>
+              <span class="tenant-name">{{ item.name || '-' }}</span>
+            </div>
+            <el-icon class="tenant-arrow"><ArrowRight /></el-icon>
+          </div>
+
+          <div class="tenant-info">
+            <div class="info-row">
+              <el-icon class="info-icon"><Iphone /></el-icon>
+              <span class="m-num">{{ item.phone || '-' }}</span>
+            </div>
+            <div class="info-row">
+              <el-icon class="info-icon"><Postcard /></el-icon>
+              <span class="m-num">{{ mask(item.idCard) || '-' }}</span>
+            </div>
+            <div class="info-row" v-if="item.emergencyContact">
+              <el-icon class="info-icon"><User /></el-icon>
+              <span>{{ item.emergencyContact }}</span>
+            </div>
+          </div>
+        </article>
       </div>
-      <div class="line muted">身份证：{{ mask(item.idCard) }}</div>
-      <div class="line muted">紧急联系人：{{ item.emergencyContact || '-' }}</div>
-    </el-card>
 
-    <el-empty v-if="!loading && tenants.length === 0" description="未找到租户" />
+      <!-- 空态 -->
+      <div v-else-if="!loading" class="m-card empty-state">
+        <el-icon :size="32" class="empty-icon"><Search /></el-icon>
+        <p class="empty-title">未找到租户</p>
+        <p class="empty-desc">{{ keyword ? '换个关键词试试' : '当前还没有租户记录' }}</p>
+      </div>
+
+    <!-- 新建租户 -->
+    <el-dialog v-model="createVisible" title="新建租户" width="92%" align-center>
+      <el-form :model="createForm" label-position="top" class="create-form">
+        <el-form-item label="姓名" required>
+          <el-input v-model="createForm.name" placeholder="请输入租户姓名" />
+        </el-form-item>
+        <el-form-item label="手机号" required>
+          <el-input v-model="createForm.phone" placeholder="11 位手机号" maxlength="11" />
+        </el-form-item>
+        <el-form-item label="身份证号">
+          <el-input v-model="createForm.idCard" placeholder="可选，用于实名" maxlength="18" />
+        </el-form-item>
+        <el-row :gutter="10">
+          <el-col :span="12">
+            <el-form-item label="紧急联系人">
+              <el-input v-model="createForm.emergencyContact" placeholder="可选" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="紧急电话">
+              <el-input v-model="createForm.emergencyPhone" placeholder="可选" maxlength="11" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="备注">
+          <el-input v-model="createForm.remark" type="textarea" :rows="2" placeholder="可选" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="createVisible = false">取消</el-button>
+        <el-button type="primary" :loading="creating" @click="submitCreate">创建</el-button>
+      </template>
+    </el-dialog>
 
     <el-drawer v-model="showDetail" title="租户详情" size="100%">
       <template v-if="currentTenant">
@@ -69,7 +153,8 @@ import PullRefresh from '../components/PullRefresh.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getTenants, getContracts } from '@/api'
+import { Search, ArrowRight, Iphone, Postcard, User, Plus } from '@element-plus/icons-vue'
+import { getTenants, getContracts, createTenant, canAddTenant, getErrorMessage } from '@/api'
 import { unwrapList } from '@/utils/mobileApi'
 import { getMobileCache, setMobileCache } from '@/utils/mobileCache'
 
@@ -77,6 +162,53 @@ const TENANT_CACHE_TTL = 60 * 60 * 1000
 
 const router = useRouter()
 const loading = ref(false)
+
+// ---- 新建租户 ----
+const canAdd = canAddTenant()
+const createVisible = ref(false)
+const creating = ref(false)
+const createForm = ref({
+  name: '', phone: '', idCard: '',
+  emergencyContact: '', emergencyPhone: '', remark: ''
+})
+
+function openCreate() {
+  createForm.value = {
+    name: '', phone: '', idCard: '',
+    emergencyContact: '', emergencyPhone: '', remark: ''
+  }
+  createVisible.value = true
+}
+
+async function submitCreate() {
+  const f = createForm.value
+  if (!f.name.trim()) {
+    ElMessage.warning('请填写租户姓名')
+    return
+  }
+  if (!/^1\d{10}$/.test(f.phone.trim())) {
+    ElMessage.warning('请填写 11 位手机号')
+    return
+  }
+  creating.value = true
+  try {
+    await createTenant({
+      name: f.name.trim(),
+      phone: f.phone.trim(),
+      idCard: f.idCard.trim() || null,
+      emergencyContact: f.emergencyContact.trim() || null,
+      emergencyPhone: f.emergencyPhone.trim() || null,
+      remark: f.remark.trim() || null
+    })
+    ElMessage.success('租户已创建')
+    createVisible.value = false
+    await load()
+  } catch (e) {
+    ElMessage.error(getErrorMessage(e, '创建失败'))
+  } finally {
+    creating.value = false
+  }
+}
 const keyword = ref('')
 const tenants = ref([])
 const {
@@ -144,61 +276,152 @@ onMounted(load)
 </script>
 
 <style scoped>
-.load-more {
+.head-row {
   display: flex;
-  justify-content: center;
-  padding: 12px 0 4px;
-}
-
-.mobile-page {
-  padding: 14px;
-  max-width: 760px;
-  margin: 0 auto;
-}
-
-.head {
-  display: flex;
+  align-items: flex-start;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
+  gap: 12px;
 }
 
-.title {
-  font-size: 20px;
+.head-btn {
+  flex: 0 0 auto;
+  min-height: 36px;
+  border-radius: 9px;
+}
+
+.create-form :deep(.el-form-item__label) {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding-bottom: 4px;
+}
+
+.create-form :deep(.el-input__wrapper) {
+  min-height: var(--m-tap);
+  border-radius: 10px;
+}
+
+.count {
+  color: var(--accent-3);
   font-weight: 700;
+  font-size: 15px;
+}
+
+.search-input :deep(.el-input__wrapper) {
+  min-height: var(--m-tap);
+  border-radius: 10px;
+}
+
+.tenant-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--m-gap);
+}
+
+.tenant-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 0.15s ease, transform 0.12s ease;
+}
+
+.tenant-card:active {
+  transform: scale(0.985);
+  border-color: var(--accent-2);
+}
+
+.tenant-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tenant-name-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* 姓名首字头像 */
+.tenant-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--accent-1);
+  color: var(--accent-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+
+.tenant-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tenant-arrow {
+  color: var(--text-muted);
+  opacity: 0.45;
+  flex: 0 0 auto;
+}
+
+.tenant-info {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.info-icon {
+  flex: 0 0 auto;
+  opacity: 0.6;
+}
+
+/* 空态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.empty-icon {
+  color: var(--text-muted);
+  opacity: 0.4;
+}
+
+.empty-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
   color: var(--text-main);
 }
 
-.panel {
-  margin-top: 10px;
-  border: 1px solid #e8efff;
-}
-
-.line {
-  margin-bottom: 6px;
-}
-
-.top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.muted {
+.empty-desc {
+  margin: 0;
+  font-size: 12px;
   color: var(--text-muted);
-  font-size: 13px;
-}
-
-.section {
-  margin-top: 12px;
-}
-
-.history-row {
-  padding: 8px 0;
-  border-bottom: 1px solid #ecf0fb;
-}
-
-.history-row:last-child {
-  border-bottom: none;
 }
 </style>

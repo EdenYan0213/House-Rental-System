@@ -42,6 +42,14 @@ public class TenantService {
     return tenantRepository.findById(id).filter(t -> t.getDeleted() == null || t.getDeleted() == 0);
   }
 
+  /** 批量按 ID 取租户，供列表页一次性填充展示字段（避免 N+1）。 */
+  public List<Tenant> findAllByIds(List<Long> ids) {
+    if (ids == null || ids.isEmpty()) {
+      return List.of();
+    }
+    return tenantRepository.findAllById(ids);
+  }
+
   public List<Tenant> search(String q) {
     List<Tenant> tenants = tenantRepository.findByNameContainingOrPhoneContaining(q, q).stream()
         .filter(t -> t.getDeleted() == null || t.getDeleted() == 0)
@@ -67,16 +75,36 @@ public class TenantService {
     return tenants;
   }
 
+  /**
+   * 更新租户。
+   *
+   * <p>前端编辑弹窗常常只提交改动过的字段，因此这里是**部分更新**：
+   * 传入 null 或空串的字段保留库中原值，而不是把它覆盖成 null。
+   * 原实现无条件覆盖，导致「只改姓名」的请求因 phone 为 null 触发
+   * {@code Column 'phone' cannot be null} 而整单失败。
+   */
   public Tenant update(Tenant tenant) {
     Optional<Tenant> opt = tenantRepository.findById(tenant.getId());
     if (opt.isPresent()) {
       Tenant existing = opt.get();
-      existing.setName(tenant.getName());
-      existing.setPhone(tenant.getPhone());
-      existing.setIdCard(tenant.getIdCard());
-      existing.setEmergencyContact(tenant.getEmergencyContact());
-      existing.setEmergencyPhone(tenant.getEmergencyPhone());
-      existing.setRemark(tenant.getRemark());
+      if (hasText(tenant.getName())) {
+        existing.setName(tenant.getName().trim());
+      }
+      if (hasText(tenant.getPhone())) {
+        existing.setPhone(tenant.getPhone().trim());
+      }
+      if (tenant.getIdCard() != null && !tenant.getIdCard().isBlank()) {
+        existing.setIdCard(tenant.getIdCard());
+      }
+      if (tenant.getEmergencyContact() != null) {
+        existing.setEmergencyContact(tenant.getEmergencyContact());
+      }
+      if (tenant.getEmergencyPhone() != null) {
+        existing.setEmergencyPhone(tenant.getEmergencyPhone());
+      }
+      if (tenant.getRemark() != null) {
+        existing.setRemark(tenant.getRemark());
+      }
       if (existing.getDeleted() == null) {
         existing.setDeleted(0);
       }
@@ -88,6 +116,10 @@ public class TenantService {
     }
     applyDefaults(tenant);
     return tenantRepository.save(tenant);
+  }
+
+  private boolean hasText(String value) {
+    return value != null && !value.trim().isEmpty();
   }
 
   private void applyDefaults(Tenant tenant) {

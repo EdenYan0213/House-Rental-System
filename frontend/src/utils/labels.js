@@ -172,7 +172,15 @@ export const LOG_ACTION = {
   pay: '收款',
   export: '导出',
   import: '导入',
-  custom: '其他操作'
+  custom: '其他操作',
+  // AI 助手：按意图区分动作，日志里一眼看出 AI 做了什么
+  ai_meter_reading: 'AI·录入水电',
+  ai_batch_meter: 'AI·批量抄表',
+  ai_send_sms: 'AI·发送短信',
+  ai_query_contract: 'AI·查询合同',
+  ai_query_electricity: 'AI·查询用电',
+  ai_not_configured: 'AI·未配置',
+  ai_unknown: 'AI·未识别'
 }
 
 // ---------------- 用户角色 ----------------

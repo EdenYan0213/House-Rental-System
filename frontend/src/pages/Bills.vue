@@ -54,7 +54,7 @@
           <el-option label="已付清" value="PAID" />
           <el-option label="已作废" value="VOID" />
         </el-select>
-        <el-button type="primary" plain @click="loadBills">查询</el-button>
+        <el-button type="primary" plain @click="reloadAll">查询</el-button>
         <el-button @click="resetQuery">重置</el-button>
         <transition name="el-fade-in">
           <div v-if="selectedBills.length > 0" class="selection-bar">
@@ -63,6 +63,9 @@
             </el-tag>
             <el-button type="success" size="small" :icon="Wallet" @click="openBatchPay">
               批量收款
+            </el-button>
+            <el-button type="warning" size="small" :icon="Message" @click="handleBatchSms">
+              批量发短信
             </el-button>
           </div>
         </transition>
@@ -78,6 +81,7 @@
         empty-text="当前筛选条件下没有账单，可调整月份或状态后重试"
         style="width: 100%"
         @selection-change="onSelectionChange"
+        @row-click="onRowClick"
       >
         <el-table-column type="selection" width="46" :selectable="row => !isBillFinal(row)" />
         <el-table-column label="账单月份" width="110" sortable prop="billMonth" />
@@ -119,12 +123,23 @@
           <template #default="{ row }">
             <div class="bill-actions">
               <el-button type="primary" link size="small" @click="viewDetail(row)">详情</el-button>
-              <el-button type="success" link size="small" @click="openPayment(row)" v-if="canPay && !isBillFinal(row)">收款</el-button>
+              <el-button
+                v-if="canPay && !isBillFinal(row)"
+                type="success"
+                link
+                size="small"
+                :loading="quickPayingId === row.id"
+                @click="quickPay(row)"
+              >快收</el-button>
               <el-dropdown trigger="click" @command="cmd => handleMoreCommand(cmd, row)">
                 <el-button type="primary" link size="small">更多</el-button>
                 <template #dropdown>
                   <el-dropdown-menu>
                     <el-dropdown-item command="regenerate" v-if="canGenerate && !isBillFinal(row)">重新生成</el-dropdown-item>
+                    <el-dropdown-item
+                      command="partial"
+                      v-if="canPay && !isBillFinal(row)"
+                    >部分收款…</el-dropdown-item>
                     <el-dropdown-item command="sms">发送账单短信</el-dropdown-item>
                     <el-dropdown-item command="void" divided v-if="canVoid && !isBillFinal(row)">作废账单</el-dropdown-item>
                   </el-dropdown-menu>
@@ -136,10 +151,10 @@
       </el-table>
 
       <el-pagination
-        v-if="allBills.length > pageSize"
+        v-if="totalBills > pageSize"
         class="pager"
         layout="total, prev, pager, next, jumper"
-        :total="allBills.length"
+        :total="totalBills"
         :page-size="pageSize"
         :current-page="currentPage"
         @current-change="handlePageChange"
@@ -318,9 +333,10 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Download, Plus, DocumentAdd, Wallet, Refresh } from '@element-plus/icons-vue'
+import { Download, Plus, DocumentAdd, Wallet, Refresh, Message } from '@element-plus/icons-vue'
 import {
   getBills,
+  getBillSummary,
   generateBill,
   generateBillForRoom,
   regenerateBill,
@@ -334,11 +350,21 @@ import {
   canGenerateBill,
   canRecordPayment,
   canVoidBill,
-  batchPayments
+  batchSendBillSms,
+  getErrorMessage
 } from '@/api'
-import { billStatusText, billStatusTag, paymentMethodText } from '@/utils/labels'
-import { getErrorMessage } from '@/api'
+import { billStatusText, billStatusTag } from '@/utils/labels'
 import { showUndoToast } from '../utils/undo'
+import { useBatchPayment } from '@/composables/useBatchPayment'
+import { useRoomBillGenerate } from '@/composables/useRoomBillGenerate'
+import {
+  isBillFinal,
+  remainOf,
+  formatMoneyValue,
+  isOverdue,
+  overdueDaysOf as overdueDays,
+  hasMeterData
+} from '../utils/bills'
 
 const router = useRouter()
 const route = useRoute()
@@ -351,10 +377,45 @@ const loading = ref(false)
 const paying = ref(false)
 const regenerating = ref(false)
 const bills = ref([])
-// 后端 /api/bills 返回全量列表（不分页），这里做前端分页保证大月份数据也能浏览
-const allBills = ref([])
+// 后端分页：content 是当前页数据，total 是筛选后的总条数
 const currentPage = ref(1)
 const pageSize = ref(20)
+const totalBills = ref(0)
+// 财务汇总由 /api/bills/summary 单独统计，不受分页影响
+const summaryData = ref({ total: 0, paid: 0, unpaid: 0, rate: 0, activeCount: 0, paidCount: 0 })
+const paymentForm = reactive({
+  paidAmount: 0,
+  paymentMethod: 'CASH',
+  remark: ''
+})
+
+const paymentRules = {
+  paidAmount: [{ required: true, message: '请输入收款金额', trigger: 'blur' }],
+  paymentMethod: [{ required: true, message: '请选择收款方式', trigger: 'change' }]
+}
+
+const waterUnit = ref(null)
+const electricUnit = ref(null)
+
+// 财务汇总由 /api/bills/summary 计算，不受分页影响
+const summary = computed(() => summaryData.value)
+
+/** 读取水电单价，用于顶部提示；失败不阻塞页面。 */
+async function loadUnits() {
+  try {
+    const res = await getFeeItems()
+    const items = res.data || []
+    const w = items.find(i => i.category === 'WATER' || (i.name || '').includes('水'))
+    const e = items.find(i => i.category === 'ELECTRIC' || (i.name || '').includes('电'))
+    waterUnit.value = w ? w.unitPrice : null
+    electricUnit.value = e ? e.unitPrice : null
+  } catch (e) {
+    // 单价只是辅助信息，失败时保持占位符 '-' 即可
+    waterUnit.value = null
+    electricUnit.value = null
+  }
+}
+
 const queryForm = reactive({ month: '', status: '' })
 const roomIdFilter = ref('')
 const paymentVisible = ref(false)
@@ -362,145 +423,6 @@ const paymentRef = ref(null)
 const currentBill = ref(null)
 const regenerateVisible = ref(false)
 const regenerateBillId = ref(null)
-const roomGenerateVisible = ref(false)
-const generatingRoom = ref(false)
-const buildingOptions = ref([])
-const floorOptions = ref([])
-const roomOptions = ref([])
-const roomOptionsFiltered = ref([])
-const roomGenerateForm = reactive({
-  buildingId: null,
-  floor: null,
-  roomId: null,
-  month: ''
-})
-
-const paymentForm = reactive({
-  paidAmount: 0,
-  paymentMethod: 'CASH',
-  remark: ''
-})
-
-const waterUnit = ref(null)
-const electricUnit = ref(null)
-const generating = ref(false)
-const billsTableRef = ref(null)
-const selectedBills = ref([])
-const batchPayVisible = ref(false)
-const batchPaying = ref(false)
-const batchPayForm = reactive({ paymentMethod: 'CASH', remark: '批量收款' })
-
-// 所选账单的待收合计
-const selectedRemain = computed(() =>
-  selectedBills.value.reduce((sum, b) => sum + remainOf(b), 0)
-)
-
-function remainOf(bill) {
-  const total = Number(bill?.totalAmount || 0)
-  const paid = Number(bill?.paidAmount || 0)
-  return Math.max(total - paid, 0)
-}
-
-function onSelectionChange(rows) {
-  selectedBills.value = rows || []
-}
-
-function openBatchPay() {
-  if (selectedBills.value.length === 0) {
-    return ElMessage.warning('请先选择要收款的账单')
-  }
-  if (selectedRemain.value <= 0) {
-    return ElMessage.warning('所选账单没有待收金额')
-  }
-  batchPayVisible.value = true
-}
-
-async function submitBatchPay() {
-  batchPaying.value = true
-  try {
-    const res = await batchPayments({
-      billIds: selectedBills.value.map(b => b.id),
-      paymentMethod: batchPayForm.paymentMethod,
-      remark: batchPayForm.remark
-    })
-    const data = res.data || {}
-    if (data.failCount > 0) {
-      const detail = (data.failures || []).map(f => `账单#${f.billId}：${f.reason}`).join('\n')
-      ElMessageBox.alert(detail, `成功 ${data.successCount} 张，失败 ${data.failCount} 张`, { type: 'warning' })
-    } else {
-      ElMessage.success(`批量收款完成，共 ${data.successCount} 张，合计 ¥${money(data.totalPaid)}`)
-    }
-    batchPayVisible.value = false
-    selectedBills.value = []
-    billsTableRef.value?.clearSelection()
-    await loadBills()
-  } catch (e) {
-    ElMessage.error(getErrorMessage(e, '批量收款失败'))
-  } finally {
-    batchPaying.value = false
-  }
-}
-// 批量生成失败明细（房间 + 原因），允许逐条重试
-const generationFailures = ref([])
-const generationVisible = ref(false)
-
-// 财务汇总：仅统计未作废账单
-const summary = computed(() => {
-  const valid = allBills.value.filter(b => String(b.status || '').toUpperCase() !== 'VOID')
-  const total = valid.reduce((sum, b) => sum + (Number(b.totalAmount) || 0), 0)
-  const paid = valid.reduce((sum, b) => sum + (Number(b.paidAmount) || 0), 0)
-  const paidCount = valid.filter(b => isBillFinal(b)).length
-  return {
-    total,
-    paid,
-    unpaid: Math.max(total - paid, 0),
-    rate: total > 0 ? Math.round((paid / total) * 100) : 0,
-    activeCount: valid.length,
-    paidCount
-  }
-})
-
-function money(v) {
-  return Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-
-// 到期日缺失时无法判断逾期，返回 false 避免误标
-function isOverdue(row) {
-  if (isBillFinal(row) || !row.dueDate) return false
-  return new Date(row.dueDate) < new Date(new Date().toDateString())
-}
-
-function overdueDays(row) {
-  if (!row.dueDate) return 0
-  const diff = new Date(new Date().toDateString()) - new Date(new Date(row.dueDate).toDateString())
-  return Math.max(Math.floor(diff / 86400000), 0)
-}
-
-// 水电用量都为 0/空时视为缺读数
-function hasMeterData(row) {
-  const w = Number(row.waterUsage || 0)
-  const e = Number(row.electricUsage || 0)
-  return w > 0 || e > 0
-}
-
-async function loadUnits() {
-  try {
-    const res = await getFeeItems()
-    const items = res.data || []
-    const w = items.find(i => i.category === 'WATER' || i.name.includes('水'))
-    const e = items.find(i => i.category === 'ELECTRIC' || i.name.includes('电'))
-    waterUnit.value = w ? w.unitPrice : null
-    electricUnit.value = e ? e.unitPrice : null
-  } catch (err) {
-    // ignore
-  }
-}
-
-const paymentRules = {
-  paidAmount: [{ required: true, message: '请输入收款金额', trigger: 'blur' }],
-  paymentMethod: [{ required: true, message: '请选择收款方式', trigger: 'change' }]
-}
-
 // 状态展示统一走 utils/labels，避免各页面各自维护映射
 function getStatusType(status) {
   return billStatusTag(status)
@@ -510,23 +432,26 @@ function getStatusText(status) {
   return billStatusText(status)
 }
 
-// 终态账单不可再收款/作废/重新生成
-function isBillFinal(row) {
-  const s = String(row?.status || '').trim().toUpperCase()
-  return ['PAID', 'VOID', 'OBSOLETE'].includes(s)
+function buildQueryParams() {
+  const params = {}
+  if (queryForm.month) params.month = queryForm.month
+  if (queryForm.status) params.status = queryForm.status
+  if (roomIdFilter.value) params.roomId = Number(roomIdFilter.value)
+  return params
 }
 
 async function loadBills() {
   loading.value = true
   try {
-    const params = {}
-    if (queryForm.month) params.month = queryForm.month
-    if (queryForm.status) params.status = queryForm.status
-    if (roomIdFilter.value) params.roomId = Number(roomIdFilter.value)
+    const params = {
+      ...buildQueryParams(),
+      // el-pagination 是 1 起始，后端约定 0 起始
+      page: currentPage.value - 1,
+      size: pageSize.value
+    }
     const res = await getBills(params)
-    allBills.value = res.data || []
-    currentPage.value = 1
-    applyPaging()
+    bills.value = res.data?.content || []
+    totalBills.value = res.data?.totalElements || 0
   } catch (err) {
     ElMessage.error(getErrorMessage(err, '账单加载失败'))
   } finally {
@@ -534,21 +459,99 @@ async function loadBills() {
   }
 }
 
-function applyPaging() {
-  const start = (currentPage.value - 1) * pageSize.value
-  bills.value = allBills.value.slice(start, start + pageSize.value)
+function loadSummary() {
+  return getBillSummary(buildQueryParams())
+    .then(res => {
+      summaryData.value = res.data || summaryData.value
+    })
+    .catch(() => {
+      // 汇总失败不阻塞列表，保留上一次数值
+    })
+}
+
+/** 首次查询 / 重置 / 筛选变化：回到第 1 页并同时刷新汇总 */
+async function reloadAll() {
+  currentPage.value = 1
+  await Promise.all([loadBills(), loadSummary()])
+}
+
+/**
+ * 点击整行 → 切换勾选。
+ *
+ * <p>已结清/已作废的账单不可选（selection 列有 :selectable 限制），
+ * 这里必须复用同一判断，否则行点击能选上本不该选的账单，
+ * 后续批量收款就会出错。行内按钮同样放行。
+ */
+function onRowClick(row, column, event) {
+  const el = event?.target
+  if (el && el.closest('button, a, input, textarea, .el-checkbox, .el-link, .el-dropdown')) {
+    return
+  }
+  if (isBillFinal(row)) return
+  billsTableRef.value?.toggleRowSelection(row)
 }
 
 function handlePageChange(page) {
   currentPage.value = page
-  applyPaging()
+  loadBills()
 }
 
 function resetQuery() {
   queryForm.month = ''
   queryForm.status = ''
   roomIdFilter.value = ''
-  loadBills()
+  reloadAll()
+}
+
+const generating = ref(false)
+const sendingSms = ref(false)
+// 行内收款中的账单 ID，用于按钮 loading
+const quickPayingId = ref(null)
+const billsTableRef = ref(null)
+
+// 批量收款：逻辑在 composable，变量名对齐模板
+const {
+  visible: batchPayVisible,
+  paying: batchPaying,
+  selectedBills,
+  form: batchPayForm,
+  selectedRemain,
+  onSelectionChange,
+  open: openBatchPay,
+  submit: submitBatchPay
+} = useBatchPayment(billsTableRef, async () => {
+  await Promise.all([loadBills(), loadSummary()])
+})
+
+// 按房间生成账单：逻辑在 composable，变量名对齐模板
+const {
+  visible: roomGenerateVisible,
+  generating: generatingRoom,
+  buildingOptions,
+  floorOptions,
+  roomOptions: roomOptionsFiltered,
+  form: roomGenerateForm,
+  formatRoomOption,
+  onBuildingChange,
+  onFloorChange,
+  open: openRoomGenerateRaw,
+  submit: submitRoomGenerate
+} = useRoomBillGenerate(async () => {
+  await Promise.all([loadBills(), loadSummary()])
+})
+
+// 模板里 openRoomGenerate 不带参数，这里包一层传入当前筛选月份
+function openRoomGenerate() {
+  return openRoomGenerateRaw(queryForm.month)
+}
+
+// 批量生成失败明细（房间 + 原因），允许逐条重试
+const generationFailures = ref([])
+const generationVisible = ref(false)
+
+/** 模板里大量调用 money()，实现统一在 utils/bills */
+function money(v) {
+  return formatMoneyValue(v)
 }
 
 async function handleGenerate() {
@@ -566,15 +569,18 @@ async function handleGenerate() {
       generationFailures.value = []
       ElMessage.success(`账单生成成功，共 ${result.successCount ?? result.created ?? 0} 张`)
     }
-    await loadBills()
+    await Promise.all([loadBills(), loadSummary()])
   } catch (err) {
     ElMessage.error(getErrorMessage(err, '账单生成失败'))
+  } finally {
+    generating.value = false
   }
 }
 
 // 行内「更多」菜单
 function handleMoreCommand(cmd, row) {
   if (cmd === 'regenerate') return openRegenerate(row)
+  if (cmd === 'partial') return openPayment(row)
   if (cmd === 'sms') return handleSendSms(row)
   if (cmd === 'void') return handleVoid(row)
 }
@@ -628,100 +634,52 @@ async function retryAllFailures() {
   }
 }
 
-function formatRoomOption(room) {
-  const building = room?.buildingName ? `${room.buildingName}-` : ''
-  return `${building}${room?.roomNumber || room?.id}`
-}
+/**
+ * 批量发送账单短信。
+ *
+ * <p>先确认条数，再逐条发送；后端会汇总成功/失败并返回明细，
+ * 有失败时把原因列出来，便于逐个排查（如未绑定手机号）。
+ */
+async function handleBatchSms() {
+  const ids = selectedBills.value.map(b => b.id)
+  if (ids.length === 0) {
+    ElMessage.warning('请先选择要发送短信的账单')
+    return
+  }
 
-async function loadRoomOptions() {
   try {
-    const params = { size: 1000 }
-    if (roomGenerateForm.buildingId) {
-      params.buildingId = roomGenerateForm.buildingId
+    await ElMessageBox.confirm(
+      `将向所选 ${ids.length} 张账单的租户发送催缴短信，是否继续？`,
+      '批量发送短信',
+      { confirmButtonText: '发送', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+
+  sendingSms.value = true
+  try {
+    const res = await batchSendBillSms(ids)
+    const data = res.data || {}
+    const success = Number(data.successCount || 0)
+    const fail = Number(data.failCount || 0)
+
+    if (fail === 0) {
+      ElMessage.success(`短信已发送，共 ${success} 张`)
+    } else {
+      const detail = (data.failures || [])
+        .map(f => `账单#${f.billId}${f.roomNumber ? '（' + f.roomNumber + '）' : ''}：${f.reason}`)
+        .join('\n')
+      await ElMessageBox.alert(detail, `成功 ${success} 张，失败 ${fail} 张`, { type: 'warning' })
     }
-    if (roomGenerateForm.floor !== null && roomGenerateForm.floor !== undefined) {
-      params.floor = roomGenerateForm.floor
-    }
-    const res = await getRooms(params)
-    roomOptions.value = res.data?.content || res.data || []
-  } catch (err) {
-    roomOptions.value = []
-  }
-}
 
-async function loadBuildings() {
-  try {
-    const res = await getBuildings()
-    buildingOptions.value = res.data || []
-  } catch (err) {
-    buildingOptions.value = []
-  }
-}
-
-function refreshFloorOptions() {
-  const set = new Set((roomOptions.value || []).map(r => r.floor).filter(v => v !== null && v !== undefined))
-  floorOptions.value = Array.from(set).sort((a, b) => a - b)
-}
-
-function refreshRoomOptionsFiltered() {
-  if (roomGenerateForm.floor === null || roomGenerateForm.floor === undefined) {
-    roomOptionsFiltered.value = []
-    return
-  }
-  roomOptionsFiltered.value = (roomOptions.value || []).filter(r => r.floor === roomGenerateForm.floor)
-}
-
-async function onBuildingChange() {
-  roomGenerateForm.floor = null
-  roomGenerateForm.roomId = null
-  roomOptionsFiltered.value = []
-  await loadRoomOptions()
-  refreshFloorOptions()
-}
-
-async function onFloorChange() {
-  roomGenerateForm.roomId = null
-  // 同楼栋下楼层切换时直接过滤本地数据，避免重复请求
-  refreshRoomOptionsFiltered()
-}
-
-async function openRoomGenerate() {
-  roomGenerateForm.buildingId = null
-  roomGenerateForm.floor = null
-  roomGenerateForm.roomId = null
-  roomGenerateForm.month = queryForm.month || ''
-  roomOptions.value = []
-  floorOptions.value = []
-  roomOptionsFiltered.value = []
-  await loadBuildings()
-  await loadRoomOptions()
-  roomGenerateVisible.value = true
-}
-
-async function submitRoomGenerate() {
-  if (!roomGenerateForm.buildingId) {
-    ElMessage.warning('请选择楼栋')
-    return
-  }
-  if (roomGenerateForm.floor === null || roomGenerateForm.floor === undefined) {
-    ElMessage.warning('请选择楼层')
-    return
-  }
-  if (!roomGenerateForm.roomId) {
-    ElMessage.warning('请选择房间')
-    return
-  }
-
-  generatingRoom.value = true
-  try {
-    await generateBillForRoom(roomGenerateForm.roomId, roomGenerateForm.month)
-    ElMessage.success('按房间生成账单成功')
-    roomGenerateVisible.value = false
+    billsTableRef.value?.clearSelection?.()
+    selectedBills.value = []
     await loadBills()
-  } catch (err) {
-    ElMessage.error(err?.response?.data || err?.message || '按房间生成失败')
+  } catch (e) {
+    ElMessage.error(getErrorMessage(e, '批量发送失败'))
   } finally {
-    generatingRoom.value = false
+    sendingSms.value = false
   }
 }
 
@@ -748,6 +706,37 @@ async function handleExportCsv() {
 
 function viewDetail(row) {
   router.push(`/bills/${row.id}`)
+}
+
+/**
+ * 行内快速收款：按剩余应收全额入账，一步完成。
+ *
+ * <p>日常最高频的操作就是「这单收齐了」，走弹窗填表太慢；
+ * 需要部分收款/改收款方式时，从「更多 → 部分收款」进弹窗。
+ */
+async function quickPay(row) {
+  const remain = remainOf(row)
+  if (remain <= 0) {
+    ElMessage.warning('该账单已无待收金额')
+    return
+  }
+
+  quickPayingId.value = row.id
+  try {
+    await recordPayment(row.id, {
+      paidAmount: remain,
+      paymentMethod: 'CASH',
+      remark: '快速收款'
+    })
+    ElMessage.success(`已收款 ¥${money(remain)}`)
+
+    // 收款后状态会变，刷新当前页与汇总
+    await Promise.all([loadBills(), loadSummary()])
+  } catch (err) {
+    ElMessage.error(getErrorMessage(err, '收款失败'))
+  } finally {
+    quickPayingId.value = null
+  }
 }
 
 function openPayment(row) {
@@ -848,14 +837,14 @@ onMounted(() => {
   if (routeStatus) queryForm.status = routeStatus
   if (routeRoomId) roomIdFilter.value = routeRoomId
 
-  loadBills()
+  reloadAll()
   loadUnits()
 })
 </script>
 
 <style scoped>
 .page {
-  padding: 20px;
+  padding: 0;
 }
 
 .page-card {
@@ -881,8 +870,8 @@ onMounted(() => {
 }
 
 .page-title {
-  font-size: 17px;
-  font-weight: 600;
+  font-size: var(--title-page-size);
+  font-weight: var(--title-page-weight);
   color: var(--text-main);
 }
 

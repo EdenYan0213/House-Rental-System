@@ -15,15 +15,36 @@
       </div>
     </div>
 
+    <!-- 快捷指令：点一下就填入输入框，移动端打字成本高 -->
+    <div class="quick-prompts">
+      <button
+        v-for="p in quickPrompts"
+        :key="p"
+        type="button"
+        class="prompt-chip"
+        :disabled="sending"
+        @click="input = p"
+      >{{ p }}</button>
+    </div>
+
     <div class="composer">
       <el-input
         v-model="input"
         type="textarea"
-        :rows="3"
+        :rows="2"
+        resize="none"
         :disabled="sending"
         placeholder="输入指令，例如：给张三发账单短信"
+        class="composer-input"
       />
-      <el-button class="send-btn" type="primary" :loading="sending" :disabled="!input.trim()" @click="send">发送</el-button>
+      <el-button
+        class="send-btn"
+        type="primary"
+        :icon="Promotion"
+        :loading="sending"
+        :disabled="!input.trim()"
+        @click="send"
+      >发送</el-button>
     </div>
   </div>
 </template>
@@ -32,6 +53,7 @@
 import { nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Promotion, ArrowLeft } from '@element-plus/icons-vue'
 import { executeAiCommand } from '@/api'
 
 const router = useRouter()
@@ -39,6 +61,13 @@ const historyRef = ref(null)
 const input = ref('')
 const sending = ref(false)
 const seq = ref(1)
+
+const quickPrompts = [
+  '今天101水表1250电表3680',
+  '给张三发账单短信',
+  '查一下张三的合同',
+  '101这个月用了多少电'
+]
 
 const messages = ref([
   { id: 0, role: 'assistant', text: '你好，我可以帮你处理常用租赁管理指令。' }
@@ -88,50 +117,64 @@ async function send() {
 
 <style scoped>
 .mobile-ai-page {
-  min-height: 100vh;
   display: flex;
   flex-direction: column;
+  min-height: 100vh;
+  max-width: 520px;
+  margin: 0 auto;
   background: var(--bg-main);
+  box-sizing: border-box;
 }
 
+/* 顶栏 */
 .head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px var(--m-gutter);
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
   position: sticky;
   top: 0;
-  z-index: 3;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px;
-  border-bottom: 1px solid var(--border-color);
-  background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(8px);
-}
-
-.title {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text-main);
+  z-index: 5;
 }
 
 .back-btn,
 .clear-btn {
   border: none;
-  background: var(--bg-surface);
-  color: #1a4cc8;
-  border-radius: 8px;
-  height: 32px;
-  padding: 0 12px;
+  background: transparent;
+  color: var(--accent-3);
+  font-size: 13px;
+  font-family: inherit;
+  padding: 6px 4px;
+  cursor: pointer;
+  min-height: 34px;
 }
 
+.clear-btn {
+  color: var(--text-muted);
+}
+
+.title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+/* 对话历史 */
 .history {
   flex: 1;
   overflow-y: auto;
-  padding: 12px;
+  padding: var(--m-gutter);
+  padding-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .bubble-row {
   display: flex;
-  margin-bottom: 10px;
 }
 
 .bubble-row.user {
@@ -139,35 +182,89 @@ async function send() {
 }
 
 .bubble {
-  max-width: 92%;
+  max-width: 82%;
+  padding: 10px 13px;
   border-radius: 12px;
-  border: 1px solid #dce5ff;
+  font-size: 13px;
+  line-height: 1.6;
   background: var(--bg-surface);
-  padding: 10px 12px;
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  word-break: break-word;
 }
 
 .bubble-row.user .bubble {
-  background: #1f6bff;
-  border-color: #1f6bff;
-  color: #fff;
+  background: var(--accent-3);
+  border-color: var(--accent-3);
+  color: var(--text-inverse);
 }
 
 .detail-link {
-  display: inline-block;
-  margin-top: 8px;
-  color: inherit;
-  text-decoration: underline;
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--accent-3);
 }
 
-.composer {
-  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
-  border-top: 1px solid var(--border-color);
+/* 快捷指令 */
+.quick-prompts {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px var(--m-gutter);
   background: var(--bg-surface);
+  border-top: 1px solid var(--border-color);
+}
+
+.quick-prompts::-webkit-scrollbar {
+  display: none;
+}
+
+.prompt-chip {
+  flex: 0 0 auto;
+  border: 1px solid var(--border-color);
+  background: var(--bg-main);
+  color: var(--text-main);
+  border-radius: 999px;
+  padding: 7px 13px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.prompt-chip:active:not(:disabled) {
+  background: var(--accent-1);
+  border-color: var(--accent-2);
+}
+
+/* 输入区 */
+.composer {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  padding: 10px var(--m-gutter) calc(10px + var(--m-safe-bottom));
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-color);
+}
+
+.composer-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.composer-input :deep(.el-textarea__inner) {
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 13px;
 }
 
 .send-btn {
-  width: 100%;
-  margin-top: 10px;
+  flex: 0 0 auto;
   min-height: 40px;
+  border-radius: 10px;
+  padding: 0 16px;
 }
 </style>

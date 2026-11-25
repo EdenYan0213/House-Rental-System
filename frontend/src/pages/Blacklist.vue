@@ -1,5 +1,5 @@
 <template>
-  <div style="padding: 20px">
+  <div>
     <el-row justify="space-between" align="middle">
       <div>
         <el-button @click="$router.push('/tenants')">返回租户管理</el-button>

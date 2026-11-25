@@ -1,5 +1,12 @@
 <template>
-  <div style="padding: 20px">
+  <div class="page">
+    <div class="page-head">
+      <div>
+        <h2>维修工与模板</h2>
+        <p class="page-sub">维护维修工档案与常用故障模板，派单时可直接选用。</p>
+      </div>
+    </div>
+
     <el-tabs>
       <el-tab-pane label="维修工管理">
         <el-row justify="space-between" align="middle" style="margin-bottom: 12px">
@@ -90,9 +97,7 @@ import {
   getApplianceTemplates,
   createApplianceTemplate,
   updateApplianceTemplate,
-  deleteApplianceTemplate,
-  getErrorMessage,
-} from '../api'
+  deleteApplianceTemplate} from '../api'
 import EmptyState from '../components/EmptyState.vue'
 
 const workers = ref([])

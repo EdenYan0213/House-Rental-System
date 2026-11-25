@@ -242,8 +242,14 @@ export const updateFeeItem = (id, data) => api.put(`/fee-items/${id}`, data)
 export const deleteFeeItem = (id) => api.delete(`/fee-items/${id}`)
 
 export const getMeterReadings = (params) => api.get('/meter-readings', { params })
+
+/** 各房间最近一次读数（用于抄表页的「上次读数」） */
+export const getLastMeterReadings = (params) =>
+  api.get('/meter-readings/last-by-room', { params })
 export const exportMeterReadingsCsv = (params) => api.get('/meter-readings/export-csv', { params, responseType: 'blob' })
 export const saveMeterReadings = (data) => api.post('/meter-readings', data)
+/** 按「上期读数 + 增量」批量生成抄表。roomIds + recordDate + 增量，见 MeterReadingGenerateService */
+export const generateMeterReadingsByDelta = (data) => api.post('/meter-readings/generate-by-delta', data, { timeout: 60000 })
 export const deleteMeterReading = (id) => api.delete(`/meter-readings/${id}`)
 export const downloadMeterReadingImportTemplate = () => api.get('/meter-readings/import-template', { responseType: 'blob', timeout: 60000 })
 export const parseMeterReadingImportFile = (file) => {
@@ -259,6 +265,9 @@ export const confirmMeterReadingImport = (records) =>
 
 // ---------- 账单与收款 ----------
 export const getBills = (params) => api.get('/bills', { params })
+
+/** 账单财务汇总：按同一筛选条件统计全部账单，不受分页影响 */
+export const getBillSummary = (params) => api.get('/bills/summary', { params })
 export const exportBillsCsv = (params) => api.get('/bills/export-csv', { params, responseType: 'blob', timeout: 60000 })
 export const getBill = (id) => api.get(`/bills/${id}`)
 export const generateBill = (month) => {
@@ -280,6 +289,10 @@ export const sendBillSms = (id) => api.post(`/bills/${id}/send-sms`)
 export const recordPayment = (id, data) => api.post(`/bills/${id}/payments`, data)
 // 批量收款：按剩余应收金额全额收款
 export const batchPayments = (data) => api.post('/bills/batch-payments', data)
+
+/** 批量发送账单短信：逐条发送并返回成功/失败明细 */
+export const batchSendBillSms = (billIds) =>
+  api.post('/bills/batch-sms', { billIds }, { timeout: 60000 })
 
 export const exportModuleData = (module, data) =>
   api.post(`/export/${module}`, data || {}, { responseType: 'blob', timeout: 60000 })

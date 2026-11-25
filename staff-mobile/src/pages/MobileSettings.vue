@@ -1,7 +1,13 @@
 <template>
   <div class="mobile-page" v-loading="saving">
-    <el-card shadow="never" class="panel">
-      <template #header>个人资料</template>
+    <header class="m-head">
+      <h1 class="m-head-title">个人设置</h1>
+      <p class="m-head-sub">修改个人资料与登录密码。</p>
+    </header>
+
+    <section>
+      <div class="m-section-title">个人资料</div>
+      <div class="m-card">
       <el-form ref="profileFormRef" :model="profileForm" :rules="profileRules" label-position="top" class="form">
         <el-form-item label="姓名" prop="realName">
           <el-input v-model="profileForm.realName" placeholder="请输入姓名" />
@@ -15,10 +21,12 @@
         <div class="hint">提示：手机号支持 11 位大陆手机号，邮箱可留空。</div>
       </el-form>
       <el-button type="primary" class="submit-btn" @click="saveProfile">保存资料</el-button>
-    </el-card>
+      </div>
+    </section>
 
-    <el-card shadow="never" class="panel">
-      <template #header>修改密码</template>
+    <section>
+      <div class="m-section-title">修改密码</div>
+      <div class="m-card">
       <el-form ref="passwordFormRef" :model="passwordForm" :rules="passwordRules" label-position="top" class="form">
         <el-form-item label="原密码" prop="oldPassword">
           <el-input v-model="passwordForm.oldPassword" type="password" show-password placeholder="请输入原密码" />
@@ -32,7 +40,8 @@
         <div class="hint">提示：新密码长度建议 8-20 位，且不要与原密码相同。</div>
       </el-form>
       <el-button type="danger" plain class="submit-btn" @click="savePassword">更新密码</el-button>
-    </el-card>
+      </div>
+    </section>
 
     <el-button class="back-btn" @click="goBack">返回我的</el-button>
   </div>
@@ -165,35 +174,33 @@ function goBack() {
 </script>
 
 <style scoped>
-.mobile-page {
-  padding: 14px;
-  max-width: 760px;
-  margin: 0 auto;
+.form :deep(.el-form-item__label) {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding-bottom: 4px;
 }
 
-.panel {
-  margin-bottom: 12px;
-  border: 1px solid #e8efff;
-}
-
-.form {
-  margin-top: 2px;
+.form :deep(.el-input__wrapper) {
+  min-height: var(--m-tap);
+  border-radius: 10px;
 }
 
 .hint {
-  margin-top: 2px;
+  font-size: 11px;
   color: var(--text-muted);
-  font-size: 12px;
+  line-height: 1.5;
+  margin: 2px 0 12px;
 }
 
-.submit-btn,
-.back-btn {
+.submit-btn {
   width: 100%;
-  height: 42px;
+  min-height: var(--m-tap);
   border-radius: 10px;
 }
 
 .back-btn {
-  margin-top: 2px;
+  width: 100%;
+  min-height: var(--m-tap);
+  border-radius: 10px;
 }
 </style>

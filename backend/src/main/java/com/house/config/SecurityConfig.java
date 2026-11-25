@@ -16,6 +16,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.Arrays;
 import java.util.Collections;
 
@@ -59,6 +60,19 @@ public class SecurityConfig {
                         .requestMatchers("/api/complaints/**").hasAnyAuthority("ROLE_SUPER_ADMIN", "ROLE_ADMIN")
                         .requestMatchers("/api/backup/**").authenticated()
                         .anyRequest().authenticated())
+                // 未认证返回 401（而非默认的 403），前端拦截器据此跳转登录页；
+                // 已认证但无权限仍返回 403，前端只提示不跳转。
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                            response.setContentType("application/json;charset=UTF-8");
+                            response.getWriter().write("{\"message\":\"登录已过期，请重新登录\",\"status\":401}");
+                        })
+                        .accessDeniedHandler((request, response, deniedException) -> {
+                            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                            response.setContentType("application/json;charset=UTF-8");
+                            response.getWriter().write("{\"message\":\"没有该操作权限\",\"status\":403}");
+                        }))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

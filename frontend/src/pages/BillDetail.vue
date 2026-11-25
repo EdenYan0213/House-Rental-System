@@ -329,7 +329,7 @@ onMounted(() => {
 
 <style scoped>
 .bill-detail-container {
-  padding: 20px;
+  padding: 0;
 }
 
 .bill-content {

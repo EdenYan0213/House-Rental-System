@@ -43,13 +43,23 @@ public class ContractController {
     this.moveOutService = moveOutService;
   }
 
+  /**
+   * 合同列表。
+   *
+   * <p>传 {@code paged=true} 返回 {@code {content, totalElements, totalPages, page, size}}，
+   * 供需要翻页的前端使用；不传则保持旧行为（纯数组），兼容现有调用方。
+   */
   @GetMapping
-  public List<Contract> list(
+  public Object list(
       @RequestParam(required = false) String status,
       @RequestParam(required = false) String q,
       @RequestParam(required = false) String expiring,
       @RequestParam(defaultValue = "0") int page,
-      @RequestParam(defaultValue = "20") int size) {
+      @RequestParam(defaultValue = "20") int size,
+      @RequestParam(defaultValue = "false") boolean paged) {
+    if (paged) {
+      return contractService.searchPaged(status, q, page, size, expiring);
+    }
     return contractService.search(status, q, page, size, expiring);
   }
 
@@ -99,10 +109,7 @@ public class ContractController {
     operationLogService.log(
         "contract", "delete", String.valueOf(id), before.getContractNo(), before, null,
         "删除合同: " + before.getContractNo(), request, true, null, null, Map.of("contractId", id));
-    return ResponseEntity.ok(Map.of(
-        "undoSnapshotId", snapshot.getId(),
-        "undoExpireAt", snapshot.getExpiredAt(),
-        "undoTip", "操作成功，可在30分钟内撤销"));
+    return ResponseEntity.ok(UndoResponse.of(snapshot));
   }
 
   /**
@@ -148,9 +155,7 @@ public class ContractController {
 
       operationLogService.log("合同管理", "办理退租: " + beforeContract.getContractNo(), request);
 
-      result.put("undoSnapshotId", snapshot.getId());
-      result.put("undoExpireAt", snapshot.getExpiredAt());
-      result.put("undoTip", "退租完成，可在30分钟内撤销");
+      result.putAll(UndoResponse.of(snapshot, "退租完成，可在30分钟内撤销"));
       return ResponseEntity.ok(result);
     } catch (IllegalArgumentException | IllegalStateException e) {
       return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
@@ -180,10 +185,7 @@ public class ContractController {
       afterPayload.put("contract", afterContract);
       afterPayload.put("room", afterRoom);
       operationSnapshotService.complete(snapshot.getId(), afterPayload);
-      return ResponseEntity.ok(Map.of(
-          "undoSnapshotId", snapshot.getId(),
-          "undoExpireAt", snapshot.getExpiredAt(),
-          "undoTip", "操作成功，可在30分钟内撤销"));
+      return ResponseEntity.ok(UndoResponse.of(snapshot));
     } catch (Exception e) {
       return ResponseEntity.badRequest().body(e.getMessage());
     }

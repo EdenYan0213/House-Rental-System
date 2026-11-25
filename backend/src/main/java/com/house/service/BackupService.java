@@ -166,19 +166,27 @@ public class BackupService {
                     "--lock-tables=false",
                     dbName);
             pb.redirectErrorStream(true);
-            Process process = pb.start();
 
-            try (FileOutputStream fos = new FileOutputStream(outputFile);
-                    BufferedOutputStream bos = new BufferedOutputStream(fos)) {
-                byte[] buffer = new byte[8192];
-                int len;
-                while ((len = process.getInputStream().read(buffer)) > 0) {
-                    bos.write(buffer, 0, len);
+            // Java 17 的 Process 不是 AutoCloseable，用 finally 显式清理，
+            // 否则 mysqldump 子进程与管道句柄会泄漏。
+            Process process = null;
+            try {
+                process = pb.start();
+                try (InputStream procOut = process.getInputStream();
+                        FileOutputStream fos = new FileOutputStream(outputFile);
+                        BufferedOutputStream bos = new BufferedOutputStream(fos)) {
+                    byte[] buffer = new byte[8192];
+                    int len;
+                    while ((len = procOut.read(buffer)) > 0) {
+                        bos.write(buffer, 0, len);
+                    }
+                }
+                return true;
+            } finally {
+                if (process != null) {
+                    process.destroy();
                 }
             }
-
-            int exitCode = process.waitFor();
-            return exitCode == 0;
 
         } catch (Exception e) {
             logger.error("数据库备份失败", e);
@@ -193,8 +201,9 @@ public class BackupService {
                 Files.delete(zipPath);
             }
 
-            java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(
-                    new BufferedOutputStream(Files.newOutputStream(zipPath)));
+            // try-with-resources：中途抛异常也能正常落盘并关闭句柄
+            try (java.util.zip.ZipOutputStream zos = new java.util.zip.ZipOutputStream(
+                    new BufferedOutputStream(Files.newOutputStream(zipPath)))) {
 
             Path sqlPath = Paths.get(sqlFile);
             if (Files.exists(sqlPath)) {
@@ -220,7 +229,7 @@ public class BackupService {
                         });
             }
 
-            zos.close();
+            }  // end try-with-resources
             return true;
 
         } catch (Exception e) {

@@ -118,10 +118,24 @@ public class UserController {
                     Map.of("role", existing.getRole()), Map.of("role", updated.getRole()),
                     "权限变更: " + existing.getRole() + " -> " + updated.getRole(),
                     request, true, null, null,
-                    Map.of("userId", id, "beforeRole", existing.getRole(), "afterRole", updated.getRole()));
+                    snapshotMeta(id, existing.getRole(), updated.getRole()));
         }
         updated.setPassword(null);
         return ResponseEntity.ok(updated);
+    }
+
+    /**
+     * 权限变更快照元数据。
+     *
+     * <p>role 在历史数据中可能为 null，{@code Map.of} 不接受 null 会抛 NPE，
+     * 这里用 LinkedHashMap 并显式放入 null 允许值。
+     */
+    private Map<String, Object> snapshotMeta(Long userId, Object beforeRole, Object afterRole) {
+        Map<String, Object> meta = new java.util.LinkedHashMap<>();
+        meta.put("userId", userId);
+        meta.put("beforeRole", beforeRole);
+        meta.put("afterRole", afterRole);
+        return meta;
     }
 
     @DeleteMapping("/{id}")
@@ -243,9 +257,11 @@ public class UserController {
             currentUser.setShowTaskCard(Boolean.parseBoolean(request.get("showTaskCard")));
         }
 
-        userService.updateUser(currentUser);
-        currentUser.setPassword(null);
-        return ResponseEntity.ok(currentUser);
+        // 用 updateProfileInfo 而不是 updateUser：后者会尝试加密 password，
+        // 而这里的 currentUser 是从库里查出来的（password 已是哈希）。
+        User saved = userService.updateProfileInfo(currentUser);
+        saved.setPassword(null);
+        return ResponseEntity.ok(saved);
     }
 
     @PutMapping("/change-password")

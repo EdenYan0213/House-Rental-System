@@ -1,38 +1,85 @@
 <template>
   <PullRefresh :on-refresh="load">
     <div class="mobile-page" v-loading="loading">
-    <div class="head">
-      <div class="title">报修工单</div>
-      <el-button type="primary" plain @click="openCreate">新建</el-button>
-    </div>
+      <!-- 页头 -->
+      <header class="m-head">
+        <div class="head-row">
+          <div>
+            <h1 class="m-head-title">报修工单</h1>
+            <p class="m-head-sub">
+              共 <span class="m-num count">{{ orders.length }}</span> 条
+              <span v-if="pendingCount > 0" class="pending-hint">· {{ pendingCount }} 条待分配</span>
+            </p>
+          </div>
+          <el-button type="primary" :icon="Plus" class="head-btn" @click="openCreate">新建</el-button>
+        </div>
+      </header>
 
-    <el-radio-group v-model="status" class="status" @change="load" size="small">
-      <el-radio-button v-for="item in statusOptions" :key="item.value || 'all'" :label="item.value">
-        {{ item.label }}
-      </el-radio-button>
-    </el-radio-group>
+      <!-- 状态筛选：横向可滚动，避免挤成两行 -->
+      <div class="status-scroll">
+        <div class="status-chips">
+          <button
+            v-for="item in statusOptions"
+            :key="item.value || 'all'"
+            type="button"
+            class="chip"
+            :class="{ active: status === item.value }"
+            @click="status = item.value; load()"
+          >
+            {{ item.label }}
+          </button>
+        </div>
+      </div>
 
-    <el-card v-for="item in pagedOrders" :key="item.id" class="panel" shadow="never">
-      <div class="line top">
-        <div>{{ item.roomNumber || '-' }} · {{ item.faultType || '-' }}</div>
-        <el-tag :type="tagType(item.status)">{{ statusText(item.status) }}</el-tag>
-      </div>
-      <div class="line muted">工单号：{{ item.orderNo || '-' }}</div>
-      <div class="line muted">
-        报修时间：{{ formatDateTime(item.createdAt) }}
-        <span class="relative">（{{ formatRelative(item.createdAt) }}）</span>
-      </div>
-      <div class="line">{{ item.description || '-' }}</div>
-      <div class="actions">
-        <el-button size="small" @click="showDetail(item)">详情</el-button>
-        <el-button size="small" type="primary" v-if="item.status === 'pending'" @click="openAssign(item)">分配</el-button>
-        <el-button size="small" type="warning" v-if="item.status === 'processing'" @click="openComplete(item)">完成</el-button>
-        <el-button size="small" type="success" v-if="item.status === 'pending_accept'" @click="accept(item)">验收通过</el-button>
-        <el-button size="small" v-if="item.status === 'pending_accept'" @click="reject(item)">驳回</el-button>
-      </div>
-    </el-card>
+      <!-- 工单卡 -->
+      <div v-if="pagedOrders.length > 0" class="order-list">
+        <article v-for="item in pagedOrders" :key="item.id" class="m-card order-card">
+          <div class="order-top">
+            <div class="order-room">
+              <span class="room-no m-num">{{ item.roomNumber || '-' }}</span>
+              <span class="fault-type">{{ item.faultType || '-' }}</span>
+            </div>
+            <el-tag :type="tagType(item.status)" size="small" effect="light">
+              {{ statusText(item.status) }}
+            </el-tag>
+          </div>
 
-    <el-empty v-if="!loading && orders.length === 0" description="暂无工单" />
+          <p class="order-desc">{{ item.description || '无故障描述' }}</p>
+
+          <div class="order-meta">
+            <span class="m-num">{{ item.orderNo || '-' }}</span>
+            <span class="meta-sep">·</span>
+            <span>{{ formatRelative(item.createdAt) }}</span>
+          </div>
+
+          <div class="order-actions">
+            <el-button size="small" text @click="showDetail(item)">详情</el-button>
+            <el-button
+              v-if="item.status === 'pending'"
+              size="small"
+              type="primary"
+              @click="openAssign(item)"
+            >分配</el-button>
+            <el-button
+              v-if="item.status === 'processing'"
+              size="small"
+              type="warning"
+              @click="openComplete(item)"
+            >完成</el-button>
+            <template v-if="item.status === 'pending_accept'">
+              <el-button size="small" @click="reject(item)">驳回</el-button>
+              <el-button size="small" type="success" @click="accept(item)">验收通过</el-button>
+            </template>
+          </div>
+        </article>
+      </div>
+
+      <!-- 空态 -->
+      <div v-else-if="!loading" class="m-card empty-state">
+        <el-icon :size="32" class="empty-icon"><Tools /></el-icon>
+        <p class="empty-title">暂无工单</p>
+        <p class="empty-desc">当前筛选条件下没有报修记录。</p>
+      </div>
 
     <el-drawer v-model="showDetailDrawer" title="工单详情" size="100%">
       <el-descriptions :column="1" border v-if="currentOrder">
@@ -125,6 +172,7 @@ import PullRefresh from '../components/PullRefresh.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus, Tools } from '@element-plus/icons-vue'
 import {
   getRepairOrders,
   getRepairWorkers,
@@ -145,6 +193,11 @@ const loading = ref(false)
 const saving = ref(false)
 const status = ref(route.query.status || '')
 const orders = ref([])
+
+/** 待分配数量，页头提示用。 */
+const pendingCount = computed(() =>
+  orders.value.filter(o => o.status === 'pending').length
+)
 const {
   visible: pagedOrders,
   hasMore: hasMoreOrders,
@@ -381,64 +434,174 @@ onMounted(load)
 </script>
 
 <style scoped>
-.relative {
-  color: var(--text-muted);
-  opacity: 0.8;
-}
-
-.load-more {
+.head-row {
   display: flex;
-  justify-content: center;
-  padding: 12px 0 4px;
-}
-
-.mobile-page {
-  padding: 14px;
-  max-width: 760px;
-  margin: 0 auto;
-}
-
-.head {
-  display: flex;
+  align-items: flex-start;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
+  gap: 12px;
 }
 
-.title {
-  font-size: 20px;
+.head-btn {
+  min-height: 36px;
+  border-radius: 9px;
+  flex: 0 0 auto;
+}
+
+.count {
+  color: var(--accent-3);
   font-weight: 700;
+  font-size: 15px;
+}
+
+.pending-hint {
+  color: var(--warning-color, #b3761a);
+  font-size: 12px;
+}
+
+/* ---------- 状态筛选：横向滚动 chips ---------- */
+.status-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  /* 抵消页面左右内边距，让滚动条贴边 */
+  margin: 0 calc(var(--m-gutter) * -1);
+  padding: 0 var(--m-gutter);
+}
+
+.status-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.status-chips {
+  display: inline-flex;
+  gap: 8px;
+  padding-bottom: 2px;
+}
+
+.chip {
+  flex: 0 0 auto;
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.chip.active {
+  background: var(--accent-3);
+  border-color: var(--accent-3);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ---------- 工单卡 ---------- */
+.order-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--m-gap);
+}
+
+.order-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.order-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.order-room {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.room-no {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.fault-type {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.order-desc {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-main);
+  line-height: 1.55;
+  /* 最多两行，超出省略 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.order-meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.meta-sep {
+  opacity: 0.4;
+}
+
+.order-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
+}
+
+.order-actions :deep(.el-button) {
+  min-height: 32px;
+  border-radius: 8px;
+}
+
+/* ---------- 空态 ---------- */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.empty-icon {
+  color: var(--text-muted);
+  opacity: 0.4;
+}
+
+.empty-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
   color: var(--text-main);
 }
 
-.status {
-  width: 100%;
-  margin-bottom: 10px;
-}
-
-.panel {
-  margin-bottom: 10px;
-  border: 1px solid #e8efff;
-}
-
-.line {
-  margin-bottom: 7px;
-}
-
-.top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.muted {
+.empty-desc {
+  margin: 0;
+  font-size: 12px;
   color: var(--text-muted);
-  font-size: 13px;
-}
-
-.actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
 }
 </style>

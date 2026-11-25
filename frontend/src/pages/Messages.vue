@@ -1,11 +1,16 @@
 <template>
-  <div style="padding: 20px">
-    <el-row justify="space-between" align="middle">
-      <h2>消息中心</h2>
-      <el-button type="primary" link @click="markAllRead" :disabled="unreadCount === 0">全部标为已读</el-button>
-    </el-row>
+  <div class="page">
+    <div class="page-head">
+      <div>
+        <h2>消息中心</h2>
+        <p class="page-sub">系统通知与待办事项汇总，未读消息会显示在顶栏。</p>
+      </div>
+      <div class="page-actions">
+        <el-button :disabled="unreadCount === 0" @click="markAllRead">全部标为已读</el-button>
+      </div>
+    </div>
 
-    <el-tabs v-model="activeTab" style="margin-top: 16px" @tab-change="loadMessages">
+    <el-tabs v-model="activeTab" style="margin-top: 16px" @tab-change="onTabChange">
       <el-tab-pane label="全部" name="all" />
       <el-tab-pane label="未读" name="unread">
         <template #label>
@@ -75,7 +80,7 @@
       :page-size="pageSize"
       :total="total"
       layout="total, prev, pager, next"
-      @current-change="loadMessages"
+      @current-change="onPageChange"
     />
 
     <el-dialog v-model="detailVisible" title="消息详情" width="680px">
@@ -105,10 +110,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { getMessages, markMessageRead, markAllMessagesRead, getUnreadCount, getErrorMessage } from '../api'
+import { getMessages, markMessageRead, markAllMessagesRead} from '../api'
 import EmptyState from '../components/EmptyState.vue'
 import { ElMessage } from 'element-plus'
-import { Bell } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const messages = ref([])
@@ -134,6 +138,15 @@ function formatTime(timeStr) {
   })
 }
 
+/**
+ * 页码切换。current-change 只传新页码，不会改 page ref，
+ * 必须写回后再请求，否则永远停在第一页。
+ */
+function onPageChange(nextPage) {
+  page.value = nextPage
+  loadMessages()
+}
+
 async function loadMessages() {
   loading.value = true
   try {
@@ -156,6 +169,17 @@ async function loadMessages() {
 }
 
 function onTypeFilterChange() {
+  page.value = 1
+  loadMessages()
+}
+
+/**
+ * 切换 tab（全部/未读）时回到第 1 页。
+ *
+ * <p>不同 tab 的条数差别很大，若停在第 4 页切到「未读」，
+ * 而未读只有 1 页，就会看到一张空表。
+ */
+function onTabChange() {
   page.value = 1
   loadMessages()
 }

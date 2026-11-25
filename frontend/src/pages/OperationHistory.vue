@@ -90,15 +90,14 @@
 </template>
 
 <script setup>
-import { formatDateTime, formatRelative } from '../utils/format'
+import { formatDateTime} from '../utils/format'
 import { ref, onMounted, onUnmounted } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import {
   getOperationSnapshots,
   getOperationSnapshotDetail,
   recoverOperationSnapshot,
-  getErrorMessage,
-} from "../api";
+  getErrorMessage} from "../api";
 
 const loading = ref(false);
 const rows = ref([]);

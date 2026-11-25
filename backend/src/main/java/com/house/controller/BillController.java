@@ -36,7 +36,9 @@ import org.springframework.web.bind.annotation.*;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -117,12 +119,82 @@ public class BillController {
     }
   }
 
+  /**
+   * 账单列表。
+   *
+   * <p>不传 {@code page} 时返回全部（保持旧行为，供导出与内部调用）；
+   * 传 {@code page} 和 {@code size} 时返回分页结构
+   * {@code {content, totalElements, totalPages, page, size}}。
+   *
+   * <p><b>page 为 0 起始</b>，与 {@code staff-mobile} 现有的
+   * {@code getBills({page: 0, size: 300})} 调用保持一致；管理端也从 0 开始。
+   *
+   * <p>分页只切「返回的行」，财务汇总由 {@link #summary} 单独提供，
+   * 否则前端汇总卡会只统计当前页，金额对不上。
+   */
   @GetMapping
-  public List<Bill> list(@RequestParam(required = false) String month,
+  public ResponseEntity<?> list(@RequestParam(required = false) String month,
+      @RequestParam(required = false) String status,
+      @RequestParam(required = false) Long contractId,
+      @RequestParam(required = false) Long roomId,
+      @RequestParam(required = false) Integer page,
+      @RequestParam(defaultValue = "20") int size) {
+    List<Bill> all = queryBills(month, status, contractId, roomId);
+
+    if (page == null) {
+      return ResponseEntity.ok(all);
+    }
+
+    int safePage = Math.max(page, 0);
+    int safeSize = Math.max(size, 1);
+    int from = Math.min(safePage * safeSize, all.size());
+    int to = Math.min(from + safeSize, all.size());
+    int totalPages = (int) Math.ceil((double) all.size() / safeSize);
+
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("content", all.subList(from, to));
+    body.put("totalElements", all.size());
+    body.put("totalPages", totalPages);
+    body.put("page", safePage);
+    body.put("size", safeSize);
+    return ResponseEntity.ok(body);
+  }
+
+  /**
+   * 财务汇总：按当前筛选条件统计全部账单（不受分页影响）。
+   *
+   * <p>作废账单不计入应收，与前端汇总卡口径一致。
+   */
+  @GetMapping("/summary")
+  public Map<String, Object> summary(@RequestParam(required = false) String month,
       @RequestParam(required = false) String status,
       @RequestParam(required = false) Long contractId,
       @RequestParam(required = false) Long roomId) {
-    return queryBills(month, status, contractId, roomId);
+    List<Bill> all = queryBills(month, status, contractId, roomId).stream()
+        .filter(b -> !BillStatus.isVoid(b.getStatus()))
+        .toList();
+
+    double total = 0D;
+    double paid = 0D;
+    int paidCount = 0;
+    for (Bill b : all) {
+      double t = b.getTotalAmount() == null ? 0D : b.getTotalAmount();
+      double p = b.getPaidAmount() == null ? 0D : b.getPaidAmount();
+      total += t;
+      paid += p;
+      if (BillStatus.isFinal(b.getStatus())) {
+        paidCount++;
+      }
+    }
+
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("total", Math.round(total * 100.0) / 100.0);
+    body.put("paid", Math.round(paid * 100.0) / 100.0);
+    body.put("unpaid", Math.round(Math.max(total - paid, 0D) * 100.0) / 100.0);
+    body.put("rate", total > 0 ? Math.round((paid / total) * 100) : 0);
+    body.put("activeCount", all.size());
+    body.put("paidCount", paidCount);
+    return body;
   }
 
   @GetMapping("/export-csv")
@@ -373,10 +445,7 @@ public class BillController {
     OperationSnapshot snapshot = operationSnapshotService.capture(
         "账单管理", "delete", "bill", id, targetName, before);
     billRepository.deleteById(id);
-    return ResponseEntity.ok(Map.of(
-        "undoSnapshotId", snapshot.getId(),
-        "undoExpireAt", snapshot.getExpiredAt(),
-        "undoTip", "操作成功，可在30分钟内撤销"));
+    return ResponseEntity.ok(UndoResponse.of(snapshot));
   }
 
   /**
@@ -445,11 +514,8 @@ public class BillController {
         "bill", "void", String.valueOf(id), targetName, snapshot.getBeforeData(), after,
         "作废账单: " + targetName, request, true, null, null, Map.of("billId", id));
 
-    return ResponseEntity.ok(Map.of(
-        "data", after,
-        "undoSnapshotId", snapshot.getId(),
-        "undoExpireAt", snapshot.getExpiredAt(),
-        "undoTip", "账单已作废，可在30分钟内撤销"));
+    return ResponseEntity.ok(
+        UndoResponse.withData("data", after, snapshot, "账单已作废，可在30分钟内撤销"));
   }
 
   @PostMapping("/{id}/send-sms")
@@ -499,6 +565,82 @@ public class BillController {
   @PreAuthorize("isAuthenticated()")
   public ResponseEntity<?> sendBillSmsByGet(@PathVariable Long id) {
     return sendBillSms(id);
+  }
+
+  /**
+   * 批量发送账单短信。
+   *
+   * <p>逐条发送并汇总结果：某一条失败（无手机号、发送异常）不影响其余账单。
+   * 返回 {@code {successCount, failCount, totalCount, failures:[{billId, roomNumber, reason}]}}，
+   * 前端据此提示「成功 N 张，失败 M 张」并列出失败明细。
+   */
+  @PostMapping("/batch-sms")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+  public ResponseEntity<?> batchSendBillSms(@RequestBody Map<String, Object> body,
+      HttpServletRequest request) {
+    Object raw = body.get("billIds");
+    if (!(raw instanceof List<?> list) || list.isEmpty()) {
+      return ResponseEntity.badRequest().body(Map.of("message", "请选择要发送短信的账单"));
+    }
+
+    List<Long> billIds;
+    try {
+      billIds = list.stream().map(v -> ((Number) v).longValue()).toList();
+    } catch (Exception e) {
+      return ResponseEntity.badRequest().body(Map.of("message", "账单 ID 格式不正确"));
+    }
+
+    int successCount = 0;
+    List<Map<String, Object>> failures = new ArrayList<>();
+    for (Long billId : billIds) {
+      Bill bill = billRepository.findById(billId).orElse(null);
+      if (bill == null) {
+        failures.add(failureRow(billId, null, "账单不存在"));
+        continue;
+      }
+      if (bill.getTenantPhone() == null || bill.getTenantPhone().isBlank()) {
+        failures.add(failureRow(billId, bill.getRoomNumber(), "未绑定租户手机号"));
+        continue;
+      }
+      try {
+        RemindLog log = new RemindLog();
+        log.setTenantName(bill.getTenantName());
+        log.setPhone(bill.getTenantPhone());
+        log.setRoomNumber(bill.getRoomNumber());
+        log.setOverdueDays(0);
+        log.setBillIds("[" + bill.getId() + "]");
+        log.setTotalAmount(bill.getTotalAmount());
+        log.setContent(buildBillSmsContent(bill));
+
+        RemindLog result = smsService.sendSms(log);
+        if ("success".equalsIgnoreCase(result.getStatus())) {
+          successCount++;
+        } else {
+          failures.add(failureRow(billId, bill.getRoomNumber(),
+              result.getFailReason() == null ? "发送失败" : result.getFailReason()));
+        }
+      } catch (Exception e) {
+        failures.add(failureRow(billId, bill.getRoomNumber(), e.getMessage()));
+      }
+    }
+
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("totalCount", billIds.size());
+    payload.put("successCount", successCount);
+    payload.put("failCount", failures.size());
+    payload.put("failures", failures);
+
+    operationLogService.log("账单管理",
+        "批量短信: 成功 " + successCount + " 张, 失败 " + failures.size() + " 张", request);
+    return ResponseEntity.ok(payload);
+  }
+
+  private Map<String, Object> failureRow(Long billId, String roomNumber, String reason) {
+    Map<String, Object> row = new LinkedHashMap<>();
+    row.put("billId", billId);
+    row.put("roomNumber", roomNumber == null ? "-" : roomNumber);
+    row.put("reason", reason == null ? "未知原因" : reason);
+    return row;
   }
 
   private String buildBillSmsContent(Bill bill) {

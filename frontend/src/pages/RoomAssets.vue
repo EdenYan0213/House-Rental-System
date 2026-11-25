@@ -1,5 +1,5 @@
 <template>
-  <div style="padding: 20px">
+  <div>
     <el-row justify="space-between" align="middle">
       <div>
         <el-button @click="goBack" style="margin-right: 10px">← 返回</el-button>
@@ -114,7 +114,7 @@
 </template>
 
 <script setup>
-import { formatDateTime, formatRelative } from '../utils/format'
+import { formatDateTime} from '../utils/format'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -130,8 +130,7 @@ import {
   getRoomRepairOrders,
   exportRoomApplianceChecklistPdf,
   generateBillForRoom,
-  getErrorMessage,
-} from '../api'
+  getErrorMessage} from '../api'
 import EmptyState from '../components/EmptyState.vue'
 import { applianceStatusText, repairStatusText } from '../utils/labels'
 
@@ -303,7 +302,7 @@ async function generateRoomBill() {
     ElMessage.success('房间账单生成成功')
   } catch (e) {
     if (e !== 'cancel') {
-      ElMessage.error(e?.response?.data || e?.message || '生成账单失败')
+      ElMessage.error(getErrorMessage(e, '生成账单失败'))
     }
   }
 }

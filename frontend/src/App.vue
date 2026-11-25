@@ -1,10 +1,13 @@
 <template>
   <div>
     <el-container class="app-shell" v-if="!isLoginPage">
-      <el-aside :width="sidebarCollapsed ? '64px' : '220px'" class="sidebar">
+      <el-aside
+        class="sidebar"
+        :class="{ 'is-collapsed': sidebarCollapsed }"
+      >
         <div class="logo" :class="{ collapsed: sidebarCollapsed }">
-          <span v-if="!sidebarCollapsed">房屋租赁系统</span>
-          <span v-else>租</span>
+          <span class="logo-mark">租</span>
+          <span v-if="!sidebarCollapsed" class="logo-text">房屋租赁系统</span>
         </div>
         <el-menu
           :default-active="currentPath"
@@ -13,70 +16,101 @@
           router
           class="sidebar-menu"
         >
-        <el-menu-item index="/dashboard">
-          <el-icon><Odometer /></el-icon>
-          <span>仪表盘</span>
-        </el-menu-item>
-        <el-menu-item index="/buildings" v-if="canAccessBuilding">
-          <el-icon><OfficeBuilding /></el-icon>
-          <span>房屋管理</span>
-        </el-menu-item>
-        <el-menu-item index="/tenants">
-          <el-icon><User /></el-icon>
-          <span>租户管理</span>
-        </el-menu-item>
-        <el-menu-item index="/contracts">
-          <el-icon><Document /></el-icon>
-          <span>合同管理</span>
-        </el-menu-item>
-        <el-menu-item index="/fee-items" v-if="canAccessFeeItems">
-          <el-icon><Coin /></el-icon>
-          <span>费用项配置</span>
-        </el-menu-item>
-        <el-menu-item index="/meter-readings" v-if="canAccessMeterReadings">
-          <el-icon><TrendCharts /></el-icon>
-          <span>水电录入</span>
-        </el-menu-item>
-        <el-menu-item index="/bills">
-          <el-icon><Wallet /></el-icon>
-          <span>账单管理</span>
-        </el-menu-item>
-        <el-menu-item index="/finance" v-if="canAccessFinance">
-          <el-icon><DataAnalysis /></el-icon>
-          <span>财务报表</span>
-        </el-menu-item>
-        <el-menu-item index="/deposits">
-          <el-icon><Money /></el-icon>
-          <span>押金管理</span>
-        </el-menu-item>
-        <el-menu-item index="/messages">
-          <el-icon><Bell /></el-icon>
-          <span>消息中心</span>
-        </el-menu-item>
-        <el-sub-menu index="repair" v-if="canAccessRepairs">
-          <template #title>
-            <el-icon><Tools /></el-icon>
-            <span>维修管理</span>
-          </template>
-          <el-menu-item index="/repairs/orders">工单列表</el-menu-item>
-          <el-menu-item index="/repairs/workers">维修工与模板</el-menu-item>
-        </el-sub-menu>
-        <el-menu-item index="/complaints" v-if="canAccessRepairs">
-          <el-icon><ChatDotRound /></el-icon>
-          <span>投诉管理</span>
-        </el-menu-item>
-        <el-sub-menu index="settings" v-if="canAccessSettings">
-          <template #title>
+        <el-menu-item-group>
+          <template #title><span class="menu-group-title">概览</span></template>
+          <el-menu-item index="/dashboard">
+            <el-icon><Odometer /></el-icon>
+            <span>仪表盘</span>
+          </el-menu-item>
+        </el-menu-item-group>
+
+        <el-menu-item-group>
+          <template #title><span class="menu-group-title">房源与租约</span></template>
+          <el-menu-item index="/buildings" v-if="canAccessBuilding">
+            <el-icon><OfficeBuilding /></el-icon>
+            <span>房屋管理</span>
+          </el-menu-item>
+          <el-menu-item index="/tenants">
+            <el-icon><User /></el-icon>
+            <span>租户管理</span>
+          </el-menu-item>
+          <el-menu-item index="/contracts">
+            <el-icon><Document /></el-icon>
+            <span>合同管理</span>
+          </el-menu-item>
+        </el-menu-item-group>
+
+        <el-menu-item-group>
+          <template #title><span class="menu-group-title">计费与收款</span></template>
+          <el-menu-item index="/fee-items" v-if="canAccessFeeItems">
+            <el-icon><Coin /></el-icon>
+            <span>费用项配置</span>
+          </el-menu-item>
+          <el-menu-item index="/meter-readings" v-if="canAccessMeterReadings">
+            <el-icon><TrendCharts /></el-icon>
+            <span>水电录入</span>
+          </el-menu-item>
+          <el-menu-item index="/bills">
+            <el-icon><Wallet /></el-icon>
+            <span>账单管理</span>
+          </el-menu-item>
+          <el-menu-item index="/finance" v-if="canAccessFinance">
+            <el-icon><DataAnalysis /></el-icon>
+            <span>财务报表</span>
+          </el-menu-item>
+          <el-menu-item index="/deposits">
+            <el-icon><Money /></el-icon>
+            <span>押金管理</span>
+          </el-menu-item>
+        </el-menu-item-group>
+
+        <el-menu-item-group>
+          <template #title><span class="menu-group-title">租客服务</span></template>
+          <el-menu-item index="/messages">
+            <el-icon><Bell /></el-icon>
+            <span>消息中心</span>
+          </el-menu-item>
+          <el-sub-menu index="repair" v-if="canAccessRepairs">
+            <template #title>
+              <el-icon><Tools /></el-icon>
+              <span>维修管理</span>
+            </template>
+            <el-menu-item index="/repairs/orders">工单列表</el-menu-item>
+            <el-menu-item index="/repairs/workers">维修工与模板</el-menu-item>
+          </el-sub-menu>
+          <el-menu-item index="/complaints" v-if="canAccessRepairs">
+            <el-icon><ChatDotRound /></el-icon>
+            <span>投诉管理</span>
+          </el-menu-item>
+        </el-menu-item-group>
+
+        <el-menu-item-group v-if="canAccessSettings">
+          <template #title><span class="menu-group-title">系统</span></template>
+          <el-menu-item index="/settings">
             <el-icon><Setting /></el-icon>
-            <span>系统设置</span>
-          </template>
-          <el-menu-item index="/settings">个人设置</el-menu-item>
-          <el-menu-item index="/users" v-if="canManageUsers">用户管理</el-menu-item>
-          <el-menu-item index="/logs" v-if="canAccessLogs">操作日志</el-menu-item>
-          <el-menu-item index="/alert-rules" v-if="canAccessLogs">操作预警</el-menu-item>
-          <el-menu-item index="/operation-analysis" v-if="canAccessLogs">操作分析</el-menu-item>
-          <el-menu-item index="/backup" v-if="canManageBackup">数据备份与恢复</el-menu-item>
-        </el-sub-menu>
+            <span>个人设置</span>
+          </el-menu-item>
+          <el-menu-item index="/users" v-if="canManageUsers">
+            <el-icon><UserFilled /></el-icon>
+            <span>用户管理</span>
+          </el-menu-item>
+          <el-menu-item index="/logs" v-if="canAccessLogs">
+            <el-icon><Tickets /></el-icon>
+            <span>操作日志</span>
+          </el-menu-item>
+          <el-menu-item index="/alert-rules" v-if="canAccessLogs">
+            <el-icon><WarningFilled /></el-icon>
+            <span>操作预警</span>
+          </el-menu-item>
+          <el-menu-item index="/operation-analysis" v-if="canAccessLogs">
+            <el-icon><TrendCharts /></el-icon>
+            <span>操作分析</span>
+          </el-menu-item>
+          <el-menu-item index="/backup" v-if="canManageBackup">
+            <el-icon><FolderOpened /></el-icon>
+            <span>数据备份与恢复</span>
+          </el-menu-item>
+        </el-menu-item-group>
         </el-menu>
       </el-aside>
       <el-container>
@@ -101,6 +135,16 @@
             <el-icon><Search /></el-icon>
             <span class="search-label">搜索</span>
             <kbd class="search-kbd">{{ isMac ? '⌘' : 'Ctrl' }}K</kbd>
+          </el-button>
+          <el-button
+            v-if="canUseAi"
+            text
+            class="ai-trigger"
+            title="AI 助手（⌘/Ctrl + J）"
+            @click="openAiAssistant"
+          >
+            <el-icon><MagicStick /></el-icon>
+            <span class="search-label">AI 助手</span>
           </el-button>
           <el-dropdown @command="handleThemeCommand" trigger="click">
             <el-button text class="theme-trigger">
@@ -147,13 +191,7 @@
     </el-container>
     <router-view v-if="isLoginPage" :key="'bare'" />
     <QuickSearch ref="quickSearchRef" />
-    <el-dialog v-model="showWelcomeDialog" title="欢迎使用" width="520px" :close-on-click-modal="false">
-      <p class="welcome-text">这是你的首次登录。建议按顺序完成关键功能，系统会在页面中提供上下文提示。</p>
-      <template #footer>
-        <el-button @click="skipWelcomeGuide">稍后再看</el-button>
-        <el-button type="primary" @click="startWelcomeGuide">开始引导</el-button>
-      </template>
-    </el-dialog>
+    <AiAssistantDrawer v-if="canUseAi" v-model="showAiAssistant" />
     <el-drawer v-model="showHelpCenter" title="帮助中心" size="520px" :with-header="true">
       <el-tabs v-model="helpTab">
         <el-tab-pane label="图文教程" name="article">
@@ -205,9 +243,15 @@ import {
   Expand,
   Fold,
   Search,
-  DataAnalysis
+  DataAnalysis,
+  MagicStick,
+  UserFilled,
+  Tickets,
+  WarningFilled,
+  FolderOpened
 } from '@element-plus/icons-vue'
 import QuickSearch from '@/components/QuickSearch.vue'
+import AiAssistantDrawer from '@/components/AiAssistantDrawer.vue'
 import {
   getUser,
   removeToken,
@@ -229,7 +273,6 @@ const user = computed(() => currentUser.value)
 const currentPath = computed(() => route.path)
 const isLoginPage = computed(() => route.path === '/login')
 const themePreference = ref(getThemePreference())
-const showWelcomeDialog = ref(false)
 const showHelpCenter = ref(false)
 const helpTab = ref('article')
 const routeTipHidden = ref(false)
@@ -379,11 +422,25 @@ function openQuickSearch() {
   quickSearchRef.value?.open()
 }
 
+// AI 助手：仅 SUPER_ADMIN / ADMIN 可见（与后端 @PreAuthorize 保持一致）
+const showAiAssistant = ref(false)
+const canUseAi = computed(() => hasRole('SUPER_ADMIN') || hasRole('ADMIN'))
+
+function openAiAssistant() {
+  showAiAssistant.value = true
+}
+
 function handleGlobalKeydown(e) {
-  const isCmdK = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k'
-  if (isCmdK) {
+  const key = e.key.toLowerCase()
+  const withMod = e.metaKey || e.ctrlKey
+  if (withMod && key === 'k') {
     e.preventDefault()
     openQuickSearch()
+    return
+  }
+  if (withMod && key === 'j' && canUseAi.value) {
+    e.preventDefault()
+    openAiAssistant()
   }
 }
 
@@ -440,42 +497,6 @@ function closeCurrentTip() {
   routeTipHidden.value = true
 }
 
-async function setFirstLoginFlag(value) {
-  const payload = { firstLogin: value ? 'true' : 'false' }
-  await updateProfile(payload)
-  const user = getUser()
-  if (user) {
-    setUser({ ...user, firstLogin: value })
-    refreshCurrentUser()
-  }
-}
-
-async function skipWelcomeGuide() {
-  showWelcomeDialog.value = false
-  // 先写本地，避免服务端同步失败导致每次刷新都再次弹窗
-  const user = getUser()
-  if (user) setUser({ ...user, firstLogin: false })
-  try {
-    await setFirstLoginFlag(false)
-  } catch (_) {
-    // 服务端同步失败时保留本地已读状态即可
-  }
-}
-
-async function startWelcomeGuide() {
-  showWelcomeDialog.value = false
-  if (route.path !== '/dashboard') {
-    router.push('/dashboard')
-  }
-  try {
-    await dismissGuide('tour:dashboard')
-    markGuideKeyDismissed('tour:dashboard')
-    await setFirstLoginFlag(false)
-  } catch (_) {
-    // Ignore sync errors and keep local UX state.
-  }
-}
-
 async function openHelpCenter() {
   showHelpCenter.value = true
   try {
@@ -518,9 +539,6 @@ onMounted(() => {
   applyThemePreference(pref)
   setThemePreference(pref)
 
-  if (!isLoginPage.value && currentUser?.firstLogin !== false) {
-    showWelcomeDialog.value = true
-  }
 
   window.addEventListener('storage', refreshCurrentUser)
   window.addEventListener('keydown', handleGlobalKeydown)
@@ -547,48 +565,256 @@ body {
   font-family: 'Segoe UI', 'PingFang SC', sans-serif;
 }
 
+/* 应用外壳：占满视口，侧边栏背景才能一直铺到屏幕底部。
+   之前没有高度限制，容器高度等于内容高度（666px < 720px 视口），
+   于是侧边栏下方露出一块背景色，看起来像「断板」。 */
+.app-shell {
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* 侧边栏：深墨绿，与浅色内容区形成明确分区。
+   菜单文字用浅色，激活项用主色块 + 左侧高亮条。 */
 .sidebar {
   background: var(--bg-sidebar);
-  transition: width 0.2s ease;
+  border-right: none;
+  display: flex;
+  flex-direction: column;
+  /* 菜单项多于一屏时要能纵向滚动，否则底部分组点不到 */
   overflow-x: hidden;
+  overflow-y: auto;
+  /* 唯一必须保留的是 min-width: 0 —— flex 子项默认 min-width:auto
+     会取内容最小宽度（展开时约 220px），让收起后的 64px 失效。
+     注意：这里不要写 transition: width —— 宽度由 CSS 变量驱动，
+     加过渡反而会让浏览器缓存上一帧宽度、导致收/展切换后宽度不更新
+     （实测：带 transition 时宽度恒为 220px，去掉后 64↔220 正常）。 */
+  min-width: 0;
+  transition: background-color 0.2s ease;
+  /* 收起/展开时会瞬时出现滚动条，隐藏掉避免跳一下 */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+/* 宽度：唯一来源。
+   el-aside 自带 `.el-aside { width: var(--el-aside-width, 300px) }`，
+   与 `.sidebar.is-collapsed`（同为单类选择器）优先级相同，胜负取决于样式表顺序，
+   而 Element Plus 的 theme-chalk 常常后加载 —— 实测直接写 width 会被它盖掉。
+   因此这里改用 `.el-aside.sidebar...` 双类前缀提高优先级，变量和 width 一起给。 */
+.el-aside.sidebar:not(.is-collapsed) {
+  --el-aside-width: 220px;
+  width: 220px;
+}
+
+.el-aside.sidebar.is-collapsed {
+  --el-aside-width: 64px;
+  width: 64px;
+}
+
+.sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 3px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .logo {
   height: 60px;
-  line-height: 60px;
-  text-align: center;
-  color: var(--text-main);
-  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--text-inverse);
+  font-size: 16px;
   font-weight: 700;
+  letter-spacing: 0.04em;
   white-space: nowrap;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  /* 不随菜单滚动，始终钉在顶上 */
+  flex: 0 0 auto;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg-sidebar);
+}
+
+/* 品牌标识块：比裸文字更像「产品」而不是「一个 div」 */
+.logo-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-inverse);
+  background: linear-gradient(135deg, var(--accent-3), var(--accent-4));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  flex: 0 0 auto;
+}
+
+.logo-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .logo.collapsed {
-  font-size: 16px;
+  padding: 0;
+  gap: 0;
 }
 
+/* 用 Element Plus 自身变量控制配色，避免被组件库默认样式覆盖 */
 .sidebar-menu {
   border-right: none;
   background: var(--bg-sidebar);
+  --el-menu-bg-color: var(--bg-sidebar);
+  --el-menu-text-color: rgba(247, 250, 249, 0.72);
+  --el-menu-hover-bg-color: var(--bg-sidebar-hover);
+  --el-menu-active-color: var(--text-inverse);
 }
 
 .sidebar-menu:not(.el-menu--collapse) {
   width: 100%;
 }
 
+/* 分组标题：小字、全大写感、弱化，用来切分菜单而不是抢视觉 */
+.sidebar-menu .menu-group-title {
+  display: block;
+  padding: 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: rgba(247, 250, 249, 0.38);
+}
+
+.sidebar-menu .el-menu-item-group {
+  padding: 6px 0;
+}
+
+.sidebar-menu .el-menu-item-group:not(:first-child) {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  margin-top: 4px;
+}
+
+.sidebar-menu .el-menu-item-group__title {
+  padding: 10px 16px 4px;
+  line-height: 1.4;
+}
+
+/* 收起状态：分组标题退化成一条细分隔线，保留分组语义 */
+.sidebar-menu.el-menu--collapse .el-menu-item-group__title {
+  padding: 8px 12px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.sidebar-menu.el-menu--collapse .menu-group-title {
+  display: none;
+}
+
+.sidebar-menu.el-menu--collapse .el-menu-item-group:not(:first-child) {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Element Plus 自带的折叠隐藏规则只匹配 .el-menu--collapse > .el-menu-item，
+   而分组里的菜单结构是 .el-menu-item-group > ul > .el-menu-item，多了一层 ul，
+   于是文字不会被隐藏、还会把宽度撑到 157px 并产生横向滚动。
+   这里用带 .sidebar 前缀的高优先级选择器补齐。 */
+.sidebar .sidebar-menu.el-menu--collapse .el-menu-item-group .el-menu-item > span,
+.sidebar .sidebar-menu.el-menu--collapse .el-menu-item-group .el-sub-menu__title > span {
+  display: none !important;
+}
+
+/* 分组容器在收起态不要左右留白，否则图标不居中 */
+.sidebar .sidebar-menu.el-menu--collapse .el-menu-item-group {
+  padding: 6px 0;
+}
+
+.sidebar .sidebar-menu.el-menu--collapse .el-menu-item,
+.sidebar .sidebar-menu.el-menu--collapse .el-sub-menu__title {
+  margin: 2px 6px;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 收起态图标居中，不再依赖 padding-left */
+.sidebar .sidebar-menu.el-menu--collapse .el-menu-item .el-icon,
+.sidebar .sidebar-menu.el-menu--collapse .el-sub-menu__title .el-icon {
+  margin: 0;
+  width: auto;
+}
+
 .sidebar-menu .el-menu-item,
 .sidebar-menu .el-sub-menu__title {
-  color: var(--text-main);
+  color: rgba(247, 250, 249, 0.72);
+  height: 42px;
+  line-height: 42px;
+  margin: 2px 10px;
+  border-radius: 8px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.sidebar-menu .el-menu-item .el-icon,
+.sidebar-menu .el-sub-menu__title .el-icon {
+  color: rgba(247, 250, 249, 0.6);
+  transition: color 0.15s ease;
 }
 
 .sidebar-menu .el-menu-item:hover,
+.sidebar-menu .el-sub-menu__title:hover {
+  background: var(--bg-sidebar-hover);
+  color: var(--text-inverse);
+}
+
+.sidebar-menu .el-menu-item:hover .el-icon,
+.sidebar-menu .el-sub-menu__title:hover .el-icon {
+  color: var(--text-inverse);
+}
+
+/* 激活项：实色块 + 文字提亮加粗。
+   底色用 ::after 铺底而不是 background-color ——
+   Element Plus 会在 .el-menu-item 上用内联/高优先级规则重置背景，
+   而伪元素不受影响，这是更稳的做法。
+   不再额外画左侧竖条：深色底上的实心色块本身已经足够醒目，
+   再叠一条白条会戳出圆角，显得脏。 */
 .sidebar-menu .el-menu-item.is-active {
+  color: var(--text-inverse) !important;
+  font-weight: 600;
+  position: relative;
+  isolation: isolate;
+}
+
+.sidebar-menu .el-menu-item.is-active::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  /* 用品牌墨绿而不是半透明白：在深色底上更「实」，
+     与 hover 的浅灰绿有明确区分，不像悬浮态 */
   background: var(--bg-sidebar-active);
-  color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+  z-index: -1;
+  pointer-events: none;
+}
+
+.sidebar-menu .el-menu-item.is-active .el-icon {
+  color: var(--text-inverse);
 }
 
 .el-main {
   background: var(--bg-main);
+  /* 所有页面共用同一套内边距；页面根容器不要再自带 padding，
+     否则会出现「有的页面 20px、有的 40px」的左边缘错位。 */
+  padding: var(--space-5);
 }
 
 .header {
@@ -658,6 +884,11 @@ body {
   color: var(--text-muted);
 }
 
+.ai-trigger {
+  gap: 6px;
+  color: var(--accent-color);
+}
+
 .search-label {
   font-size: 13px;
 }
@@ -691,10 +922,6 @@ body {
   gap: 10px;
 }
 
-.welcome-text {
-  color: var(--text-muted);
-  line-height: 1.7;
-}
 
 .help-list {
   padding-left: 18px;

@@ -1,6 +1,13 @@
 <template>
-  <div>
-    <el-card shadow="never" style="margin-bottom: 12px">
+  <div class="page">
+    <div class="page-head">
+      <div>
+        <h2>操作分析</h2>
+        <p class="page-sub">从操作日志中统计趋势、模块分布与耗时，辅助发现异常。</p>
+      </div>
+    </div>
+
+    <el-card shadow="never" style="margin-bottom: 0">
       <el-row :gutter="10" align="middle">
         <el-col :span="8">
           <el-date-picker

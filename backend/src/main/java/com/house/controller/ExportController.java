@@ -146,28 +146,66 @@ public class ExportController {
   private void writeContracts(Workbook wb, List<Long> ids) {
     Sheet sheet = wb.createSheet("合同");
     Row h = sheet.createRow(0);
-    h.createCell(0).setCellValue("ID");
-    h.createCell(1).setCellValue("合同编号");
-    h.createCell(2).setCellValue("房间ID");
-    h.createCell(3).setCellValue("租户ID");
-    h.createCell(4).setCellValue("开始日期");
-    h.createCell(5).setCellValue("结束日期");
-    h.createCell(6).setCellValue("状态");
-    h.createCell(7).setCellValue("月租金");
-    List<Contract> data = (ids == null || ids.isEmpty()) ? contractRepository.findAll()
-        : contractRepository.findAllById(ids);
+    // 列顺序对齐「人看得懂」的报表：先标识、再空间与租户、最后金额状态
+    String[] headers = {"ID", "合同编号", "楼栋", "房间号", "租户姓名", "租户电话",
+        "开始日期", "结束日期", "状态", "月租金", "押金", "付款方式"};
+    for (int i = 0; i < headers.length; i++) {
+      h.createCell(i).setCellValue(headers[i]);
+    }
+
+    List<Contract> data = (ids == null || ids.isEmpty())
+        ? contractRepository.findAll() : contractRepository.findAllById(ids);
+
+    // 批量取出关联的房间/楼栋/租户，避免逐行查询
+    List<Long> roomIds = data.stream().map(Contract::getRoomId)
+        .filter(java.util.Objects::nonNull).distinct().toList();
+    Map<Long, Room> roomMap = new java.util.HashMap<>();
+    if (!roomIds.isEmpty()) {
+      roomRepository.findAllById(roomIds).forEach(r -> roomMap.put(r.getId(), r));
+    }
+    List<Long> buildingIds = roomMap.values().stream().map(Room::getBuildingId)
+        .filter(java.util.Objects::nonNull).distinct().toList();
+    Map<Long, Building> buildingMap = new java.util.HashMap<>();
+    if (!buildingIds.isEmpty()) {
+      buildingRepository.findAllById(buildingIds).forEach(b -> buildingMap.put(b.getId(), b));
+    }
+    List<Long> tenantIds = data.stream().map(Contract::getTenantId)
+        .filter(java.util.Objects::nonNull).distinct().toList();
+    Map<Long, Tenant> tenantMap = new java.util.HashMap<>();
+    if (!tenantIds.isEmpty()) {
+      tenantRepository.findAllById(tenantIds).forEach(t -> tenantMap.put(t.getId(), t));
+    }
+
     for (int i = 0; i < data.size(); i++) {
       Contract c = data.get(i);
+      Room room = roomMap.get(c.getRoomId());
+      Building building = room == null ? null : buildingMap.get(room.getBuildingId());
+      Tenant tenant = tenantMap.get(c.getTenantId());
+
       Row r = sheet.createRow(i + 1);
-      r.createCell(0).setCellValue(c.getId() == null ? 0 : c.getId());
-      r.createCell(1).setCellValue(c.getContractNo() == null ? "" : c.getContractNo());
-      r.createCell(2).setCellValue(c.getRoomId() == null ? 0 : c.getRoomId());
-      r.createCell(3).setCellValue(c.getTenantId() == null ? 0 : c.getTenantId());
-      r.createCell(4).setCellValue(c.getStartDate() == null ? "" : c.getStartDate().toString());
-      r.createCell(5).setCellValue(c.getEndDate() == null ? "" : c.getEndDate().toString());
-      r.createCell(6).setCellValue(c.getStatus() == null ? "" : c.getStatus());
-      r.createCell(7).setCellValue(c.getMonthlyRent() == null ? 0 : c.getMonthlyRent());
+      int col = 0;
+      r.createCell(col++).setCellValue(c.getId() == null ? 0 : c.getId());
+      r.createCell(col++).setCellValue(text(c.getContractNo()));
+      r.createCell(col++).setCellValue(building == null ? "" : text(building.getName()));
+      r.createCell(col++).setCellValue(room == null ? "" : text(room.getRoomNumber()));
+      r.createCell(col++).setCellValue(tenant == null ? "" : text(tenant.getName()));
+      r.createCell(col++).setCellValue(tenant == null ? "" : text(tenant.getPhone()));
+      r.createCell(col++).setCellValue(c.getStartDate() == null ? "" : c.getStartDate().toString());
+      r.createCell(col++).setCellValue(c.getEndDate() == null ? "" : c.getEndDate().toString());
+      r.createCell(col++).setCellValue(text(c.getStatus()));
+      r.createCell(col++).setCellValue(c.getMonthlyRent() == null ? 0 : c.getMonthlyRent());
+      r.createCell(col++).setCellValue(c.getDeposit() == null ? 0 : c.getDeposit());
+      r.createCell(col).setCellValue(text(c.getPaymentMethod()));
     }
+
+    // 列宽自适应（中文按 2 字符宽度估算）
+    for (int i = 0; i < headers.length; i++) {
+      sheet.setColumnWidth(i, Math.max(12, headers[i].length() * 2 + 4) * 256);
+    }
+  }
+
+  private String text(String value) {
+    return value == null ? "" : value;
   }
 
   private void writeBills(Workbook wb, List<Long> ids) {

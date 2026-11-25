@@ -61,15 +61,25 @@ public class RemindController {
     return smsConfigRepository.save(cfg);
   }
 
+  /**
+   * 催缴记录列表。
+   *
+   * <p>默认只返回催缴场景（REMIND），验证码短信不混进来；
+   * 传 {@code scene=ALL} 可查看全部短信记录用于排查。
+   */
   @GetMapping("/logs")
   @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
-  public List<RemindLog> listLogs() {
-    return remindLogRepository.findAll();
+  public List<RemindLog> listLogs(@RequestParam(value = "scene", required = false) String scene) {
+    if ("ALL".equalsIgnoreCase(scene)) {
+      return remindLogRepository.findAllByOrderByCreatedAtDesc();
+    }
+    return remindLogRepository.findBySceneOrderByCreatedAtDesc(RemindLog.SCENE_REMIND);
   }
 
   @PostMapping("/sms/test")
   @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public RemindLog testSend(@RequestBody RemindLog log) {
+    log.setScene(RemindLog.SCENE_TEST);
     return smsService.sendSms(log);
   }
 

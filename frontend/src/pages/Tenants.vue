@@ -56,6 +56,7 @@
       v-loading="loading"
       empty-text="暂无租户，点击「新增租户」开始"
       @selection-change="onSelectionChange"
+      @row-click="onRowClick"
     >
       <el-table-column type="selection" width="50" />
       <el-table-column label="姓名" min-width="80">
@@ -100,14 +101,40 @@
           <span v-else class="text-gray">无合同</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="250" fixed="right" align="left">
+      <!-- 操作列：高频两个直接露出，其余收进「更多」，避免一行五六个链接挤成一团 -->
+      <el-table-column label="操作" width="180" fixed="right">
         <template #default="{ row }">
           <div class="tenant-actions">
             <el-button size="small" type="primary" link @click="viewDetail(row)">详情</el-button>
-            <el-button size="small" type="primary" link @click="goComplaint(row)">投诉</el-button>
             <el-button size="small" type="primary" link @click="openEdit(row)" v-if="canEdit">编辑</el-button>
-            <el-button size="small" type="warning" link @click="addToBlacklist(row)" v-if="canEdit && !row.isBlacklisted">拉黑</el-button>
-            <el-button size="small" type="danger" link @click="remove(row)" v-if="canDelete && !row.activeContract">删除</el-button>
+            <el-dropdown
+              trigger="click"
+              @command="cmd => handleTenantCommand(cmd, row)"
+            >
+              <el-button size="small" link class="more-link">
+                更多<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="complaint">查看投诉</el-dropdown-item>
+                  <el-dropdown-item
+                    command="blacklist"
+                    v-if="canEdit && !row.isBlacklisted"
+                  >加入黑名单</el-dropdown-item>
+                  <el-dropdown-item
+                    command="unblacklist"
+                    v-if="canEdit && row.isBlacklisted"
+                  >移出黑名单</el-dropdown-item>
+                  <el-dropdown-item
+                    command="delete"
+                    divided
+                    v-if="canDelete && !row.activeContract"
+                  >
+                    <span class="danger-text">删除租户</span>
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
           </div>
         </template>
       </el-table-column>
@@ -121,7 +148,7 @@
           :total="total"
           layout="total, prev, pager, next"
           background
-          @current-change="loadTenants"
+          @current-change="onPageChange"
         />
       </div>
     </el-card>
@@ -278,7 +305,7 @@
 }
 
 .page {
-  padding: 20px;
+  padding: 0;
 }
 
 .page-card {
@@ -299,8 +326,8 @@
 }
 
 .page-title {
-  font-size: 17px;
-  font-weight: 600;
+  font-size: var(--title-page-size);
+  font-weight: var(--title-page-weight);
   color: var(--text-main);
 }
 
@@ -344,12 +371,34 @@
   gap: 4px;
   flex-wrap: nowrap;
 }
+
+/* 操作列：链接按钮紧凑排列，更多菜单的按钮与其它视觉对齐 */
+.tenant-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: nowrap;
+}
+
+.tenant-actions .el-button + .el-button,
+.tenant-actions .el-dropdown {
+  margin-left: 0;
+}
+
+.more-link {
+  display: inline-flex;
+  align-items: center;
+}
+
+.danger-text {
+  color: var(--danger-color);
+}
 </style>
 
 <script setup>
 import { ref, onMounted, computed, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Search, Plus, Download, Refresh } from '@element-plus/icons-vue'
+import { Search, Plus, Download, Refresh, ArrowDown } from '@element-plus/icons-vue'
 import {
   addToBlacklist as apiAddToBlacklist,
   batchSendMessages,
@@ -381,6 +430,9 @@ const router = useRouter()
 const route = useRoute()
 
 const tenants = ref([])
+// 模板上挂着 ref="tenantsTableRef"，但此前没有声明。
+// 导致 setCurrentRow / toggleRowSelection 都是静默失败。
+const tenantsTableRef = ref(null)
 const loading = ref(false)
 const searchQuery = ref('')
 const page = ref(1)
@@ -431,10 +483,42 @@ function formatDate(dateStr) {
   return dateStr.split('T')[0]
 }
 
+/**
+ * 页码切换。
+ *
+ * <p>el-pagination 的 current-change 只把新页码作为参数传出来，
+ * 不会修改 page 这个 ref。若把事件直接绑到加载函数上，
+ * page 永远是 1，请求始终是 page=0——点哪页都回到第一页。
+ */
+function onPageChange(nextPage) {
+  page.value = nextPage
+  loadTenants()
+}
+
+/**
+ * 点击整行 → 切换勾选。
+ *
+ * <p>行内有按钮/链接/下拉，点这些要放行，否则会「想点详情结果改了选择」。
+ */
+function onRowClick(row, column, event) {
+  const el = event?.target
+  if (el && el.closest('button, a, input, textarea, .el-checkbox, .el-link, .el-dropdown, .el-tag--clickable')) {
+    return
+  }
+  tenantsTableRef.value?.toggleRowSelection(row)
+}
+
 async function loadTenants() {
   loading.value = true
   try {
-    const res = await getTenants({ q: searchQuery.value, page: page.value - 1, size: pageSize.value })
+    // paged=true 走服务端分页：否则后端返回全量数组，
+    // 分页组件的 total 拿到的其实是「已加载条数」，翻页也不生效
+    const res = await getTenants({
+      q: searchQuery.value,
+      page: page.value - 1,
+      size: pageSize.value,
+      paged: true
+    })
     tenants.value = res.data.content || res.data || []
     total.value = res.data.totalElements || tenants.value.length
   } catch (e) {
@@ -551,6 +635,14 @@ async function focusTenantRow(id) {
 function goContract(row) {
   if (!row.activeContractId) return
   router.push(`/contracts?highlight=${row.activeContractId}`)
+}
+
+/** 操作列「更多」菜单分发。 */
+function handleTenantCommand(cmd, row) {
+  if (cmd === 'complaint') return goComplaint(row)
+  if (cmd === 'blacklist') return addToBlacklist(row)
+  if (cmd === 'unblacklist') return removeFromBlacklist(row)
+  if (cmd === 'delete') return remove(row)
 }
 
 function goComplaint(row) {

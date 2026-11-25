@@ -1,35 +1,252 @@
+/* ==========================================================================
+   Palette
+   --------------------------------------------------------------------------
+   底色从「淡绿」改为中性暖灰：房间照片、账单表格本身颜色多，
+   底色再去染色会让整个界面发闷。墨绿只保留在**交互**与**标识**上。
+
+   --accent-* 是一套 5 级阶梯，用于楼层标识、图表序列、渐层背景。
+   ========================================================================== */
 :root {
-  --bg-main: #f3f6ef;
+  /* 中性基底：微暖的石灰色，比纯灰更有"建筑"感 */
+  --bg-main: #f5f5f3;
   --bg-surface: #ffffff;
-  --bg-sidebar: #d8dbcd;
+  --bg-subtle: #fafaf8;
+  --bg-sidebar: #1e2b28;
+  --bg-sidebar-hover: #2a3a36;
   --bg-sidebar-active: #2f6f5f;
-  --text-main: #1f2937;
-  --text-muted: #6b7280;
-  --border-color: #d5dbcc;
-  --danger-color: #e53e3e;
-  --success-color: #2f855a;
-  --accent-color: #2f6f5f;
+
+  --text-main: #1a2421;
+  --text-muted: #6b7773;
+  --text-inverse: #f7faf9;
+  --border-color: #e3e4e0;
+  --border-strong: #cfd1cb;
+
+  /* 主色阶梯：墨绿，由浅到深。
+     1-2 级用于底色/分区，3 级是主色，4-5 级用于文字与强调。 */
+  --accent-1: #e8f2ef;
+  --accent-2: #c3ddd6;
+  --accent-3: #2f6f5f;
+  --accent-4: #235448;
+  --accent-5: #16332c;
+
+  --accent-color: var(--accent-3);
+  --danger-color: #c0392b;
+  --warning-color: #b3761a;
+  --success-color: #2f6f5f;
   --header-bg: #ffffff;
 
-  /* 斑马纹行背景，浅色下用极浅灰 */
-  --stripe-bg: #fafbf9;
+  /* 斑马纹：极浅，不干扰阅读 */
+  --stripe-bg: #fbfbf9;
+
+  /* 阴影：两级，足够区分层次但不发黑 */
+  --shadow-sm: 0 1px 2px rgba(26, 36, 33, 0.05);
+  --shadow-md: 0 2px 8px rgba(26, 36, 33, 0.07);
+  --shadow-lg: 0 8px 24px rgba(26, 36, 33, 0.09);
 }
 
-:root.theme-dark {
-  --bg-main: #141414;
-  --bg-surface: #1f1f1f;
-  --bg-sidebar: #1a2524;
-  --bg-sidebar-active: #2f8d77;
-  --text-main: #edf2f7;
-  --text-muted: #a0aec0;
-  --border-color: #2d3748;
-  --danger-color: #fc8181;
-  --success-color: #68d391;
-  --accent-color: #2f8d77;
-  --header-bg: #1b1b1b;
+/* ==========================================================================
+   设计 token
+   --------------------------------------------------------------------------
+   页面统一使用这里的间距/圆角/字号，不要在页面里写死 px。
+   .el-main 已提供左右 20px 内边距，页面根容器**不要**再加 padding:20px。
+   ========================================================================== */
+:root {
+  /* 间距（4px 基准） */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
 
-  /* 深色下斑马纹需要比卡片背景略亮，否则文字与底色混在一起 */
-  --stripe-bg: #262626;
+  /* 页面级：内容块之间的统一间距 */
+  --page-gap: var(--space-4);
+
+  /* 卡片 */
+  --card-radius: 10px;
+  --card-padding: var(--space-5);
+
+  /* 标题 */
+  --title-page-size: 20px;
+  --title-page-weight: 700;
+  --title-section-size: 15px;
+  --title-section-weight: 600;
+
+  /* 页头 */
+  --page-head-height: 40px;
+}
+
+/* ---------- 字体 ----------
+ * 中文正文用系统 UI 字体（苹方/微软雅黑），保证渲染一致；
+ * 数字（房号、金额、度数、日期）用等宽表格数字——列对齐后
+ * 表格的"专业感"就出来了，这是本系统数据密度的核心。
+ */
+:root {
+  --font-ui: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB',
+             'Microsoft YaHei', 'Source Han Sans SC', sans-serif;
+  --font-num: 'SF Mono', 'JetBrains Mono', 'Roboto Mono', ui-monospace,
+              Menlo, Consolas, monospace;
+
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-base: 14px;
+  --fs-md: 15px;
+  --fs-lg: 17px;
+  --fs-xl: 20px;
+  --fs-2xl: 26px;
+
+  --lh-tight: 1.3;
+  --lh-base: 1.6;
+}
+
+body {
+  font-family: var(--font-ui);
+}
+
+/* 任何「数字类」字段统一用等宽 + 表格数字，保证纵向对齐 */
+.num,
+.el-table .cell.num,
+[data-num] {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* ---------- 页面通用骨架 ----------
+ * 用法：
+ *   <div class="page">
+ *     <div class="page-head">
+ *       <div><h2>标题</h2><p class="page-sub">说明</p></div>
+ *       <div class="page-actions">…按钮…</div>
+ *     </div>
+ *     <div class="page-body">…内容…</div>
+ *   </div>
+ */
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--page-gap);
+  padding-bottom: var(--space-5);
+}
+
+.page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.page-head h2 {
+  margin: 0;
+  font-size: var(--title-page-size);
+  font-weight: var(--title-page-weight);
+  color: var(--text-main);
+  line-height: 1.4;
+}
+
+/* --------------------------------------------------------------------------
+   历史页面用 .page-title / .page-header 组织标题，新页面用 .page-head。
+   这里把两套写法收敛到同一组字号与间距，避免切换页面时标题忽大忽小。
+   -------------------------------------------------------------------------- */
+.page-title,
+.el-card__header .page-title {
+  font-size: var(--title-page-size);
+  font-weight: var(--title-page-weight);
+  color: var(--text-main);
+  line-height: 1.4;
+}
+
+.page-subtitle {
+  margin-left: var(--space-2);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+/* 卡片内页头（部分列表页把标题放在 el-card header 里）：
+   去掉重复的上下留白，让卡片内部的标题与独立页头观感一致 */
+.el-card__header .page-header {
+  margin-bottom: 0;
+}
+
+/* 兜底：这些页面顶层的裸 h2 也统一字号，防止未改造的页面出现 24px 大标题 */
+.el-main > div > h2,
+.el-main > .page > h2 {
+  font-size: var(--title-page-size);
+  font-weight: var(--title-page-weight);
+  color: var(--text-main);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.page-sub {
+  margin: var(--space-1) 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.page-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* 页面内的卡片不再需要额外的外边距，交给 .page 的 gap 控制 */
+.page .el-card {
+  border-radius: var(--card-radius);
+}
+
+/* 卡片内最后一个元素不留多余底边距 */
+.page .el-card .el-card__body > :last-child {
+  margin-bottom: 0;
+}
+
+
+:root.theme-dark {
+  --bg-main: #121514;
+  --bg-surface: #1a1e1d;
+  --bg-subtle: #161a19;
+  --bg-sidebar: #141a18;
+  --bg-sidebar-hover: #1f2624;
+  --bg-sidebar-active: #2f8d77;
+
+  --text-main: #e8ecea;
+  --text-muted: #94a19c;
+  /* 侧边栏在两种主题下都是深墨绿底，所以「反色文字」始终是浅色 */
+  --text-inverse: #f7faf9;
+  --border-color: #2a302e;
+  --border-strong: #3a4240;
+
+  /* 深色下主色阶梯整体提亮，否则在暗底上"糊成一团" */
+  --accent-1: #1b2b27;
+  --accent-2: #24443c;
+  --accent-3: #3f9c86;
+  --accent-4: #5cb39d;
+  --accent-5: #7fc9b6;
+
+  --accent-color: var(--accent-3);
+  --danger-color: #e57373;
+  --warning-color: #d9a441;
+  --success-color: #3f9c86;
+  --header-bg: #171b1a;
+
+  --stripe-bg: #1f2423;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.45);
 
   /* ---- Element Plus 深色变量覆盖 ----
    * 只覆盖了一部分会导致 stripe 行、表头、输入框出现「黑底黑字」。
@@ -213,9 +430,9 @@ body,
   background: var(--el-fill-color) !important;
 }
 
-/* 表格单元格内边距略收紧，信息密度更高 */
+/* 表格单元格内边距：给足呼吸感，一行能看清三四个字段而不挤 */
 .el-table .el-table__cell {
-  padding: 9px 0;
+  padding: 13px 0;
 }
 
 /* 卡片 header 与正文的分隔更柔和 */
@@ -249,4 +466,162 @@ body,
 
 .page-enter-from {
   opacity: 0;
+}
+
+/* ==========================================================================
+   全局质感
+   --------------------------------------------------------------------------
+   卡片、表格、分页、空态统一到同一套圆角与边界规则，
+   避免每个页面各写一套 border-radius / box-shadow。
+   ========================================================================== */
+
+/* 卡片：细边框 + 极轻阴影，不用大投影（数据密集页面投影会显得脏） */
+.el-card {
+  border-radius: var(--card-radius);
+  border: 1px solid var(--border-color);
+  box-shadow: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.el-card.is-hover-shadow:hover,
+.el-card.is-always-shadow {
+  box-shadow: var(--shadow-sm);
+}
+
+/* 可点击卡片：悬停时边框变色 + 轻微上浮 */
+.el-card.is-hover-shadow {
+  cursor: default;
+}
+
+/* 卡片头：更紧凑，与内容区有清晰分界 */
+.el-card__header {
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--border-color);
+  font-weight: 600;
+  font-size: var(--fs-base);
+  color: var(--text-main);
+  background: var(--bg-subtle);
+}
+
+.el-card__body {
+  padding: var(--card-padding);
+}
+
+/* 表格：去掉外框冗余线，表头用底色分隔 */
+.el-table {
+  --el-table-border-color: var(--border-color);
+  --el-table-header-bg-color: var(--bg-subtle);
+  --el-table-row-hover-bg-color: var(--accent-1);
+  border-radius: 10px;
+  font-size: var(--fs-base);
+}
+
+/* 表头：用底色 + 深色字压住整张表，不用重边框 */
+.el-table th.el-table__cell {
+  font-weight: 600;
+  font-size: var(--fs-base);
+  color: var(--text-main);
+  letter-spacing: 0.01em;
+  /* 表头略微增高，和正文行拉开层级 */
+  padding: 14px 0;
+  background: var(--el-table-header-bg-color);
+  /* 表头与首行之间用一条稍深的线，代替原来每条都很重的边框 */
+  border-bottom: 1px solid var(--border-strong) !important;
+}
+
+.el-table th.el-table__cell .cell {
+  font-weight: 600;
+}
+
+/* 正文：14px 是这套数据密集表格的可读底线，再小就要眯眼 */
+.el-table td.el-table__cell {
+  font-size: var(--fs-base);
+  color: var(--text-main);
+  line-height: 1.55;
+}
+
+/* 单元格左右留白随字号一起放宽 */
+.el-table .cell {
+  padding: 0 14px;
+}
+
+/* size="small" 的表格（弹窗内的明细表）保留紧凑，但字号不低于 13px，
+   否则和页面主表格相比像两个系统 */
+.el-table--small {
+  font-size: var(--fs-sm);
+}
+
+.el-table--small .el-table__cell {
+  padding: 9px 0;
+}
+
+.el-table--small th.el-table__cell {
+  padding: 10px 0;
+}
+
+.el-table--small td.el-table__cell,
+.el-table--small th.el-table__cell {
+  font-size: var(--fs-sm);
+}
+
+/* 表格里的金额、日期、数量走等宽，纵向对齐 */
+.el-table .cell.num,
+.el-table .num-cell {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 表格里的金额、日期、数量走等宽，纵向对齐 */
+.el-table .cell.num,
+.el-table .num-cell {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 分页：居右、留白充足 */
+.el-pagination {
+  justify-content: flex-end;
+  padding: var(--space-3) 0 var(--space-1);
+}
+
+/* 空态：统一留白与图标颜色 */
+.el-empty {
+  padding: var(--space-8) var(--space-4);
+}
+
+.el-empty__description p {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+/* 表单标签：统一右对齐宽度感 */
+.el-form-item__label {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+/* 描述列表：标签弱化、值加强 */
+.el-descriptions__label.el-descriptions__cell.is-bordered-label {
+  color: var(--text-muted);
+  font-weight: 500;
+  background: var(--bg-subtle);
+  width: 96px;
+}
+
+/* 无障碍：键盘焦点必须可见 */
+:focus-visible {
+  outline: 2px solid var(--accent-3);
+  outline-offset: 2px;
+}
+
+/* 尊重系统的「减少动效」偏好 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

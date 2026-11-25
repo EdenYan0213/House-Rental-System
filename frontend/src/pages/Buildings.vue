@@ -1,32 +1,48 @@
 <template>
-  <div class="buildings-page">
-    <el-row justify="space-between" align="middle" style="margin-bottom: 16px">
-      <h2 style="margin: 0">楼栋管理</h2>
-      <el-button v-if="canAdd" type="primary" @click="openCreate">新建楼栋</el-button>
-    </el-row>
+  <div class="page">
+    <div class="page-head">
+      <div>
+        <h2>楼栋管理</h2>
+        <p class="page-sub">维护楼栋信息后，可在楼栋下批量创建房间。</p>
+      </div>
+      <div class="page-actions">
+        <el-button v-if="canAdd" type="primary" :icon="Plus" @click="openCreate">新建楼栋</el-button>
+      </div>
+    </div>
 
     <el-row v-if="buildings.length > 0" :gutter="20">
       <el-col v-for="building in buildings" :key="building.id" :xs="24" :sm="12" :md="8" :lg="6">
-        <el-card class="building-card" shadow="hover">
-          <div class="building-cover" @click="goRooms(building)">
+        <el-card
+          class="building-card building-card--clickable"
+          shadow="hover"
+          @click="goRooms(building)"
+        >
+          <div class="building-cover">
+            <!-- 只展示实际加载成功的图片；失效引用（DB 已清理）自动跳过，
+                 全部失败时回落到占位图，避免出现破损图标 -->
             <el-carousel
-              v-if="imagesOf(building).length > 0"
+              v-if="validImagesOf(building).length > 0"
               :height="'160px'"
               :interval="4000"
               indicator-position="inside"
               arrow="hover"
-              @click.stop
             >
-              <el-carousel-item v-for="id in imagesOf(building)" :key="id">
-                <img :src="imageSrc(id)" alt="楼栋图片" class="cover-img" />
+              <el-carousel-item v-for="id in validImagesOf(building)" :key="id">
+                <img
+                  :src="imageSrc(id)"
+                  alt="楼栋图片"
+                  class="cover-img"
+                  loading="lazy"
+                  @error="markImageBroken(id)"
+                />
               </el-carousel-item>
             </el-carousel>
             <div v-else class="building-placeholder">
               <el-icon size="28"><OfficeBuilding /></el-icon>
-              <span>暂无图片</span>
+              <span>{{ imagesOf(building).length > 0 ? '图片已失效' : '暂无图片' }}</span>
             </div>
-            <div v-if="imagesOf(building).length > 1" class="img-count">
-              {{ imagesOf(building).length }} 张
+            <div v-if="validImagesOf(building).length > 1" class="img-count">
+              {{ validImagesOf(building).length }} 张
             </div>
           </div>
           <div class="building-body">
@@ -37,7 +53,7 @@
             <p>水费：{{ formatPrice(building.waterUnitPrice) }} 元/吨</p>
             <p>电费：{{ formatPrice(building.electricUnitPrice) }} 元/度</p>
           </div>
-          <div class="card-actions">
+          <div class="card-actions" @click.stop>
             <el-button size="small" @click="goRooms(building)">查看房间</el-button>
             <el-button v-if="canEdit" size="small" type="primary" plain @click="openEdit(building)">编辑</el-button>
             <el-button v-if="canDelete" size="small" type="danger" plain @click="remove(building)">删除</el-button>
@@ -58,6 +74,7 @@
           <div v-if="uploadType === 'local'">
             <el-upload
               action="/api/files/upload"
+              multiple
               :show-file-list="false"
               :on-error="handleUploadError"
               :before-upload="beforeUpload"
@@ -136,12 +153,10 @@ import {
   createBuilding,
   deleteBuilding,
   getBuildings,
-  uploadFile,
   updateBuilding,
   uploadFileByUrl,
   uploadImage,
-  getErrorMessage
-} from '../api'
+  getErrorMessage} from '../api'
 import { showUndoToast } from '../utils/undo'
 
 const router = useRouter()
@@ -176,6 +191,27 @@ function imageSrc(id) {
 /** 卡片展示用：后端返回 imageIdList（图片ID数组） */
 function imagesOf(building) {
   return Array.isArray(building?.imageIdList) ? building.imageIdList : []
+}
+
+/**
+ * 加载失败的图片 ID。
+ *
+ * <p>图片被定时任务清理后，building.image_ids 里的引用会成为悬空 ID，
+ * 直接渲染会露出浏览器默认的破损图标。这里记录失败的 ID 并从轮播中剔除，
+ * 全部失效时回落到「图片已失效」占位。
+ */
+const brokenImageIds = ref(new Set())
+
+function markImageBroken(id) {
+  // Set 不是响应式对象，重新赋值以触发视图更新
+  const next = new Set(brokenImageIds.value)
+  next.add(id)
+  brokenImageIds.value = next
+}
+
+/** 过滤掉已确认加载失败的图片。 */
+function validImagesOf(building) {
+  return imagesOf(building).filter(id => !brokenImageIds.value.has(id))
 }
 
 /** 把当前 formImages 同步到表单字段 */
@@ -275,7 +311,7 @@ function handleUploadSuccess(response) {
 }
 
 function handleUploadError(error) {
-  const message = error?.response?.data?.message || error?.message || '图片上传失败'
+  const message = getErrorMessage(error, '图片上传失败')
   ElMessage.error(message)
 }
 
@@ -291,7 +327,7 @@ async function customUpload(options) {
     }
     options.onSuccess(res.data)
   } catch (error) {
-    ElMessage.error(error?.response?.data?.message || error?.message || '图片上传失败')
+    ElMessage.error(getErrorMessage(error, '图片上传失败'))
     options.onError(error)
   }
 }
@@ -344,7 +380,7 @@ async function remove(row) {
     if (e === 'cancel' || e === 'close') {
       return
     }
-    ElMessage.error(e?.response?.data || e?.message || '删除失败')
+    ElMessage.error(getErrorMessage(e, '删除失败'))
   }
 }
 
@@ -370,7 +406,7 @@ onMounted(load)
 
 <style scoped>
 .buildings-page {
-  padding: 20px;
+  padding: 0;
 }
 
 .building-card {
@@ -545,5 +581,23 @@ onMounted(load)
 .url-upload {
   display: flex;
   gap: 10px;
+}
+
+/* 整卡可点击：给出明确的指针与悬停反馈 */
+.building-card--clickable {
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.building-card--clickable:hover {
+  transform: translateY(-2px);
+}
+
+/* 图片按容器裁切，避免不同尺寸图片撑破卡片 */
+.building-cover .cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 </style>

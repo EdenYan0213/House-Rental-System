@@ -1,47 +1,95 @@
 <template>
   <PullRefresh :on-refresh="loadAll">
     <div class="mobile-page" v-loading="loading">
-    <div class="head">
-      <div class="title">消息中心</div>
-      <el-badge :value="unreadCount" :hidden="unreadCount === 0">
-        <el-button text @click="loadAll">刷新</el-button>
-      </el-badge>
-    </div>
+      <!-- 页头 -->
+      <header class="m-head">
+        <div class="head-row">
+          <div>
+            <h1 class="m-head-title">消息中心</h1>
+            <p class="m-head-sub">
+              待办 <span class="m-num count">{{ todos.length }}</span>
+              <span v-if="unreadCount > 0" class="unread-hint">
+                · {{ unreadCount }} 条未读通知
+              </span>
+            </p>
+          </div>
+          <el-button :icon="Refresh" circle class="refresh-btn" @click="loadAll" />
+        </div>
+      </header>
 
-    <el-tabs v-model="activeTab">
-      <el-tab-pane label="待办" name="todo" />
-      <el-tab-pane label="通知" name="notice" />
-    </el-tabs>
+      <!-- 标签切换：chips 而不是 tabs，移动端更紧凑 -->
+      <div class="tab-chips">
+        <button
+          type="button"
+          class="chip"
+          :class="{ active: activeTab === 'todo' }"
+          @click="activeTab = 'todo'"
+        >待办 {{ todos.length > 0 ? `(${todos.length})` : '' }}</button>
+        <button
+          type="button"
+          class="chip"
+          :class="{ active: activeTab === 'notice' }"
+          @click="activeTab = 'notice'"
+        >通知 {{ unreadCount > 0 ? `(${unreadCount})` : '' }}</button>
+      </div>
 
-    <template v-if="activeTab === 'todo'">
-      <el-empty v-if="todos.length === 0" description="暂无待办" />
-      <el-card v-for="item in todos" :key="item.id" class="panel" shadow="never">
-        <div class="row top">
-          <div class="todo-title">{{ item.title }}</div>
-          <el-tag type="warning" size="small">待办</el-tag>
+      <!-- 待办 -->
+      <template v-if="activeTab === 'todo'">
+        <div v-if="todos.length === 0" class="m-card empty-state">
+          <el-icon :size="32" class="empty-icon"><CircleCheck /></el-icon>
+          <p class="empty-title">暂无待办</p>
+          <p class="empty-desc">所有事项都已处理完成。</p>
         </div>
-        <div class="muted">{{ item.content }}</div>
-        <div class="row foot">
-          <span class="muted">{{ item.time }}</span>
-          <el-button type="primary" link @click="goTodo(item)">去处理</el-button>
-        </div>
-      </el-card>
-    </template>
 
-    <template v-else>
-      <el-empty v-if="messages.length === 0" description="暂无通知" />
-      <el-card v-for="item in messages" :key="item.id" class="panel" shadow="never" @click="openNotice(item)">
-        <div class="row top">
-          <div>{{ item.title || '-' }}</div>
-          <el-tag size="small" :type="item.isRead ? 'info' : 'danger'">{{ item.isRead ? '已读' : '未读' }}</el-tag>
+        <div v-else class="msg-list">
+          <article v-for="item in todos" :key="item.id" class="m-card msg-card msg-card--todo">
+            <div class="msg-top">
+              <span class="msg-title">{{ item.title }}</span>
+              <el-tag type="warning" size="small" effect="light">待办</el-tag>
+            </div>
+            <p class="msg-content">{{ item.content }}</p>
+            <div class="msg-foot">
+              <span class="msg-time">{{ item.time }}</span>
+              <el-button type="primary" size="small" @click="goTodo(item)">去处理</el-button>
+            </div>
+          </article>
         </div>
-        <div class="muted line-clamp">{{ item.content || '-' }}</div>
-        <div class="row foot">
-          <span class="muted">{{ formatTime(item.createdAt) }}</span>
-          <el-button type="primary" link @click.stop="markRead(item)">标记已读</el-button>
+      </template>
+
+      <!-- 通知 -->
+      <template v-else>
+        <div v-if="messages.length === 0" class="m-card empty-state">
+          <el-icon :size="32" class="empty-icon"><Bell /></el-icon>
+          <p class="empty-title">暂无通知</p>
+          <p class="empty-desc">系统通知会显示在这里。</p>
         </div>
-      </el-card>
-    </template>
+
+        <div v-else class="msg-list">
+          <article
+            v-for="item in messages"
+            :key="item.id"
+            class="m-card msg-card"
+            :class="{ 'is-unread': !item.isRead }"
+            @click="openNotice(item)"
+          >
+            <div class="msg-top">
+              <span class="msg-title">{{ item.title || '-' }}</span>
+              <span v-if="!item.isRead" class="unread-dot"></span>
+            </div>
+            <p class="msg-content line-clamp">{{ item.content || '-' }}</p>
+            <div class="msg-foot">
+              <span class="msg-time">{{ formatTime(item.createdAt) }}</span>
+              <el-button
+                v-if="!item.isRead"
+                type="primary"
+                link
+                size="small"
+                @click.stop="markRead(item)"
+              >标记已读</el-button>
+            </div>
+          </article>
+        </div>
+      </template>
 
     <el-drawer v-model="showNotice" title="通知详情" size="100%">
       <template v-if="currentNotice">
@@ -66,6 +114,7 @@ import PullRefresh from '../components/PullRefresh.vue'
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { Refresh, CircleCheck, Bell } from '@element-plus/icons-vue'
 import { getMessages, getRepairOrders, getBills, getContracts, markMessageRead, getUnreadCount } from '@/api'
 import { unwrapList } from '@/utils/mobileApi'
 import { getMobileCache, setMobileCache } from '@/utils/mobileCache'
@@ -215,65 +264,162 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.mobile-page {
-  padding: 14px;
-  max-width: 760px;
-  margin: 0 auto;
-}
-
-.head {
+.head-row {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
+  gap: 12px;
 }
 
-.title {
-  font-size: 20px;
+.refresh-btn {
+  flex: 0 0 auto;
+  min-height: 36px;
+  min-width: 36px;
+}
+
+.count {
+  color: var(--accent-3);
   font-weight: 700;
-  color: var(--text-main);
+  font-size: 15px;
 }
 
-.panel {
-  margin-bottom: 10px;
-  border: 1px solid #e8efff;
+.unread-hint {
+  color: var(--danger-color);
+  font-size: 12px;
 }
 
-.row {
+/* 标签切换 chips */
+.tab-chips {
   display: flex;
+  gap: 8px;
+}
+
+.chip {
+  flex: 1;
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  color: var(--text-muted);
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  min-height: 40px;
+  transition: all 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.chip.active {
+  background: var(--accent-3);
+  border-color: var(--accent-3);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* 消息列表 */
+.msg-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--m-gap);
+}
+
+.msg-card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  position: relative;
+}
+
+/* 待办卡左侧加色条，与通知区分 */
+.msg-card--todo {
+  border-left: 3px solid var(--warning-color, #b3761a);
+}
+
+/* 未读通知：左侧主色条 + 淡底 */
+.msg-card.is-unread {
+  border-left: 3px solid var(--accent-3);
+  background: color-mix(in srgb, var(--accent-3) 4%, var(--bg-surface));
+}
+
+.msg-top {
+  display: flex;
+  align-items: flex-start;
   justify-content: space-between;
-  align-items: center;
+  gap: 8px;
 }
 
-.top {
-  margin-bottom: 6px;
+.msg-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+  line-height: 1.4;
+  flex: 1;
+  min-width: 0;
 }
 
-.foot {
+.unread-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--danger-color);
+  flex: 0 0 auto;
   margin-top: 6px;
 }
 
-.muted {
-  color: var(--text-muted);
+.msg-content {
+  margin: 0;
   font-size: 13px;
-}
-
-.todo-title {
-  font-weight: 600;
-  color: var(--text-main);
+  color: var(--text-muted);
+  line-height: 1.55;
 }
 
 .line-clamp {
   display: -webkit-box;
   -webkit-line-clamp: 2;
-  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-.notice-actions {
-  margin-top: 12px;
+.msg-foot {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-color);
+}
+
+.msg-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 空态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.empty-icon {
+  color: var(--text-muted);
+  opacity: 0.4;
+}
+
+.empty-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.empty-desc {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 </style>

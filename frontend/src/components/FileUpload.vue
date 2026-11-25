@@ -32,7 +32,7 @@
 
 <script setup>
 import { ref } from 'vue'
-import { ElMessage, genFileId } from 'element-plus'
+import { ElMessage} from 'element-plus'
 import { Plus, Upload } from '@element-plus/icons-vue'
 import { uploadFile, deleteFile } from '@/api'
 

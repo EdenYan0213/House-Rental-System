@@ -1,22 +1,99 @@
 <template>
   <PullRefresh :on-refresh="load">
     <div class="mobile-page" v-loading="loading">
-    <div class="head">
-      <div class="title">楼栋信息</div>
-      <el-button text @click="load">刷新</el-button>
+      <!-- 页头 -->
+      <header class="m-head">
+        <div class="head-row">
+          <div>
+            <h1 class="m-head-title">楼栋信息</h1>
+            <p class="m-head-sub">共 <span class="m-num count">{{ buildings.length }}</span> 栋</p>
+          </div>
+          <el-button
+            v-if="canAdd"
+            type="primary"
+            :icon="Plus"
+            class="head-btn"
+            @click="openCreate"
+          >新建</el-button>
+        </div>
+      </header>
+
+      <!-- 空态 -->
+      <div v-if="!loading && buildings.length === 0" class="m-card empty-state">
+        <el-icon :size="32" class="empty-icon"><OfficeBuilding /></el-icon>
+        <p class="empty-title">暂无楼栋</p>
+        <p class="empty-desc">请联系管理员在后台创建楼栋。</p>
+      </div>
+
+      <!-- 楼栋卡 -->
+      <div v-else class="building-list">
+        <article
+          v-for="item in pagedBuildings"
+          :key="item.id"
+          class="m-card building-card"
+          @click="openRooms(item)"
+        >
+          <div class="building-top">
+            <div class="building-name">{{ item.name || '-' }}</div>
+            <el-icon class="building-arrow"><ArrowRight /></el-icon>
+          </div>
+
+          <div class="building-addr">
+            <el-icon class="addr-icon"><Location /></el-icon>
+            <span>{{ item.address || '未填写地址' }}</span>
+          </div>
+
+          <div class="building-prices">
+            <div class="price-item">
+              <span class="price-label">水价</span>
+              <span class="price-value m-num">{{ money(item.waterUnitPrice) }}</span>
+            </div>
+            <div class="price-item">
+              <span class="price-label">电价</span>
+              <span class="price-value m-num">{{ money(item.electricUnitPrice) }}</span>
+            </div>
+            <div class="price-item" v-if="item.totalFloors">
+              <span class="price-label">楼层</span>
+              <span class="price-value m-num">{{ item.totalFloors }} 层</span>
+            </div>
+          </div>
+        </article>
+      </div>
     </div>
 
-    <el-empty v-if="!loading && buildings.length === 0" description="暂无楼栋" />
-
-    <el-card v-for="item in pagedBuildings" :key="item.id" class="panel" shadow="never" @click="openRooms(item)">
-      <div class="row top">
-        <div class="name">{{ item.name || '-' }}</div>
-        <el-tag size="small" type="info">查看房间</el-tag>
-      </div>
-      <div class="muted">地址：{{ item.address || '-' }}</div>
-      <div class="muted">水价：{{ money(item.waterUnitPrice) }} / 电价：{{ money(item.electricUnitPrice) }}</div>
-    </el-card>
-  </div>
+      <!-- 新建楼栋 -->
+      <el-dialog v-model="createVisible" title="新建楼栋" width="92%" align-center>
+        <el-form :model="createForm" label-position="top" class="create-form">
+          <el-form-item label="楼栋名称" required>
+            <el-input v-model="createForm.name" placeholder="如：阳光花园A栋" />
+          </el-form-item>
+          <el-form-item label="楼栋编号">
+            <el-input v-model="createForm.code" placeholder="如：A" />
+          </el-form-item>
+          <el-form-item label="地址">
+            <el-input v-model="createForm.address" placeholder="如：杭州市西湖区文一西路100号" />
+          </el-form-item>
+          <el-form-item label="楼层数">
+            <el-input-number v-model="createForm.totalFloors" :min="1" :max="99" class="full-width" />
+          </el-form-item>
+          <el-row :gutter="10">
+            <el-col :span="12">
+              <el-form-item label="水费单价">
+                <el-input-number v-model="createForm.waterUnitPrice" :min="0" :precision="2" class="full-width" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="电费单价">
+                <el-input-number v-model="createForm.electricUnitPrice" :min="0" :precision="2" class="full-width" />
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </el-form>
+        <template #footer>
+          <el-button @click="createVisible = false">取消</el-button>
+          <el-button type="primary" :loading="creating" @click="submitCreate">创建</el-button>
+        </template>
+      </el-dialog>
 
       <div v-if="hasMoreBuildings" class="load-more">
         <el-button text type="primary" @click="showMoreBuildings">
@@ -33,11 +110,49 @@ import PullRefresh from '../components/PullRefresh.vue'
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getBuildings } from '@/api'
+import { OfficeBuilding, ArrowRight, Location, Plus } from '@element-plus/icons-vue'
+import { getBuildings, createBuilding, canAddBuilding, getErrorMessage } from '@/api'
 import { unwrapList } from '@/utils/mobileApi'
 
 const router = useRouter()
 const loading = ref(false)
+
+// ---- 新建楼栋 ----
+const canAdd = canAddBuilding()
+const createVisible = ref(false)
+const creating = ref(false)
+const createForm = ref({
+  name: '',
+  code: '',
+  address: '',
+  totalFloors: 6,
+  waterUnitPrice: 0,
+  electricUnitPrice: 0
+})
+
+function openCreate() {
+  createForm.value = { name: '', code: '', address: '', totalFloors: 6, waterUnitPrice: 0, electricUnitPrice: 0 }
+  createVisible.value = true
+}
+
+async function submitCreate() {
+  const name = createForm.value.name.trim()
+  if (!name) {
+    ElMessage.warning('请填写楼栋名称')
+    return
+  }
+  creating.value = true
+  try {
+    await createBuilding({ ...createForm.value, name })
+    ElMessage.success('楼栋已创建')
+    createVisible.value = false
+    await load()
+  } catch (e) {
+    ElMessage.error(getErrorMessage(e, '创建失败'))
+  } finally {
+    creating.value = false
+  }
+}
 const buildings = ref([])
 const {
   visible: pagedBuildings,
@@ -73,54 +188,148 @@ onMounted(load)
 </script>
 
 <style scoped>
-.load-more {
+.head-row {
   display: flex;
-  justify-content: center;
-  padding: 12px 0 4px;
-}
-
-.mobile-page {
-  padding: 14px;
-  max-width: 760px;
-  margin: 0 auto;
-}
-
-.head {
-  display: flex;
+  align-items: flex-start;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
+  gap: 12px;
 }
 
-.title {
-  font-size: 20px;
+.head-btn {
+  flex: 0 0 auto;
+  min-height: 36px;
+  border-radius: 9px;
+}
+
+/* 弹层表单：输入控件统一 44px 高 */
+.create-form :deep(.el-form-item__label) {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding-bottom: 4px;
+}
+
+.create-form :deep(.el-input__wrapper) {
+  min-height: var(--m-tap);
+  border-radius: 10px;
+}
+
+.create-form :deep(.el-input-number) {
+  width: 100%;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.count {
+  color: var(--accent-3);
   font-weight: 700;
+  font-size: 15px;
+}
+
+.building-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--m-gap);
+}
+
+.building-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 0.15s ease, transform 0.12s ease;
+}
+
+.building-card:active {
+  transform: scale(0.985);
+  border-color: var(--accent-2);
+}
+
+.building-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.building-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-main);
+  line-height: 1.3;
+}
+
+.building-arrow {
+  color: var(--text-muted);
+  opacity: 0.45;
+  flex: 0 0 auto;
+}
+
+.building-addr {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.addr-icon {
+  flex: 0 0 auto;
+}
+
+/* 价格行：三等分 */
+.building-prices {
+  display: flex;
+  gap: 16px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
+}
+
+.price-item {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.price-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.price-value {
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text-main);
 }
 
-.panel {
-  margin-bottom: 10px;
-  border: 1px solid #e8efff;
-}
-
-.row {
+/* 空态 */
+.empty-state {
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   align-items: center;
+  gap: 8px;
+  padding: 40px 20px;
+  text-align: center;
 }
 
-.top {
-  margin-bottom: 6px;
-}
-
-.name {
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.muted {
+.empty-icon {
   color: var(--text-muted);
-  font-size: 13px;
-  margin-bottom: 4px;
+  opacity: 0.4;
+}
+
+.empty-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.empty-desc {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 </style>

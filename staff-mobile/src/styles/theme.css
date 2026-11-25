@@ -1,35 +1,79 @@
+/* ==========================================================================
+   与桌面端共用同一套调色板，保证两个端切换时观感一致。
+   ========================================================================== */
 :root {
-  --bg-main: #f3f6ef;
+  --bg-main: #f5f5f3;
   --bg-surface: #ffffff;
-  --bg-sidebar: #d8dbcd;
+  --bg-subtle: #fafaf8;
+  --bg-sidebar: #1e2b28;
+  --bg-sidebar-hover: #2a3a36;
   --bg-sidebar-active: #2f6f5f;
-  --text-main: #1f2937;
-  --text-muted: #6b7280;
-  --border-color: #d5dbcc;
-  --danger-color: #e53e3e;
-  --success-color: #2f855a;
-  --accent-color: #2f6f5f;
+
+  --text-main: #1a2421;
+  --text-muted: #6b7773;
+  --text-inverse: #f7faf9;
+  --border-color: #e3e4e0;
+  --border-strong: #cfd1cb;
+
+  --accent-1: #e8f2ef;
+  --accent-2: #c3ddd6;
+  --accent-3: #2f6f5f;
+  --accent-4: #235448;
+  --accent-5: #16332c;
+
+  --accent-color: var(--accent-3);
+  --danger-color: #c0392b;
+  --warning-color: #b3761a;
+  --success-color: #2f6f5f;
   --header-bg: #ffffff;
 
-  /* 斑马纹行背景，浅色下用极浅灰 */
-  --stripe-bg: #fafbf9;
+  --stripe-bg: #fbfbf9;
+
+  --shadow-sm: 0 1px 2px rgba(26, 36, 33, 0.05);
+  --shadow-md: 0 2px 8px rgba(26, 36, 33, 0.07);
+
+  /* ---- 移动端专用 token ----
+   * 触控目标不小于 44px；间距比桌面端更宽松，手指容错更好。
+   */
+  --m-tap: 44px;
+  --m-gutter: 14px;
+  --m-radius: 12px;
+  --m-gap: 12px;
+
+  /* 安全区（iPhone 底部小黑条） */
+  --m-safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 :root.theme-dark {
-  --bg-main: #141414;
-  --bg-surface: #1f1f1f;
-  --bg-sidebar: #1a2524;
+  --bg-main: #121514;
+  --bg-surface: #1a1e1d;
+  --bg-subtle: #161a19;
+  --bg-sidebar: #141a18;
+  --bg-sidebar-hover: #1f2624;
   --bg-sidebar-active: #2f8d77;
-  --text-main: #edf2f7;
-  --text-muted: #a0aec0;
-  --border-color: #2d3748;
-  --danger-color: #fc8181;
-  --success-color: #68d391;
-  --accent-color: #2f8d77;
-  --header-bg: #1b1b1b;
 
-  /* 深色下斑马纹需要比卡片背景略亮，否则文字与底色混在一起 */
-  --stripe-bg: #262626;
+  --text-main: #e8ecea;
+  --text-muted: #94a19c;
+  --text-inverse: #f7faf9;
+  --border-color: #2a302e;
+  --border-strong: #3a4240;
+
+  --accent-1: #1b2b27;
+  --accent-2: #24443c;
+  --accent-3: #3f9c86;
+  --accent-4: #5cb39d;
+  --accent-5: #7fc9b6;
+
+  --accent-color: var(--accent-3);
+  --danger-color: #e57373;
+  --warning-color: #d9a441;
+  --success-color: #3f9c86;
+  --header-bg: #171b1a;
+
+  --stripe-bg: #1f2423;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.35);
 
   /* ---- Element Plus 深色变量覆盖 ----
    * 只覆盖了一部分会导致 stripe 行、表头、输入框出现「黑底黑字」。
@@ -249,4 +293,243 @@ body,
 
 .page-enter-from {
   opacity: 0;
+}
+
+/* ==========================================================================
+   移动端通用骨架
+   --------------------------------------------------------------------------
+   所有页面用 .mobile-page 作为根容器，内部用 .m-section 分块。
+   ========================================================================== */
+
+.mobile-page {
+  padding: var(--m-gutter);
+  padding-bottom: calc(var(--m-gutter) + 64px + var(--m-safe-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: var(--m-gap);
+  min-height: 100%;
+  box-sizing: border-box;
+}
+
+/* 页头：标题 + 副标题，左侧对齐 */
+.m-head {
+  padding: var(--space-2, 8px) 0;
+}
+
+.m-head-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-main);
+  line-height: 1.3;
+  margin: 0;
+}
+
+.m-head-sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* 区块标题 */
+.m-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin: 4px 0 0;
+}
+
+.m-section-more {
+  font-size: 12px;
+  color: var(--accent-3);
+  font-weight: 500;
+}
+
+/* 通用卡片 */
+.m-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--m-radius);
+  padding: var(--m-gutter);
+  box-sizing: border-box;
+}
+
+/* 可点击卡片：触控反馈 */
+.m-card--tap {
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.m-card--tap:active {
+  transform: scale(0.985);
+  border-color: var(--accent-2);
+}
+
+/* 统计块：两列网格，触控友好 */
+.m-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--m-gap);
+}
+
+.m-stat {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--m-radius);
+  padding: 14px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* 左侧语义色条，与管理端统计卡呼应 */
+.m-stat::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--stat-color, var(--accent-3));
+}
+
+.m-stat-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+  letter-spacing: 0.02em;
+}
+
+.m-stat-value {
+  font-family: var(--font-num, ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--text-main);
+}
+
+.m-stat--accent { --stat-color: var(--accent-3); }
+.m-stat--warn { --stat-color: var(--warning-color, #b3761a); }
+.m-stat--danger { --stat-color: var(--danger-color); }
+.m-stat--muted { --stat-color: var(--text-muted); }
+
+/* 磁贴入口：3 列网格，图标 + 文字 */
+.m-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--m-gap);
+}
+
+.m-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 8px;
+  min-height: 88px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--m-radius);
+  cursor: pointer;
+  position: relative;
+  transition: border-color 0.15s ease, transform 0.12s ease;
+  -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
+}
+
+.m-tile:active {
+  transform: scale(0.96);
+  border-color: var(--accent-2);
+}
+
+.m-tile-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-3);
+  background: color-mix(in srgb, var(--accent-3) 12%, transparent);
+}
+
+.m-tile-label {
+  font-size: 12px;
+  color: var(--text-main);
+  text-align: center;
+  line-height: 1.3;
+}
+
+/* 列表项：整行可点，右侧留出箭头位置 */
+.m-list {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--m-radius);
+  overflow: hidden;
+}
+
+.m-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px var(--m-gutter);
+  min-height: var(--m-tap);
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.12s ease;
+}
+
+.m-list-item:last-child {
+  border-bottom: none;
+}
+
+.m-list-item:active {
+  background: var(--accent-1);
+}
+
+.m-list-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.m-list-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+  line-height: 1.4;
+}
+
+.m-list-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.m-list-extra {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* 数字统一等宽 */
+.m-num {
+  font-family: var(--font-num, ui-monospace, monospace);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 小屏适配：低于 360px 时磁贴降到 2 列 */
+@media (max-width: 359px) {
+  .m-tiles {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }

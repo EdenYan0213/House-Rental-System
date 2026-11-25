@@ -116,3 +116,8 @@ tenant-frontend/dist/
 
 # test artifacts
 backend/target/test-uploads/
+
+# 运行期上传目录：FileStorageService 把用户上传的图片写在这里，
+# 属于运行时数据，不应进版本库（保留空目录靠 .gitkeep）
+backend/src/main/resources/imgs/*
+!backend/src/main/resources/imgs/.gitkeep

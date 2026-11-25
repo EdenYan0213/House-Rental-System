@@ -25,6 +25,8 @@ import java.util.concurrent.locks.ReentrantLock;
 @RequestMapping("/api/ai-assistant")
 public class AiAssistantController {
 
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AiAssistantController.class);
+
   private final AiAssistantService aiAssistantService;
   private final OperationLogService operationLogService;
   private final UserService userService;
@@ -83,10 +85,15 @@ public class AiAssistantController {
       return ResponseEntity.ok(outcome.getResponse());
     } catch (Exception ex) {
       long duration = System.currentTimeMillis() - start;
+      // 未配置模型时给出可操作的配置指引，而不是笼统的「处理失败」。
+      // 日志的意图要和返回给前端的意图一致，否则会记成「未识别」误导排查。
+      boolean notConfigured = ex instanceof AiAssistantService.AiNotConfiguredException;
+      String logIntent = notConfigured ? "NOT_CONFIGURED" : intent;
+
       operationLogService.logAi(
           user.getId(),
           request.getMessage(),
-          intent,
+          logIntent,
           entities,
           "FAILED",
           ex.getMessage(),
@@ -94,7 +101,12 @@ public class AiAssistantController {
           modelName,
           httpRequest);
 
-      return ResponseEntity.status(500).body(AiAssistantResponse.fail("AI助手处理失败，请稍后重试。", "UNKNOWN"));
+      if (notConfigured) {
+        return ResponseEntity.ok(AiAssistantResponse.fail(ex.getMessage(), "NOT_CONFIGURED"));
+      }
+      log.warn("AI 助手执行失败: {}", ex.getMessage());
+      return ResponseEntity.status(500).body(
+          AiAssistantResponse.fail("AI 助手暂时不可用，请稍后重试。", "UNKNOWN"));
     } finally {
       lock.unlock();
     }

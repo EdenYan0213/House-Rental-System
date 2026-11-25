@@ -1,9 +1,61 @@
 <template>
-  <div class="backup-management">
-    <el-card class="config-card">
+  <div class="page">
+    <!-- 页头 -->
+    <div class="page-head">
+      <div>
+        <h2>数据备份与恢复</h2>
+        <p class="page-sub">
+          自动备份按设定周期执行；手动备份不占用保留名额，可随时创建。
+        </p>
+      </div>
+      <div class="page-actions">
+        <el-button :icon="Refresh" :loading="loading" @click="reloadAll">刷新</el-button>
+      </div>
+    </div>
+
+    <!-- 状态概览：三块关键信息放在最上面 -->
+    <div class="stat-grid">
+      <div class="stat-box">
+        <div class="stat-box-label">自动备份</div>
+        <div class="stat-box-value" :class="config.enabled ? 'is-on' : 'is-off'">
+          {{ config.enabled ? '已开启' : '已关闭' }}
+        </div>
+        <div class="stat-box-hint">
+          {{ config.enabled
+            ? `${cycleText} ${config.backupTime}`
+            : '数据不会自动备份，建议开启' }}
+        </div>
+      </div>
+
+      <div class="stat-box">
+        <div class="stat-box-label">最近备份</div>
+        <div class="stat-box-value">
+          {{ latestBackup ? formatDateTime(latestBackup.backupTime) : '暂无' }}
+        </div>
+        <div class="stat-box-hint">
+          {{ latestBackup
+            ? `${backupTypeText(latestBackup.type)} · ${formatFileSize(latestBackup.fileSize)}`
+            : '还没有可用的备份文件' }}
+        </div>
+      </div>
+
+      <div class="stat-box">
+        <div class="stat-box-label">保留份数</div>
+        <div class="stat-box-value">{{ config.retentionCount }} 份</div>
+        <div class="stat-box-hint">
+          当前共 {{ backups.length }} 份记录，超出后自动删除最旧的
+        </div>
+      </div>
+    </div>
+
+    <el-row :gutter="16">
+      <el-col :xs="24" :lg="14">
+    <el-card class="config-card" shadow="never">
       <template #header>
         <div class="card-header">
           <span>自动备份设置</span>
+          <el-tag v-if="config.enabled" type="success" size="small" effect="plain">运行中</el-tag>
+          <el-tag v-else type="info" size="small" effect="plain">已停用</el-tag>
         </div>
       </template>
       <el-form :model="config" label-width="120px">
@@ -45,38 +97,55 @@
       </el-form>
     </el-card>
 
-    <el-card class="action-card">
+      </el-col>
+
+      <el-col :xs="24" :lg="10">
+    <el-card class="action-card" shadow="never">
       <template #header>
         <div class="card-header">
-          <span>手动备份</span>
+          <span>手动操作</span>
         </div>
       </template>
-      <el-button type="primary" @click="handleManualBackup" :loading="backupLoading">
-        立即备份
-      </el-button>
-      <el-upload
-        v-if="canRestore"
-        class="upload-restore"
-        :show-file-list="false"
-        accept=".zip,application/zip"
-        :before-upload="beforeUploadRestoreFile"
-        :http-request="handleUploadAndRestore"
-      >
-        <el-button type="danger" :loading="uploadRestoreLoading">
-          上传并恢复
-        </el-button>
-      </el-upload>
-      <span class="time-hint">手动备份不占用自动备份保留名额</span>
-    </el-card>
 
-    <el-card>
+      <div class="action-block">
+        <div class="action-text">
+          <div class="action-title">立即备份</div>
+          <div class="action-desc">把当前数据库与上传文件打包成一个 zip，不占用自动备份保留名额。</div>
+        </div>
+        <el-button type="primary" :icon="Download" :loading="backupLoading" @click="handleManualBackup">
+          立即备份
+        </el-button>
+      </div>
+
+      <el-divider style="margin: var(--space-4) 0" />
+
+      <div class="action-block">
+        <div class="action-text">
+          <div class="action-title">从备份恢复</div>
+          <div class="action-desc">上传之前导出的 zip 文件，系统会用其中的数据覆盖当前库，请谨慎操作。</div>
+        </div>
+        <el-upload
+          v-if="canRestore"
+          :show-file-list="false"
+          accept=".zip,application/zip"
+          :before-upload="beforeUploadRestoreFile"
+          :http-request="handleUploadAndRestore"
+        >
+          <el-button type="danger" plain :icon="Upload" :loading="uploadRestoreLoading">
+            上传并恢复
+          </el-button>
+        </el-upload>
+        <span v-else class="action-disabled">当前账号无恢复权限</span>
+      </div>
+    </el-card>
+      </el-col>
+    </el-row>
+
+    <el-card shadow="never">
       <template #header>
         <div class="card-header">
           <span>备份记录</span>
-          <el-button type="primary" @click="loadBackups">
-            <el-icon><Refresh /></el-icon>
-            刷新
-          </el-button>
+          <el-button size="small" :icon="Refresh" @click="loadBackups">刷新</el-button>
         </div>
       </template>
       <el-table :data="backups" stripe>
@@ -175,9 +244,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh } from '@element-plus/icons-vue'
+import EmptyState from '@/components/EmptyState.vue'
+import { Refresh, Download, Upload } from '@element-plus/icons-vue'
 import {
   hasRole,
   getBackupRecords,
@@ -201,6 +271,33 @@ const config = ref({
 
 const backups = ref([])
 const backupLoading = ref(false)
+const loading = ref(false)
+
+/** 最近一次成功备份，用于顶部概览。 */
+const latestBackup = computed(() => {
+  const ok = backups.value.filter(b => b.status === 'success')
+  if (!ok.length) return null
+  return [...ok].sort((a, b) => new Date(b.backupTime) - new Date(a.backupTime))[0]
+})
+
+/** 备份周期的中文描述，概览卡用。 */
+const cycleText = computed(() => {
+  if (config.value.backupType === 'weekly') {
+    const days = ['', '周一', '周二', '周三', '周四', '周五', '周六', '周日']
+    return `每周${(days[config.value.backupDay] || '一').slice(1)}`
+  }
+  return '每日'
+})
+
+/** 一次性刷新配置与记录（页头「刷新」用）。 */
+async function reloadAll() {
+  loading.value = true
+  try {
+    await Promise.all([loadConfig(), loadBackups()])
+  } finally {
+    loading.value = false
+  }
+}
 const restoreDialogVisible = ref(false)
 const restoreLoading = ref(false)
 const uploadRestoreLoading = ref(false)
@@ -378,7 +475,82 @@ onMounted(() => {
 
 <style scoped>
 .backup-management {
-  padding: 20px;
+  padding: 0;
+}
+
+/* ---------- 顶部状态概览 ----------
+ * 三块关键信息（是否自动备份 / 最近一次 / 保留份数）优先展示，
+ * 管理员进来第一眼就能判断「数据是否安全」。
+ */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-4);
+}
+
+.stat-box {
+  padding: var(--space-4);
+  border: 1px solid var(--border-color);
+  border-radius: var(--card-radius);
+  background: var(--bg-surface);
+}
+
+.stat-box-label {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+  margin-bottom: var(--space-2);
+}
+
+.stat-box-value {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  color: var(--text-main);
+  line-height: 1.3;
+  margin-bottom: var(--space-1);
+}
+
+.stat-box-value.is-on { color: var(--accent-3); }
+.stat-box-value.is-off { color: var(--warning-color); }
+
+.stat-box-hint {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* ---------- 手动操作区 ---------- */
+.action-block {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.action-text {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.action-title {
+  font-size: var(--fs-base);
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: var(--space-1);
+}
+
+.action-desc {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.action-disabled {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
 }
 
 .config-card,

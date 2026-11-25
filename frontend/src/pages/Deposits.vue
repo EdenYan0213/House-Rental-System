@@ -104,7 +104,7 @@
           :total="total"
           layout="total, prev, pager, next"
           background
-          @current-change="loadDeposits"
+          @current-change="onPageChange"
         />
       </div>
     </el-card>
@@ -212,6 +212,18 @@ function formatDateTime(v) {
   const d = new Date(v)
   if (Number.isNaN(d.getTime())) return v
   return d.toLocaleString('zh-CN', { hour12: false })
+}
+
+/**
+ * 页码切换。
+ *
+ * <p>必须显式把新页码写回 page 再请求：el-pagination 的 current-change
+ * 只把页码当参数传出来，不会改 page 这个 ref。直接绑 loadDeposits 的话
+ * page 永远是 1，点哪页都还是第一页的数据。
+ */
+function onPageChange(nextPage) {
+  page.value = nextPage
+  loadDeposits()
 }
 
 async function loadDeposits() {
@@ -327,7 +339,7 @@ onMounted(() => {
 
 <style scoped>
 .page {
-  padding: 20px;
+  padding: 0;
 }
 
 .page-card {
@@ -347,8 +359,8 @@ onMounted(() => {
 }
 
 .page-title {
-  font-size: 17px;
-  font-weight: 600;
+  font-size: var(--title-page-size);
+  font-weight: var(--title-page-weight);
   color: var(--text-main);
 }
 

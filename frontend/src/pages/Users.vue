@@ -1,9 +1,14 @@
 <template>
-  <div style="padding: 20px">
-    <el-row justify="space-between" align="middle">
-      <h2>用户管理</h2>
-      <el-button type="primary" @click="handleAdd" v-if="isSuperAdmin">新增用户</el-button>
-    </el-row>
+  <div class="page">
+    <div class="page-head">
+      <div>
+        <h2>用户管理</h2>
+        <p class="page-sub">管理后台账号与角色，不同角色可访问的模块不同。</p>
+      </div>
+      <div class="page-actions">
+        <el-button v-if="isSuperAdmin" type="primary" :icon="Plus" @click="handleAdd">新增用户</el-button>
+      </div>
+    </div>
 
     <el-row style="margin-top: 16px">
       <el-input v-model="searchForm.username" placeholder="用户名" clearable style="width: 150px; margin-right: 10px" />
@@ -13,7 +18,7 @@
         <el-option label="管理员" value="ADMIN" />
         <el-option label="普通用户" value="USER" />
       </el-select>
-      <el-button type="primary" @click="loadData">搜索</el-button>
+      <el-button type="primary" @click="handleSearch">搜索</el-button>
     </el-row>
 
     <el-table :data="tableData" style="width: 100%; margin-top: 16px" v-loading="loading">
@@ -64,7 +69,7 @@
       :page-size="pagination.size"
       :total="pagination.total || tableData.length"
       layout="total, prev, pager, next"
-      @current-change="loadData"
+      @current-change="onPageChange"
     />
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="500px">
@@ -103,7 +108,9 @@
 import { formatDateTime, formatRelative } from '../utils/format'
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import EmptyState from '@/components/EmptyState.vue'
 import { getUsers, createUser, updateUser, deleteUser, enableUser, disableUser, resetUserPassword, getUser, getErrorMessage } from '@/api'
+import { Plus } from '@element-plus/icons-vue'
 
 const isSuperAdmin = computed(() => getUser()?.role === 'SUPER_ADMIN')
 
@@ -158,6 +165,28 @@ function formatDate(dateStr) {
   if (!dateStr) return ''
   const date = new Date(dateStr)
   return date.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
+/**
+ * 页码切换。
+ *
+ * <p>Users 走 MyBatis-Plus 的 Page，页码是 1-based（与其它页面的 0-based 不同），
+ * current-change 给的就是 1-based 页码，直接写回即可。
+ */
+function onPageChange(nextPage) {
+  pagination.page = nextPage
+  loadData()
+}
+
+/**
+ * 搜索：先回到第 1 页再查。
+ *
+ * <p>否则在第 3 页输入关键字时，结果可能只有 1 页，
+ * 而请求仍发 page=3，页面会空白且没有任何提示。
+ */
+function handleSearch() {
+  pagination.page = 1
+  loadData()
 }
 
 async function loadData() {

@@ -35,23 +35,26 @@ public class ReminderService {
     this.objectMapper = objectMapper;
   }
 
+  /** 未配置时的默认提醒节点（天）。 */
+  private static final List<Integer> DEFAULT_REMINDER_DAYS = List.of(30, 7, 1);
+
   @Scheduled(cron = "0 5 0 * * ?")
   @Transactional
   public void checkExpiringContracts() {
     Optional<ReminderSettings> settingsOpt = reminderSettingsRepository.findById(1L);
-    if (settingsOpt.isEmpty() || !settingsOpt.get().getEnabled()) {
+
+    // 没有配置行时不应静默跳过——这会导致功能「看起来存在但从不触发」。
+    // 历史库中 reminder_settings 常为空表，这里回落到默认节点。
+    boolean enabled = settingsOpt.map(ReminderSettings::getEnabled).orElse(true);
+    if (!enabled) {
       return;
     }
 
-    ReminderSettings settings = settingsOpt.get();
-    String[] daysArray = settings.getReminderDays().split(",");
-    List<Integer> reminderDays = new ArrayList<>();
-    for (String d : daysArray) {
-      try {
-        reminderDays.add(Integer.parseInt(d.trim()));
-      } catch (NumberFormatException e) {
-      }
-    }
+    List<Integer> reminderDays = settingsOpt
+        .map(ReminderSettings::getReminderDays)
+        .map(this::parseReminderDays)
+        .filter(list -> !list.isEmpty())
+        .orElse(DEFAULT_REMINDER_DAYS);
 
     LocalDate today = LocalDate.now();
     List<Contract> activeContracts = contractRepository.findAll().stream()
@@ -61,16 +64,41 @@ public class ReminderService {
 
     for (Contract contract : activeContracts) {
       long daysLeft = java.time.temporal.ChronoUnit.DAYS.between(today, contract.getEndDate());
+      if (daysLeft < 0) {
+        continue; // 已过期的不再提醒
+      }
 
       for (Integer reminderDay : reminderDays) {
-        if (daysLeft == reminderDay) {
-          if (!hasSentReminder(contract, reminderDay)) {
-            sendReminder(contract, reminderDay);
-            recordReminderSent(contract, reminderDay);
-          }
+        // 用「已经进入该区间且尚未发送」判断，而不是 daysLeft == reminderDay。
+        // 原实现精确匹配，服务停机一天就会永久漏发这个节点。
+        if (daysLeft <= reminderDay && !hasSentReminder(contract, reminderDay)) {
+          sendReminder(contract, reminderDay, daysLeft);
+          recordReminderSent(contract, reminderDay);
+          break; // 一次只发最近的一个节点，避免同一天刷多条
         }
       }
     }
+  }
+
+  /** 解析「30,7,1」这类配置；非法值忽略。 */
+  private List<Integer> parseReminderDays(String raw) {
+    if (raw == null || raw.isBlank()) {
+      return List.of();
+    }
+    List<Integer> days = new ArrayList<>();
+    for (String part : raw.split(",")) {
+      try {
+        int v = Integer.parseInt(part.trim());
+        if (v > 0) {
+          days.add(v);
+        }
+      } catch (NumberFormatException ignored) {
+        // 非法项直接跳过
+      }
+    }
+    // 从大到小，保证先匹配最远的节点
+    days.sort(Comparator.reverseOrder());
+    return days;
   }
 
   private boolean hasSentReminder(Contract contract, Integer day) {
@@ -88,7 +116,7 @@ public class ReminderService {
     }
   }
 
-  private void sendReminder(Contract contract, Integer daysLeft) {
+  private void sendReminder(Contract contract, Integer reminderDay, long actualDaysLeft) {
     final String[] roomNumber = { "" };
     final String[] tenantName = { "" };
 
@@ -99,7 +127,7 @@ public class ReminderService {
       tenantRepository.findById(contract.getTenantId()).ifPresent(t -> tenantName[0] = t.getName());
     }
 
-    String timeDesc = daysLeft == 1 ? "明天" : daysLeft + "天";
+    String timeDesc = actualDaysLeft <= 1 ? "明天" : actualDaysLeft + "天";
     String title = "合同到期提醒";
     String content = String.format("【合同到期提醒】合同%s（租户%s，房间%s）将于%s（%s）到期，请及时处理。",
         contract.getContractNo(), tenantName[0], roomNumber[0], timeDesc, contract.getEndDate());

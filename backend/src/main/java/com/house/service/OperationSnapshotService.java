@@ -253,13 +253,16 @@ public class OperationSnapshotService {
     Building current = before.getId() == null ? null : buildingRepository.findById(before.getId()).orElse(null);
     checkConflict(snapshot, current);
     if ("delete".equalsIgnoreCase(snapshot.getOperation()) && current == null && before.getId() != null) {
+      // 必须同时恢复 image_ids：否则撤销删除后图片引用丢失，
+      // 房间/楼栋会变成「无图」，且原图会在孤儿清理中被回收。
       jdbcTemplate.update(
-          "INSERT INTO building (id, name, code, address, image_url, total_floors, water_unit_price, electric_unit_price) VALUES (?,?,?,?,?,?,?,?)",
+          "INSERT INTO building (id, name, code, address, image_ids, total_floors, water_unit_price, electric_unit_price) "
+              + "VALUES (?,?,?,?,?,?,?,?)",
           before.getId(),
           before.getName(),
           before.getCode(),
           before.getAddress(),
-          before.getImageUrl(),
+          before.getImageIds(),
           before.getTotalFloors(),
           before.getWaterUnitPrice(),
           before.getElectricUnitPrice());
@@ -273,8 +276,10 @@ public class OperationSnapshotService {
     Room current = before.getId() == null ? null : roomRepository.findById(before.getId()).orElse(null);
     checkConflict(snapshot, current);
     if ("delete".equalsIgnoreCase(snapshot.getOperation()) && current == null && before.getId() != null) {
+      // 同 building：漏掉 image_ids 会导致撤销后房间无图
       jdbcTemplate.update(
-          "INSERT INTO room (id, building_id, floor, room_number, layout, area, status, water_meter_id, electric_meter_id, image_url, deleted) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+          "INSERT INTO room (id, building_id, floor, room_number, layout, area, status, water_meter_id, electric_meter_id, image_ids, deleted) "
+              + "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
           before.getId(),
           before.getBuildingId(),
           before.getFloor(),
@@ -284,7 +289,7 @@ public class OperationSnapshotService {
           before.getStatus(),
           before.getWaterMeterId(),
           before.getElectricMeterId(),
-          before.getImageUrl(),
+          before.getImageIds(),
           before.getDeleted());
       return;
     }

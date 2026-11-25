@@ -1,6 +1,13 @@
 <template>
-  <div>
-    <el-row :gutter="12" style="margin-bottom: 12px">
+  <div class="page">
+    <div class="page-head">
+      <div>
+        <h2>操作预警</h2>
+        <p class="page-sub">配置异常操作规则，触发后生成记录供跟进处理。</p>
+      </div>
+    </div>
+
+    <el-row :gutter="12">
       <el-col :span="12">
         <el-card shadow="never">
           <template #header>
@@ -10,15 +17,19 @@
             </div>
           </template>
           <el-table :data="rules" border>
-              <template #empty>
-                <EmptyState icon="bell" title="还没有预警规则" description="设置规则后，异常操作会自动触发预警" compact />
-              </template>
+            <template #empty>
+              <EmptyState icon="bell" title="还没有预警规则" description="设置规则后，异常操作会自动触发预警" compact />
+            </template>
             <el-table-column prop="title" label="规则" />
             <el-table-column label="类型" width="150">
               <template #default="scope">{{ alertRuleTypeText(scope.row.ruleType) }}</template>
             </el-table-column>
-            <el-table-column prop="thresholdValue" label="阈值" width="90" />
-            <el-table-column prop="windowMinutes" label="窗口(分钟)" width="110" />
+            <el-table-column label="阈值" width="90">
+              <template #default="scope">{{ scope.row.thresholdValue ?? '-' }}</template>
+            </el-table-column>
+            <el-table-column label="窗口(分钟)" width="110">
+              <template #default="scope">{{ scope.row.windowMinutes ?? '-' }}</template>
+            </el-table-column>
             <el-table-column label="级别" width="90">
               <template #default="scope">{{ levelText(scope.row.level) }}</template>
             </el-table-column>
@@ -46,7 +57,10 @@
             </div>
           </template>
           <el-table :data="records" border>
-            <el-table-column label="时间" width="160">
+            <template #empty>
+              <EmptyState icon="bell" title="还没有预警记录" description="触发规则后会在这里生成记录，可标记处理" compact />
+            </template>
+            <el-table-column label="时间" width="140">
               <template #default="scope">{{ formatDateTime(scope.row.createdAt) }}</template>
             </el-table-column>
             <el-table-column prop="title" label="标题" min-width="160" show-overflow-tooltip />
@@ -91,23 +105,31 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitForm">保存</el-button>
+        <el-button type="primary" :loading="saving" @click="submitForm">保存</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { formatDateTime, formatRelative } from '../utils/format'
+import { formatDateTime } from '../utils/format'
 import { onMounted, ref } from 'vue'
 import { alertRuleTypeText } from '../utils/labels'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { deleteAlertRule, getAlertRecords, getAlertRules, handleAlertRecord, saveAlertRule } from '../api'
+import {
+  deleteAlertRule,
+  getAlertRecords,
+  getAlertRules,
+  getErrorMessage,
+  handleAlertRecord,
+  saveAlertRule
+} from '../api'
 import EmptyState from '../components/EmptyState.vue'
 
 const rules = ref([])
 const records = ref([])
 const dialogVisible = ref(false)
+const saving = ref(false)
 const form = ref({})
 
 function levelText(level) {
@@ -117,13 +139,21 @@ function levelText(level) {
 }
 
 async function loadRules() {
-  const res = await getAlertRules()
-  rules.value = res.data || []
+  try {
+    const res = await getAlertRules()
+    rules.value = res.data || []
+  } catch (e) {
+    ElMessage.error(getErrorMessage(e, '预警规则加载失败'))
+  }
 }
 
 async function loadRecords() {
-  const res = await getAlertRecords({ page: 0, size: 20 })
-  records.value = res.data.content || []
+  try {
+    const res = await getAlertRecords({ page: 0, size: 20 })
+    records.value = res.data?.content || []
+  } catch (e) {
+    ElMessage.error(getErrorMessage(e, '预警记录加载失败'))
+  }
 }
 
 function openCreate() {
@@ -145,37 +175,63 @@ function editRule(row) {
 }
 
 async function submitForm() {
-  await saveAlertRule(form.value)
-  dialogVisible.value = false
-  ElMessage.success('保存成功')
-  await loadRules()
+  if (!form.value.title?.trim()) {
+    ElMessage.warning('请填写规则名称')
+    return
+  }
+  saving.value = true
+  try {
+    await saveAlertRule(form.value)
+    dialogVisible.value = false
+    ElMessage.success('保存成功')
+    await loadRules()
+  } catch (e) {
+    ElMessage.error(getErrorMessage(e, '保存失败'))
+  } finally {
+    saving.value = false
+  }
 }
 
 async function toggleRule(row) {
-  await saveAlertRule({ ...row, enabled: row.enabled === 1 ? 0 : 1 })
-  ElMessage.success('状态已更新')
-  await loadRules()
+  try {
+    await saveAlertRule({ ...row, enabled: row.enabled === 1 ? 0 : 1 })
+    ElMessage.success('状态已更新')
+    await loadRules()
+  } catch (e) {
+    ElMessage.error(getErrorMessage(e, '状态更新失败'))
+  }
 }
 
 async function removeRule(row) {
-  await ElMessageBox.confirm('确认删除该规则?', '提示', { type: 'warning' })
-  await deleteAlertRule(row.id)
-  ElMessage.success('删除成功')
-  await loadRules()
+  try {
+    await ElMessageBox.confirm(`确认删除规则「${row.title}」？`, '提示', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消'
+    })
+  } catch {
+    return // 用户取消
+  }
+  try {
+    await deleteAlertRule(row.id)
+    ElMessage.success('删除成功')
+    await loadRules()
+  } catch (e) {
+    ElMessage.error(getErrorMessage(e, '删除失败'))
+  }
 }
 
 async function handleRecord(row) {
-  await handleAlertRecord(row.id)
-  ElMessage.success('已标记处理')
-  await loadRecords()
+  try {
+    await handleAlertRecord(row.id)
+    ElMessage.success('已标记处理')
+    await loadRecords()
+  } catch (e) {
+    ElMessage.error(getErrorMessage(e, '处理失败'))
+  }
 }
 
 onMounted(async () => {
-  try {
-    await loadRules()
-    await loadRecords()
-  } catch (_) {
-    ElMessage.error('加载预警数据失败')
-  }
+  await Promise.all([loadRules(), loadRecords()])
 })
 </script>

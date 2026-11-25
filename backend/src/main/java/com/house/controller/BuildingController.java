@@ -4,7 +4,10 @@ import com.house.model.Building;
 import com.house.model.OperationSnapshot;
 import com.house.repo.BuildingRepository;
 import com.house.repo.RoomRepository;
+import com.house.service.ImageStorageService;
 import com.house.service.OperationSnapshotService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -16,16 +19,21 @@ import java.util.Map;
 @RequestMapping("/api/buildings")
 public class BuildingController {
 
+  private static final Logger log = LoggerFactory.getLogger(BuildingController.class);
+
   private final BuildingRepository buildingRepository;
   private final RoomRepository roomRepository;
   private final OperationSnapshotService operationSnapshotService;
+  private final ImageStorageService imageStorageService;
 
   public BuildingController(BuildingRepository buildingRepository,
       RoomRepository roomRepository,
-      OperationSnapshotService operationSnapshotService) {
+      OperationSnapshotService operationSnapshotService,
+      ImageStorageService imageStorageService) {
     this.buildingRepository = buildingRepository;
     this.roomRepository = roomRepository;
     this.operationSnapshotService = operationSnapshotService;
+    this.imageStorageService = imageStorageService;
   }
 
   /**
@@ -61,7 +69,9 @@ public class BuildingController {
 
   @PostMapping
   public Building create(@RequestBody Building building) {
-    return buildingRepository.save(building);
+    Building saved = buildingRepository.save(building);
+    markBuildingImagesReferenced(saved);
+    return saved;
   }
 
   @PutMapping("/{id}")
@@ -70,16 +80,34 @@ public class BuildingController {
       b.setName(building.getName());
       b.setCode(building.getCode());
       b.setAddress(building.getAddress());
-      b.setImageUrl(building.getImageUrl());
+      // imageUrl 已废弃：不再接受前端写入，图片统一走 imageIds
       if (building.getImageIds() != null) {
         b.setImageIds(building.getImageIds());
       }
       b.setTotalFloors(building.getTotalFloors());
       b.setWaterUnitPrice(building.getWaterUnitPrice());
       b.setElectricUnitPrice(building.getElectricUnitPrice());
-      buildingRepository.save(b);
-      return ResponseEntity.ok(b);
+      Building saved = buildingRepository.save(b);
+      // 图片上传时 refCount=0，必须在这里标记已引用，
+      // 否则定时清理任务会把仍在使用中的图片删掉（历史 bug）。
+      markBuildingImagesReferenced(saved);
+      return ResponseEntity.ok(saved);
     }).orElse(ResponseEntity.notFound().build());
+  }
+
+  /** 把楼栋引用的图片标记为已引用，避免被孤儿清理任务删除。 */
+  private void markBuildingImagesReferenced(Building building) {
+    if (building == null) {
+      return;
+    }
+    try {
+      List<Long> ids = building.getImageIdList();
+      if (ids != null && !ids.isEmpty()) {
+        imageStorageService.markReferenced(ids);
+      }
+    } catch (Exception e) {
+      log.warn("标记楼栋图片引用失败 buildingId={}: {}", building.getId(), e.getMessage());
+    }
   }
 
   @DeleteMapping("/{id}")
@@ -93,9 +121,6 @@ public class BuildingController {
     OperationSnapshot snapshot = operationSnapshotService.capture(
         "房屋管理", "delete", "building", id, before.getName(), before);
     buildingRepository.deleteById(id);
-    return ResponseEntity.ok(java.util.Map.of(
-        "undoSnapshotId", snapshot.getId(),
-        "undoExpireAt", snapshot.getExpiredAt(),
-        "undoTip", "操作成功，可在30分钟内撤销"));
+    return ResponseEntity.ok(UndoResponse.of(snapshot));
   }
 }

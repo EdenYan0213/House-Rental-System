@@ -1,12 +1,15 @@
 <template>
-  <div style="padding: 20px">
-    <el-row justify="space-between" align="middle">
-      <h2>投诉管理</h2>
+  <div class="page">
+    <div class="page-head">
       <div>
-        <el-button @click="exportCurrent">导出</el-button>
-        <el-button type="primary" @click="openCreate">新建投诉</el-button>
+        <h2>投诉管理</h2>
+        <p class="page-sub">按状态处理租户投诉，处理完成后租户可确认并评价。</p>
       </div>
-    </el-row>
+      <div class="page-actions">
+        <el-button @click="exportCurrent">导出</el-button>
+        <el-button type="primary" :icon="Plus" @click="openCreate">新建投诉</el-button>
+      </div>
+    </div>
 
     <el-tabs v-model="activeTab" style="margin-top: 8px" @tab-change="onTabChange">
       <el-tab-pane label="待受理" name="pending" />
@@ -245,6 +248,7 @@ import {
   uploadComplaintFile
 } from '../api'
 import EmptyState from '../components/EmptyState.vue'
+import { Plus } from '@element-plus/icons-vue'
 
 const route = useRoute()
 

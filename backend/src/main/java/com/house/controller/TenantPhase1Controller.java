@@ -317,11 +317,13 @@ public class TenantPhase1Controller {
       return ResponseEntity.ok(Collections.emptyMap());
     }
 
-    return ResponseEntity.ok(Map.of(
-        "id", notice.getId(),
-        "title", notice.getTitle(),
-        "summary", toSummary(notice.getContent()),
-        "createdAt", notice.getCreatedAt()));
+    // 公告字段历史数据可能为空，Map.of 不接受 null
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("id", notice.getId());
+    body.put("title", notice.getTitle());
+    body.put("summary", toSummary(notice.getContent()));
+    body.put("createdAt", notice.getCreatedAt());
+    return ResponseEntity.ok(body);
   }
 
   @PostMapping("/notice")

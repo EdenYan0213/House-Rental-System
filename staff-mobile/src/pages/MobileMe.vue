@@ -1,63 +1,98 @@
 <template>
   <div class="mobile-page">
-    <el-card shadow="never" class="panel">
-      <div class="name">{{ user?.realName || user?.username || '-' }}</div>
-      <div class="role">角色：{{ roleText }}</div>
-    </el-card>
+    <!-- 用户卡片 -->
+    <section class="profile-card">
+      <div class="avatar">{{ avatarLetter }}</div>
+      <div class="profile-meta">
+        <div class="profile-name">{{ user?.realName || user?.username || '-' }}</div>
+        <div class="profile-role">{{ roleText }}</div>
+      </div>
+    </section>
 
-    <el-card shadow="never" class="panel">
-      <template #header>主题设置</template>
-      <el-radio-group v-model="themePref" @change="changeTheme" size="small">
-        <el-radio-button label="light">浅色</el-radio-button>
-        <el-radio-button label="dark">深色</el-radio-button>
-        <el-radio-button label="system">跟随系统</el-radio-button>
-      </el-radio-group>
-    </el-card>
+    <!-- 主题 -->
+    <section>
+      <div class="m-section-title">外观</div>
+      <div class="m-card theme-card">
+        <el-radio-group v-model="themePref" @change="changeTheme" class="theme-group">
+          <el-radio-button label="light">浅色</el-radio-button>
+          <el-radio-button label="dark">深色</el-radio-button>
+          <el-radio-button label="system">跟随系统</el-radio-button>
+        </el-radio-group>
+      </div>
+    </section>
 
-    <el-card shadow="never" class="panel">
-      <template #header>消息提醒</template>
-      <div class="switch-row">
-        <span>总开关</span>
-        <el-switch v-model="notifySettings.enabled" @change="saveNotifySettings" />
+    <!-- 消息提醒 -->
+    <section>
+      <div class="m-section-title">消息提醒</div>
+      <div class="m-card switch-list">
+        <div class="switch-row">
+          <div class="switch-text">
+            <span class="switch-label">总开关</span>
+            <span class="switch-desc">关闭后不再接收任何提醒</span>
+          </div>
+          <el-switch v-model="notifySettings.enabled" @change="saveNotifySettings" />
+        </div>
+        <div class="switch-row">
+          <div class="switch-text">
+            <span class="switch-label">工单提醒</span>
+            <span class="switch-desc">有新工单或状态变更时通知</span>
+          </div>
+          <el-switch v-model="notifySettings.repair" :disabled="!notifySettings.enabled" @change="saveNotifySettings" />
+        </div>
+        <div class="switch-row">
+          <div class="switch-text">
+            <span class="switch-label">账单提醒</span>
+            <span class="switch-desc">账单逾期或生成时通知</span>
+          </div>
+          <el-switch v-model="notifySettings.bill" :disabled="!notifySettings.enabled" @change="saveNotifySettings" />
+        </div>
+        <div class="switch-row">
+          <div class="switch-text">
+            <span class="switch-label">合同提醒</span>
+            <span class="switch-desc">合同即将到期时通知</span>
+          </div>
+          <el-switch v-model="notifySettings.contract" :disabled="!notifySettings.enabled" @change="saveNotifySettings" />
+        </div>
       </div>
-      <div class="switch-row">
-        <span>工单提醒</span>
-        <el-switch v-model="notifySettings.repair" :disabled="!notifySettings.enabled" @change="saveNotifySettings" />
-      </div>
-      <div class="switch-row">
-        <span>账单提醒</span>
-        <el-switch v-model="notifySettings.bill" :disabled="!notifySettings.enabled" @change="saveNotifySettings" />
-      </div>
-      <div class="switch-row">
-        <span>合同提醒</span>
-        <el-switch v-model="notifySettings.contract" :disabled="!notifySettings.enabled" @change="saveNotifySettings" />
-      </div>
-    </el-card>
+    </section>
 
-    <el-card shadow="never" class="panel">
-      <template #header>连接设置</template>
-      <el-input v-model="apiBaseUrl" placeholder="后端地址，如 http://192.168.1.100:8080/api" />
-      <div class="ops">
-        <el-button type="primary" plain @click="saveApiBase">保存地址</el-button>
-        <el-button @click="resetApiBase">恢复默认</el-button>
+    <!-- 连接设置 -->
+    <section>
+      <div class="m-section-title">连接设置</div>
+      <div class="m-card">
+        <el-input v-model="apiBaseUrl" placeholder="http://192.168.1.100:8081/api" />
+        <div class="conn-ops">
+          <el-button type="primary" plain @click="saveApiBase">保存</el-button>
+          <el-button @click="resetApiBase">恢复默认</el-button>
+        </div>
+        <div class="conn-current">当前：{{ currentApiBase }}</div>
       </div>
-      <div class="muted">当前：{{ currentApiBase }}</div>
-    </el-card>
+    </section>
 
-    <el-card shadow="never" class="panel">
-      <template #header>系统操作</template>
-      <div class="action-list">
-        <el-button v-if="canUseAiAssistant" type="success" plain class="action-btn" @click="router.push('/mobile/ai-assistant')">AI助手</el-button>
-        <el-button type="primary" plain class="action-btn" @click="goSettings">个人设置</el-button>
-        <el-button plain class="action-btn" @click="clearCache">清理缓存</el-button>
-        <el-button type="danger" class="action-btn" @click="logout">退出登录</el-button>
+    <!-- 操作 -->
+    <section>
+      <div class="m-section-title">操作</div>
+      <div class="m-list">
+        <div v-if="canUseAiAssistant" class="m-list-item" @click="router.push('/mobile/ai-assistant')">
+          <el-icon class="item-icon"><MagicStick /></el-icon>
+          <div class="m-list-main"><div class="m-list-title">AI 助手</div></div>
+          <el-icon class="item-arrow"><ArrowRight /></el-icon>
+        </div>
+        <div class="m-list-item" @click="goSettings">
+          <el-icon class="item-icon"><Setting /></el-icon>
+          <div class="m-list-main"><div class="m-list-title">个人设置</div></div>
+          <el-icon class="item-arrow"><ArrowRight /></el-icon>
+        </div>
+        <div class="m-list-item" @click="clearCache">
+          <el-icon class="item-icon"><Delete /></el-icon>
+          <div class="m-list-main"><div class="m-list-title">清理缓存</div></div>
+          <el-icon class="item-arrow"><ArrowRight /></el-icon>
+        </div>
       </div>
-    </el-card>
+    </section>
 
-    <el-card shadow="never" class="panel">
-      <template #header>帮助</template>
-      <el-link href="/README.md" target="_blank" type="primary">查看帮助文档</el-link>
-    </el-card>
+    <!-- 退出登录 -->
+    <el-button class="logout-btn" @click="logout">退出登录</el-button>
   </div>
 </template>
 
@@ -65,6 +100,7 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { MagicStick, Setting, Delete, ArrowRight } from '@element-plus/icons-vue'
 import {
   getUser,
   removeToken,
@@ -80,6 +116,12 @@ import { clearMobileCache } from '@/utils/mobileCache'
 
 const router = useRouter()
 const user = getUser()
+
+/** 头像占位字母：取姓名首字。 */
+const avatarLetter = computed(() => {
+  const name = user?.realName || user?.username || ''
+  return name ? name.slice(0, 1).toUpperCase() : '?'
+})
 const NOTIFY_SETTING_KEY = 'mobile_notify_settings'
 
 const themePref = ref(getStoredThemePreference())
@@ -163,54 +205,153 @@ apiBaseUrl.value = ''
 </script>
 
 <style scoped>
-.mobile-page {
-  padding: 14px;
-  max-width: 760px;
-  margin: 0 auto;
+/* ---------- 用户卡片 ---------- */
+.profile-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px var(--m-gutter);
+  background: linear-gradient(135deg, var(--accent-3), var(--accent-4));
+  border-radius: var(--m-radius);
+  color: var(--text-inverse);
 }
 
-.panel {
-  margin-bottom: 12px;
-}
-
-.name {
-  font-size: 20px;
+.avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
   font-weight: 700;
-  color: var(--text-main);
+  flex: 0 0 auto;
 }
 
-.role {
-  margin-top: 6px;
-  color: var(--text-muted);
+.profile-meta {
+  min-width: 0;
+}
+
+.profile-name {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile-role {
+  font-size: 12px;
+  opacity: 0.85;
+  margin-top: 3px;
+}
+
+/* ---------- 主题 ---------- */
+.theme-card {
+  padding: 12px;
+}
+
+.theme-group {
+  display: flex;
+  width: 100%;
+}
+
+.theme-group :deep(.el-radio-button) {
+  flex: 1;
+}
+
+.theme-group :deep(.el-radio-button__inner) {
+  width: 100%;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---------- 消息提醒 ---------- */
+.switch-list {
+  padding: 0 var(--m-gutter);
 }
 
 .switch-row {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 7px 0;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 0;
+  min-height: var(--m-tap);
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--border-color);
 }
 
-.ops {
-  margin-top: 10px;
+.switch-row:last-child {
+  border-bottom: none;
+}
+
+.switch-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.switch-label {
+  font-size: 14px;
+  color: var(--text-main);
+  font-weight: 500;
+}
+
+.switch-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* ---------- 连接设置 ---------- */
+.conn-ops {
   display: flex;
   gap: 8px;
+  margin-top: 10px;
 }
 
-.muted {
+.conn-ops :deep(.el-button) {
+  flex: 1;
+  min-height: 38px;
+  border-radius: 9px;
+}
+
+.conn-current {
   margin-top: 8px;
+  font-size: 11px;
   color: var(--text-muted);
-  font-size: 12px;
+  word-break: break-all;
 }
 
-.action-list {
-  display: grid;
-  gap: 10px;
+/* ---------- 操作列表 ---------- */
+.item-icon {
+  color: var(--accent-3);
+  flex: 0 0 auto;
 }
 
-.action-btn {
+.item-arrow {
+  color: var(--text-muted);
+  opacity: 0.45;
+  flex: 0 0 auto;
+}
+
+/* ---------- 退出 ---------- */
+.logout-btn {
   width: 100%;
-  height: 42px;
+  min-height: var(--m-tap);
   border-radius: 10px;
+  color: var(--danger-color);
+  border-color: color-mix(in srgb, var(--danger-color) 35%, transparent);
+  background: transparent;
+}
+
+.logout-btn:active {
+  background: color-mix(in srgb, var(--danger-color) 10%, transparent);
 }
 </style>

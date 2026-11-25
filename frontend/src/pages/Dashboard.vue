@@ -2,10 +2,23 @@
   <div class="dashboard">
     <el-row :gutter="20" class="stat-row">
       <el-col v-for="card in statCards" :key="card.label" :xs="12" :sm="12" :md="6">
-        <el-card shadow="hover" class="stat-card" v-loading="loading">
-          <div class="stat-label">{{ card.label }}</div>
-          <div class="stat-value" :class="card.tone">{{ card.value }}</div>
-          <div class="stat-hint">{{ card.hint || '\u00a0' }}</div>
+        <el-card
+          shadow="hover"
+          class="stat-card"
+          :class="card.tone"
+          v-loading="loading"
+          @click="card.to && $router.push(card.to)"
+        >
+          <div class="stat-card-inner">
+            <div class="stat-icon">
+              <el-icon :size="18"><component :is="card.icon" /></el-icon>
+            </div>
+            <div class="stat-body">
+              <div class="stat-label">{{ card.label }}</div>
+              <div class="stat-value">{{ card.value }}</div>
+            </div>
+          </div>
+          <div class="stat-hint">{{ card.hint }}</div>
         </el-card>
       </el-col>
     </el-row>
@@ -66,19 +79,19 @@
       <el-col :xs="24" :md="12">
         <el-card>
           <template #header>快捷入口</template>
-          <div class="quick-actions">
-            <el-button type="primary" @click="$router.push('/contracts/new')">
-              <el-icon><Plus /></el-icon>新建合同
-            </el-button>
-            <el-button type="success" @click="$router.push('/meter-readings')">
-              <el-icon><Edit /></el-icon>录入水电
-            </el-button>
-            <el-button type="warning" @click="$router.push('/bills')">
-              <el-icon><Document /></el-icon>账单管理
-            </el-button>
-            <el-button @click="$router.push('/messages')">
-              <el-icon><Bell /></el-icon>消息中心
-            </el-button>
+          <!-- 快捷入口：统一磁贴样式，靠图标与文案区分，不用四种按钮颜色 -->
+          <div class="quick-grid">
+            <button
+              v-for="q in quickActions"
+              :key="q.to"
+              type="button"
+              class="quick-tile"
+              @click="$router.push(q.to)"
+            >
+              <el-icon :size="20"><component :is="q.icon" /></el-icon>
+              <span class="quick-label">{{ q.label }}</span>
+              <span class="quick-desc">{{ q.desc }}</span>
+            </button>
           </div>
         </el-card>
       </el-col>
@@ -115,7 +128,10 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'v
 import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import { ElMessage } from 'element-plus'
-import { Plus, Edit, Document, Bell, CircleCheckFilled, Clock } from '@element-plus/icons-vue'
+import {
+  Plus, Edit, Document, Bell, CircleCheckFilled, Clock,
+  Money, Wallet, OfficeBuilding, House
+} from '@element-plus/icons-vue'
 import {
   getDashboardStats,
   getDashboardCharts,
@@ -167,32 +183,71 @@ const rentRate = computed(() =>
   stats.totalRooms > 0 ? Math.round((stats.rentedRooms / stats.totalRooms) * 100) : 0
 )
 
+/**
+ * 顶部四张统计卡。
+ *
+ * <p>每张都有实质的副信息（hint），不再用不换行空格占位——
+ * 空白行会让卡片显得松散，也让管理员看不出数字背后的含义。
+ * 卡片可点击，直接跳到对应模块处理。
+ */
 const statCards = computed(() => [
   {
     label: '今日收款',
     value: `¥${formatMoney(stats.todayPayment)}`,
     tone: 'tone-primary',
-    hint: null
+    icon: Money,
+    to: '/bills',
+    hint: stats.todayPayment > 0 ? '已入账，可在账单流水核对' : '今日还没有收款记录'
   },
   {
     label: '待收租金',
     value: `¥${formatMoney(stats.pendingAmount)}`,
     tone: 'tone-warning',
-    hint: stats.overdueCount > 0 ? `共 ${stats.overdueCount} 张未结清账单` : null
+    icon: Wallet,
+    to: '/bills?status=PENDING',
+    hint: stats.overdueCount > 0
+      ? `${stats.overdueCount} 张账单已逾期，建议尽快催缴`
+      : '暂无逾期账单'
   },
   {
-    label: '在租房间数',
+    label: '在租房间',
     value: `${stats.rentedRooms} / ${stats.totalRooms}`,
     tone: 'tone-success',
-    hint: stats.totalRooms > 0 ? `出租率 ${rentRate.value}%` : null
+    icon: OfficeBuilding,
+    to: '/buildings',
+    hint: stats.totalRooms > 0
+      ? `整体出租率 ${rentRate.value}%`
+      : '还没有房间，先创建楼栋'
   },
   {
-    label: '空闲房间数',
+    label: '空闲房间',
     value: String(stats.idleRooms),
     tone: 'tone-info',
-    hint: null
+    icon: House,
+    to: '/buildings',
+    hint: stats.idleRooms > 0
+      ? `可出租，约占 ${idleRate.value}%`
+      : '全部已出租'
   }
 ])
+
+/**
+ * 快捷入口。用磁贴而非彩色按钮：四种按钮色会让仪表盘视觉噪音太大，
+ * 而图标 + 一句说明足以让人认出功能。
+ */
+const quickActions = [
+  { to: '/contracts/new', label: '新建合同', desc: '录入租约信息', icon: Plus },
+  { to: '/meter-readings', label: '录入水电', desc: '批量抄表', icon: Edit },
+  { to: '/bills', label: '账单管理', desc: '收款与催缴', icon: Document },
+  { to: '/messages', label: '消息中心', desc: '待办与通知', icon: Bell }
+]
+
+/** 空闲占比，用于第四张卡的副信息。 */
+const idleRate = computed(() => {
+  const total = Number(stats.totalRooms || 0)
+  if (total <= 0) return 0
+  return Math.round((Number(stats.idleRooms || 0) / total) * 100)
+})
 
 function formatMoney(val) {
   const num = Number(val || 0)
@@ -378,56 +433,96 @@ onBeforeUnmount(() => {
 }
 
 .dashboard {
-  padding: 20px;
+  padding: 0;
 }
 .section-row {
   margin-top: 20px;
 }
+/* ---------- 统计卡 ----------
+ * 左图标 + 右数字，底部一行实质说明。
+ * 每张卡都有 tone 色，通过左侧细色条区分语义（收/欠/租/空）。
+ */
 .stat-card {
-  text-align: center;
-  margin-bottom: 16px;
-  /* 让同一行的卡片等高，不随提示文案有无而变化 */
   height: 100%;
+  margin-bottom: var(--space-4);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
 }
 
 .stat-card :deep(.el-card__body) {
-  padding: 18px 12px;
+  padding: var(--space-4) var(--space-4) var(--space-3);
   height: 100%;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  gap: var(--space-3);
 }
+
+/* 左侧语义色条 */
+.stat-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--stat-color, var(--accent-3));
+}
+
+.stat-card-inner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* 图标底座：淡色圆角方块 */
+.stat-icon {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--stat-color, var(--accent-3));
+  background: color-mix(in srgb, var(--stat-color, var(--accent-3)) 12%, transparent);
+}
+
+.stat-body {
+  min-width: 0;
+  flex: 1;
+}
+
 .stat-label {
   color: var(--text-muted);
-  font-size: 13px;
-  margin-bottom: 8px;
+  font-size: var(--fs-xs);
+  letter-spacing: 0.02em;
+  margin-bottom: 2px;
 }
+
 .stat-value {
   color: var(--text-main);
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
   font-size: 24px;
-  font-weight: 700;
-  line-height: 1.2;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
 }
-.tone-primary {
-  color: var(--accent-color);
-}
-.tone-warning {
-  color: #d97706;
-}
-.tone-success {
-  color: var(--success-color);
-}
-.tone-info {
-  color: var(--text-main);
-}
+
+/* 语义色：只染图标与色条，数字保持高对比 */
+.tone-primary { --stat-color: var(--accent-3); }
+.tone-warning { --stat-color: var(--warning-color); }
+.tone-success { --stat-color: var(--accent-3); }
+.tone-info    { --stat-color: var(--text-muted); }
+
 .stat-hint {
-  margin-top: 6px;
-  font-size: 12px;
-  line-height: 18px;
-  /* 固定高度占位，有无提示都保持一致 */
-  min-height: 18px;
+  font-size: var(--fs-xs);
+  line-height: 1.5;
   color: var(--text-muted);
+  /* 不再用空格占位：每张卡都有真实文案，高度自然一致 */
+  margin: 0;
 }
 .chart {
   height: 250px;
@@ -441,6 +536,50 @@ onBeforeUnmount(() => {
 .badge {
   margin-left: 8px;
 }
+/* 快捷入口磁贴：2x2 网格，图标在上、说明在下 */
+.quick-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-3);
+}
+
+.quick-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: var(--space-3);
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  background: var(--bg-surface);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+  font-family: inherit;
+}
+
+.quick-tile:hover {
+  border-color: var(--accent-2);
+  background: var(--accent-1);
+  transform: translateY(-1px);
+}
+
+.quick-tile .el-icon {
+  color: var(--accent-3);
+  margin-bottom: 4px;
+}
+
+.quick-label {
+  font-size: var(--fs-base);
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.quick-desc {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
 .quick-actions {
   display: flex;
   flex-wrap: wrap;

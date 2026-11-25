@@ -1,5 +1,5 @@
 <template>
-  <div style="padding:20px">
+  <div>
     <el-row justify="space-between" align="middle">
       <div>
         <el-button @click="goBack" style="margin-right:10px">← 退回</el-button>
@@ -11,6 +11,7 @@
         <el-button :disabled="rooms.length === 0" @click="toggleSelectAll">{{ allSelected ? '取消本页全选' : '选中本页' }}</el-button>
         <el-button type="danger" plain :disabled="selectedRoomIds.length === 0" @click="batchDelete">批量删除</el-button>
         <el-button type="warning" :disabled="selectedRoomIds.length === 0" @click="openBatchRentDialog">批量调整租金</el-button>
+        <el-button :disabled="rooms.length === 0" @click="openQrBatchDialog">导出二维码</el-button>
       </div>
     </el-row>
 
@@ -40,7 +41,7 @@
 
     <el-row v-else :gutter="20" style="margin-top: 20px">
       <el-col v-for="room in rooms" :key="room.id" :span="8">
-        <el-card class="room-card" shadow="hover">
+        <el-card class="room-card room-card--clickable" shadow="hover" @click="goDetail(room)">
           <div
             style="
               position: absolute;
@@ -52,10 +53,12 @@
               padding: 2px 6px;
             "
           >
-            <el-checkbox
-              :model-value="selectedRoomIds.includes(room.id)"
-              @change="(v) => toggleRoomSelection(room.id, v)"
-            />
+            <span @click.stop>
+              <el-checkbox
+                :model-value="selectedRoomIds.includes(room.id)"
+                @change="(v) => toggleRoomSelection(room.id, v)"
+              />
+            </span>
           </div>
           <div class="room-image">
             <el-carousel
@@ -69,7 +72,10 @@
                 <img :src="imageSrc(id)" alt="房间图片" />
               </el-carousel-item>
             </el-carousel>
-            <img v-else :src="getRoomImage(room)" alt="房间图片" />
+            <div v-else class="room-image-placeholder">
+              <el-icon :size="32"><Picture /></el-icon>
+              <span>暂无照片</span>
+            </div>
             <div class="room-status" :class="room.status">
               {{ roomStatusText(room.status) }}
             </div>
@@ -77,16 +83,39 @@
               {{ imagesOf(room).length }} 张
             </div>
           </div>
-          <div class="room-info">
-            <h3>{{ room.roomNumber }}</h3>
-            <p class="detail">{{ room.layout }} · {{ room.area }}m² · {{ room.floor }}层</p>
-            <div class="actions">
-              <el-button size="small" @click="goDetail(room)">详情</el-button>
-              <el-button type="primary" size="small" @click="editRoom(room)">编辑</el-button>
-              <el-button size="small" @click="goAssets(room)">器具</el-button>
-              <el-button size="small" @click="goMeter(room)">水电</el-button>
-              <el-button size="small" @click="goComplaint(room)">投诉</el-button>
-              <el-button size="small" type="danger" @click="del(room)">删除</el-button>
+          <div class="room-info" :class="`floor-band-${floorBand(room.floor)}`">
+            <!-- 房号是本系统的主键，也是管理员扫视时最先找的东西：
+                 用等宽大字号 + 左侧楼层色带，让「同一层的房间」在视觉上成组。 -->
+            <div class="room-title-row">
+              <span class="room-no">{{ room.roomNumber }}</span>
+              <span v-if="room.floor != null" class="floor-tag">{{ room.floor }}F</span>
+            </div>
+            <p class="detail">
+              <span v-if="room.layout">{{ room.layout }}</span>
+              <span v-if="room.layout && room.area != null" class="sep">·</span>
+              <span v-if="room.area != null">{{ room.area }}m²</span>
+            </p>
+
+            <!-- 常用操作用文字按钮，低频操作收进「更多」，避免一排按钮被挤出卡片 -->
+            <div class="actions" @click.stop>
+              <el-button type="primary" size="small" @click="goDetail(room)">详情</el-button>
+              <el-button size="small" @click="editRoom(room)">编辑</el-button>
+              <el-button size="small" :loading="qrLoading" @click="showRoomQr(room)">二维码</el-button>
+              <el-dropdown trigger="click" @command="cmd => handleRoomCommand(cmd, room)">
+                <el-button size="small" class="more-btn">
+                  更多<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="assets">器具档案</el-dropdown-item>
+                    <el-dropdown-item command="meter">水电记录</el-dropdown-item>
+                    <el-dropdown-item command="complaint">投诉记录</el-dropdown-item>
+                    <el-dropdown-item command="delete" divided>
+                      <span class="danger-item">删除房间</span>
+                    </el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
             </div>
           </div>
         </el-card>
@@ -103,6 +132,7 @@
           <div v-if="uploadType === 'local'">
             <el-upload
               action="/api/files/upload"
+              multiple
               :show-file-list="false"
               :on-error="handleUploadError"
               :before-upload="beforeUpload"
@@ -177,6 +207,57 @@
       <template #footer>
         <el-button @click="showBatchRentDialog = false">取消</el-button>
         <el-button type="primary" :loading="batchRentLoading" @click="submitBatchRent">确认调整</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 单房间二维码 -->
+    <el-dialog
+      v-model="showQrDialog"
+      :title="currentQrRoom ? `${currentQrRoom.roomNumber} 二维码` : '房间二维码'"
+      width="420px"
+      @closed="releaseQrUrl"
+    >
+      <div v-loading="qrLoading" class="qr-preview">
+        <img v-if="qrImageUrl" :src="qrImageUrl" alt="房间二维码" />
+        <p class="qr-hint">扫码进入房间详情，可录入水电、查看账单</p>
+      </div>
+      <template #footer>
+        <el-button @click="showQrDialog = false">关闭</el-button>
+        <el-button @click="printQr">打印</el-button>
+        <el-button type="primary" @click="downloadQrPng">下载 PNG</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 批量导出二维码 PDF -->
+    <el-dialog v-model="showQrBatchDialog" title="批量导出二维码" width="520px">
+      <el-form :model="qrBatchForm" label-width="110px">
+        <el-form-item label="范围">
+          <el-radio-group v-model="qrBatchForm.useSelectedOnly">
+            <el-radio :label="false">本页全部房间</el-radio>
+            <el-radio :label="true">仅已选房间（{{ selectedRoomIds.length }}）</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="楼层">
+          <el-select v-model="qrBatchForm.floor" placeholder="全部楼层" clearable style="width:100%">
+            <el-option v-for="f in floorList" :key="f" :label="`${f}层`" :value="f" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="纸张">
+          <el-select v-model="qrBatchForm.paperSize" style="width:100%">
+            <el-option label="A4" value="A4" />
+            <el-option label="A5" value="A5" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="每页数量">
+          <el-input-number v-model="qrBatchForm.qrPerPage" :min="1" :max="24" style="width:100%" />
+        </el-form-item>
+        <el-form-item label="显示 Logo">
+          <el-switch v-model="qrBatchForm.showLogo" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showQrBatchDialog = false">取消</el-button>
+        <el-button type="primary" :loading="qrBatchLoading" @click="exportQrBatchPdf">导出 PDF</el-button>
       </template>
     </el-dialog>
 
@@ -282,10 +363,10 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted } from 'vue'
+import { computed, onBeforeUnmount, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, ArrowDown, Picture } from '@element-plus/icons-vue'
 import {
   getRooms,
   createRoom,
@@ -295,16 +376,14 @@ import {
   getBuilding,
   createRoomsBatch,
   createRoomsBatchOverride,
-  uploadFile,
   uploadFileByUrl,
   uploadImage,
   batchAdjustRoomRent,
-  getRoomQrPng,
-  exportRoomQrsPdf,
   getErrorMessage
 } from '../api'
 import { showUndoToast } from '../utils/undo'
 import { roomStatusText } from '../utils/labels'
+import { useRoomQr } from '@/composables/useRoomQr'
 
 const route = useRoute()
 const router = useRouter()
@@ -381,6 +460,23 @@ const selectedRoomIds = ref([])
 const showBatchRentDialog = ref(false)
 const batchRentLoading = ref(false)
 const batchRentForm = ref({ mode: 'FIXED', fixedAmount: 0, percent: 0, syncActiveContracts: true })
+
+// 二维码：状态与逻辑在 composable 内，这里只负责模板绑定
+const {
+  showQrDialog,
+  currentQrRoom,
+  qrImageUrl,
+  qrLoading,
+  showQrBatchDialog,
+  qrBatchLoading,
+  qrBatchForm,
+  showRoomQr,
+  downloadQrPng,
+  printQr,
+  openQrBatchDialog,
+  exportQrBatchPdf,
+  releaseQrUrl
+} = useRoomQr({ rooms, selectedRoomIds, buildingName })
 // 分页后「全选」只作用于当前页，避免误以为选中了全部房间
 const allSelected = computed(() =>
   rooms.value.length > 0 &&
@@ -531,85 +627,6 @@ function openBatch() {
   }
 }
 
-function openQrBatchDialog() {
-  qrBatchForm.value.useSelectedOnly = selectedRoomIds.value.length > 0;
-  showQrBatchDialog.value = true;
-}
-
-async function showRoomQr(room) {
-  currentQrRoom.value = room;
-  try {
-    const res = await getRoomQrPng(room.id, { showLogo: false });
-    if (qrImageUrl.value) {
-      URL.revokeObjectURL(qrImageUrl.value);
-    }
-    qrImageUrl.value = URL.createObjectURL(res.data);
-    showQrDialog.value = true;
-  } catch (_) {
-    ElMessage.error("二维码生成失败");
-  }
-}
-
-async function downloadQrPng() {
-  if (!currentQrRoom.value) return;
-  try {
-    const res = await getRoomQrPng(currentQrRoom.value.id, { showLogo: true });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(res.data);
-    link.download = `${buildingName.value}_${currentQrRoom.value.roomNumber}_二维码.png`;
-    link.click();
-    URL.revokeObjectURL(link.href);
-  } catch (_) {
-    ElMessage.error("下载失败");
-  }
-}
-
-function printQr() {
-  if (!qrImageUrl.value) return;
-  const win = window.open("", "_blank");
-  if (!win) return;
-  win.document.write(`<img src="${qrImageUrl.value}" style="width:320px;display:block;margin:20px auto;"/>`);
-  win.document.close();
-  win.print();
-}
-
-async function exportQrBatchPdf() {
-  qrBatchLoading.value = true;
-  try {
-    let targetRooms = qrBatchForm.value.useSelectedOnly
-      ? rooms.value.filter((room) => selectedRoomIds.value.includes(room.id))
-      : rooms.value;
-
-    if (qrBatchForm.value.floor !== null && qrBatchForm.value.floor !== undefined) {
-      targetRooms = targetRooms.filter((r) => Number(r.floor) === Number(qrBatchForm.value.floor));
-    }
-    if (targetRooms.length === 0) {
-      ElMessage.warning("没有可导出的房间");
-      return;
-    }
-    const roomIds = targetRooms.map((r) => r.id);
-    const res = await exportRoomQrsPdf({
-      roomIds,
-      paperSize: qrBatchForm.value.paperSize,
-      qrPerPage: qrBatchForm.value.qrPerPage,
-      showLogo: qrBatchForm.value.showLogo,
-    });
-
-    const fileName = `${buildingName.value || "房间"}二维码_${new Date().toISOString().slice(0, 10).replace(/-/g, "")}.pdf`;
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(res.data);
-    link.download = fileName;
-    link.click();
-    URL.revokeObjectURL(link.href);
-    ElMessage.success("导出成功");
-    showQrBatchDialog.value = false;
-  } catch (_) {
-    ElMessage.error("导出失败");
-  } finally {
-    qrBatchLoading.value = false;
-  }
-}
-
 function editRoom(r) {
   editId.value = r.id
   form.value = { ...r }
@@ -653,7 +670,7 @@ function handleRoomUploadSuccess(response) {
 }
 
 function handleUploadError(error) {
-  const message = error?.response?.data?.message || error?.message || '图片上传失败'
+  const message = getErrorMessage(error, '图片上传失败')
   ElMessage.error(message)
 }
 
@@ -669,7 +686,7 @@ async function customUpload(options) {
     }
     options.onSuccess(res.data)
   } catch (error) {
-    ElMessage.error(error?.response?.data?.message || error?.message || '图片上传失败')
+    ElMessage.error(getErrorMessage(error, '图片上传失败'))
     options.onError(error)
   }
 }
@@ -695,7 +712,7 @@ async function del(r) {
     await load()
   } catch (e) {
     if (e !== 'cancel') {
-      const message = e?.response?.data || e?.message || '删除失败'
+      const message = getErrorMessage(e, '删除失败')
       if (String(message).includes('已出租')) {
         ElMessageBox.alert(message, '删除失败', { type: 'warning' })
       } else {
@@ -800,6 +817,26 @@ function goMeter(room) {
   router.push(`/buildings/${buildingId}/rooms/${room.id}/meter`)
 }
 
+/** 卡片「更多」菜单命令分发。 */
+function handleRoomCommand(cmd, room) {
+  if (cmd === 'assets') return goAssets(room)
+  if (cmd === 'meter') return goMeter(room)
+  if (cmd === 'complaint') return goComplaint(room)
+  if (cmd === 'delete') return del(room)
+}
+
+/**
+ * 楼层 → 色带层级（1-5）。
+ *
+ * <p>同一层的房间共用同一条色带，管理员扫视时能立刻看出
+ * 「这几个房间在同一层」。楼层越高颜色越深，形成垂直方向的地图感。
+ */
+function floorBand(floor) {
+  const f = Number(floor)
+  if (!Number.isFinite(f) || f <= 0) return 1
+  return Math.min(5, Math.max(1, f))
+}
+
 function goDetail(room) {
   router.push(`/buildings/${buildingId}/rooms/${room.id}/detail`)
 }
@@ -816,30 +853,22 @@ function goBack() {
   router.push('/buildings')
 }
 
-const roomImages = [
-  'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=400&h=300&fit=crop',
-  'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?w=400&h=300&fit=crop',
-  'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=400&h=300&fit=crop',
-  'https://images.unsplash.com/photo-1493809842364-78817add7ffb?w=400&h=300&fit=crop'
-]
-
+/**
+ * 房间封面地址。
+ *
+ * <p>只使用 imageIdList（图片存 image_blob）；没有图片时返回空字符串，
+ * 由模板渲染占位图。不再回退到已废弃的 imageUrl，
+ * 也不再使用随机网络图片——那会让人误以为房间有照片。
+ */
 function getRoomImage(room) {
-  if (room.imageUrl) {
-    return resolveImageUrl(room.imageUrl)
-  }
-  const index = room.id ? room.id % roomImages.length : 0
-  return roomImages[index]
-}
-
-function resolveImageUrl(url) {
-  if (!url) return ''
-  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('/')) {
-    return url
-  }
-  return `/api/files/${url}`
+  const ids = imagesOf(room)
+  return ids.length > 0 ? imageSrc(ids[0]) : ''
 }
 
 onMounted(load)
+
+// 预览图是 objectURL，离开页面释放
+onBeforeUnmount(releaseQrUrl)
 </script>
 
 <style scoped>
@@ -1016,5 +1045,223 @@ onMounted(load)
 .room-info .actions {
   display: flex;
   gap: 8px;
+}
+
+.qr-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  min-height: 240px;
+}
+
+.qr-preview img {
+  width: 260px;
+  height: 260px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.qr-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* ---------- 卡片：整卡可点击 ---------- */
+.room-card--clickable {
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.room-card--clickable:hover {
+  transform: translateY(-2px);
+}
+
+/* 操作区固定不换行，避免 7 个按钮把「删除」挤出卡片 */
+.room-card .actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: nowrap;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.room-card .actions :deep(.el-button) {
+  margin-left: 0;
+  flex: 0 0 auto;
+}
+
+.room-card .actions .more-btn {
+  flex: 0 0 auto;
+}
+
+.danger-item {
+  color: var(--danger-color, #f56c6c);
+}
+
+.room-card .detail .sep {
+  margin: 0 5px;
+  opacity: 0.5;
+}
+
+/* 无图时的占位（替代原来的随机网络图） */
+.room-image-placeholder {
+  height: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--text-muted);
+  background: var(--el-fill-color-light);
+  font-size: 13px;
+}
+
+/* ==========================================================================
+   房间卡片 —— 本系统的签名元素
+   --------------------------------------------------------------------------
+   房号是管理员扫视时最先找的信息，所以给它最大字号和等宽数字。
+   左侧色带按楼层分 5 级深浅，同层房间成组，形成"垂直楼层地图"。
+   ========================================================================== */
+.room-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--card-radius, 10px);
+  border: 1px solid var(--border-color);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.room-card:hover {
+  border-color: var(--accent-2);
+  box-shadow: var(--shadow-md);
+}
+
+.room-card .el-card__body {
+  padding: 0;
+}
+
+/* 楼层色带：贴在卡片左缘，颜色深浅编码楼层 */
+.room-card .room-info {
+  position: relative;
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  padding-left: calc(var(--space-4) + 6px);
+  border-top: 1px solid var(--border-color);
+}
+
+.room-card .room-info::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--band-color, var(--accent-2));
+}
+
+/* 楼层色带：5 级递进。
+   浅色下用实色阶梯；深色下 accent-1 在卡片底色上几乎不可见，
+   因此深色改用「同一个主色 + 不同透明度」，保证 5 级都能分辨。 */
+.room-info.floor-band-1::before { --band-color: var(--accent-2); --band-alpha: 0.28; }
+.room-info.floor-band-2::before { --band-color: var(--accent-2); --band-alpha: 0.48; }
+.room-info.floor-band-3::before { --band-color: var(--accent-3); --band-alpha: 0.72; }
+.room-info.floor-band-4::before { --band-color: var(--accent-4); --band-alpha: 0.9; }
+.room-info.floor-band-5::before { --band-color: var(--accent-5); --band-alpha: 1; }
+
+.room-card .room-info::before {
+  opacity: var(--band-alpha, 1);
+}
+
+/* 深色主题：整体提亮一档，否则低层色带与卡片底色混在一起 */
+:root.theme-dark .room-info.floor-band-1::before { --band-color: var(--accent-3); --band-alpha: 0.35; }
+:root.theme-dark .room-info.floor-band-2::before { --band-color: var(--accent-3); --band-alpha: 0.55; }
+:root.theme-dark .room-info.floor-band-3::before { --band-color: var(--accent-4); --band-alpha: 0.75; }
+:root.theme-dark .room-info.floor-band-4::before { --band-color: var(--accent-4); --band-alpha: 0.95; }
+:root.theme-dark .room-info.floor-band-5::before { --band-color: var(--accent-5); --band-alpha: 1; }
+
+/* 房号：等宽 + 大字号 + 紧字距，像门牌号 */
+.room-card .room-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.room-card .room-no {
+  font-family: var(--font-num);
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 楼层小标：等宽、低对比，作为房号的"单位" */
+.room-card .floor-tag {
+  font-family: var(--font-num);
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  color: var(--accent-3);
+  background: var(--accent-1);
+  padding: 1px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+}
+
+.room-card .detail {
+  margin: 0 0 var(--space-3);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  line-height: var(--lh-base);
+}
+
+.room-card .detail .sep {
+  margin: 0 5px;
+  opacity: 0.45;
+}
+
+/* 图片区：统一裁切，避免不同原图比例撑破卡片 */
+.room-card .room-image {
+  position: relative;
+  height: 200px;
+  overflow: hidden;
+  background: var(--bg-subtle);
+}
+
+.room-card .room-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* 状态角标：右上，圆角药丸 */
+.room-card .room-status {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  backdrop-filter: blur(6px);
+}
+
+/* 图片张数：右下，比状态角标更弱 */
+.room-card .room-img-count {
+  position: absolute;
+  bottom: var(--space-2);
+  right: var(--space-2);
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(6px);
+  font-variant-numeric: tabular-nums;
 }
 </style>

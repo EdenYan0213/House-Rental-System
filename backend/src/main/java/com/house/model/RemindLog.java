@@ -45,6 +45,19 @@ public class RemindLog {
   @Column(name = "is_debug")
   private Integer isDebug;
 
+  /**
+   * 短信场景。同一张表既存催缴短信也存验证码短信，
+   * 管理端「催缴记录」只查 REMIND，避免验证码把列表刷满。
+   */
+  public static final String SCENE_REMIND = "REMIND";
+  public static final String SCENE_LOGIN_CODE = "LOGIN_CODE";
+  public static final String SCENE_UPDATE_PHONE = "UPDATE_PHONE";
+  public static final String SCENE_TEST = "TEST";
+
+  @Column(name = "scene")
+  @Builder.Default
+  private String scene = SCENE_REMIND;
+
   @Column(name = "created_at")
   private LocalDateTime createdAt;
 }

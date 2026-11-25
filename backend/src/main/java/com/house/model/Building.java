@@ -17,9 +17,6 @@ public class Building {
   private String code;
   private String address;
 
-  @Column(name = "image_url")
-  private String imageUrl;
-
   /**
    * 图片 ID 列表（JSON 数组字符串，如 "[1,2,3]"）。
    * 图片二进制存 image_blob 表，这里只存引用。

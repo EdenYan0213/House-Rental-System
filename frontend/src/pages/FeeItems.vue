@@ -311,7 +311,7 @@ onMounted(loadAll)
 
 <style scoped>
 .page {
-  padding: 20px;
+  padding: 0;
 }
 
 .page-card {
@@ -331,8 +331,8 @@ onMounted(loadAll)
 }
 
 .page-title {
-  font-size: 17px;
-  font-weight: 600;
+  font-size: var(--title-page-size);
+  font-weight: var(--title-page-weight);
   color: var(--text-main);
 }
 

@@ -111,16 +111,19 @@ public class MobileRoomController {
           "monthlyRent", activeContract.getMonthlyRent() == null ? 0D : activeContract.getMonthlyRent());
     }
 
-    return ResponseEntity.ok(Map.of(
-        "room", roomData,
-        "tenant", tenantData,
-        "contract", contractData,
-        "unpaidAmount", unpaidAmount,
-        "unpaidBills", unpaidBills,
-        "repairHistory", recentRepairs,
-        "appliances", appliances,
-        "canOperate", canOperate,
-        "role", role));
+    // tenantData / contractData 在房间空闲时为 null，
+    // Map.of 不接受 null（会抛 NPE），必须用 LinkedHashMap。
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("room", roomData);
+    body.put("tenant", tenantData);
+    body.put("contract", contractData);
+    body.put("unpaidAmount", unpaidAmount);
+    body.put("unpaidBills", unpaidBills);
+    body.put("repairHistory", recentRepairs);
+    body.put("appliances", appliances);
+    body.put("canOperate", canOperate);
+    body.put("role", role);
+    return ResponseEntity.ok(body);
   }
 
   private boolean isUnpaid(Bill bill) {

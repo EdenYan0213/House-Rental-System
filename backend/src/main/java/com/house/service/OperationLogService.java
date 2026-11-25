@@ -81,8 +81,10 @@ public class OperationLogService {
     OperationLog log = new OperationLog();
     log.setUserId(userId);
     log.setModule("AI助手");
-    log.setAction("custom");
-    log.setChangeSummary("自然语言指令执行");
+    // 用意图作为动作名，日志列表里能直接看出「AI 做了什么」，
+    // 而不是一律显示 custom
+    log.setAction(aiActionOf(intent));
+    log.setChangeSummary("AI 指令：" + abbreviate(instruction, 40));
     log.setOperator(resolveOperator());
     log.setUsername(log.getOperator());
     log.setIp(resolveIp(request));
@@ -351,5 +353,28 @@ public class OperationLogService {
       return xff.split(",")[0].trim();
     }
     return request.getRemoteAddr();
+  }
+  /** AI 意图 → 可读的动作名，用于操作日志的 action 列。 */
+  private String aiActionOf(String intent) {
+    if (intent == null) {
+      return "custom";
+    }
+    return switch (intent) {
+      case "METER_READING" -> "ai_meter_reading";
+      case "SEND_SMS" -> "ai_send_sms";
+      case "QUERY_CONTRACT" -> "ai_query_contract";
+      case "QUERY_ELECTRICITY" -> "ai_query_electricity";
+      case "NOT_CONFIGURED" -> "ai_not_configured";
+      default -> "ai_" + intent.toLowerCase();
+    };
+  }
+
+  /** 截断长文本，避免日志列表被超长指令撑开。 */
+  private String abbreviate(String text, int max) {
+    if (text == null) {
+      return "";
+    }
+    String flat = text.replaceAll("\\s+", " ").trim();
+    return flat.length() <= max ? flat : flat.substring(0, max) + "…";
   }
 }
