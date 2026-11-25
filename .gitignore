@@ -121,3 +121,7 @@ backend/target/test-uploads/
 # 属于运行时数据，不应进版本库（保留空目录靠 .gitkeep）
 backend/src/main/resources/imgs/*
 !backend/src/main/resources/imgs/.gitkeep
+
+# Vite 构建缓存
+staff-mobile/.vite/
+.vite/
