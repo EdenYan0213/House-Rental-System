@@ -59,7 +59,7 @@ class TenantDepositScopeTest {
         contractRepository,
         null, // renewApplicationRepository：本测试不涉及
         roomRepository,
-        null, // fileStorageConfig
+        null, // fileStorageService
         null, // feedbackRepository
         depositRecordRepository,
         null); // support

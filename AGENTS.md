@@ -173,7 +173,10 @@ The package is split by concern — put new code in the matching file:
 ## Gotchas
 
 - `frontend/src/pages/OperationHistory.vue` is not a route — it is embedded inside `Settings.vue`. Deleting it "because nothing links to it" breaks settings.
-- `WebMvcConfig` maps `/uploads/**` to `app.file.upload-dir`, which defaults to `./src/main/resources/imgs` relative to the backend working directory. `FileController` and the upload dir must agree, and files written there land inside the source tree.
+- **All uploaded files live in MySQL** (`image_blob`, `data` LONGBLOB). `/api/images/{id}` and `/api/files/{storedName}` both read from it. Nothing is written to disk any more, so deployment needs **no persistent volume** — and a database backup contains the images too (the backup zip is just `database.sql`).
+  - `FileStorageService` stores a UUID-prefixed `stored_name`; that column exists solely so legacy `/api/files/<name>` URLs keep working. Business tables store either `image_ids` (room/building) or a `/api/files/...` URL (repair/complaint/attachments).
+  - `ImageStorageService.cleanupOrphans()` deletes `ref_count = 0` rows older than a day. Anything saved through `FileStorageService` is written with `ref_count = 1` so it is never swept. If you add a new "upload then reference later" flow, decide its `ref_count` deliberately.
+  - Applying `migrate_files_to_db.sql` adds `stored_name`; `backend/sql/import_disk_files_to_db.sh` imports any pre-existing files from the old upload dir (idempotent).
 - `FileStorageService` validates extension against `app.file.allowed-extensions` (jpg/jpeg/png/gif/webp) — PDFs and Excel are rejected by upload even though PDF generation exists server-side.
 - Most list endpoints return **unpaginated** `List<...>` (`TenantController`, `RoomController`, `ExportController`). `TenantService.search` and `DashboardController` load collections once instead of inside loops — keep it that way.
 - **`GET /api/bills` is dual-mode.** Omit `page` → returns the old plain `List<Bill>` (used by CSV export and internal callers). Pass `page` + `size` → returns `{content, totalElements, totalPages, page, size}`. **`page` is 0-based** because `staff-mobile` already called it that way; `Bills.vue` keeps a 1-based `currentPage` for `el-pagination` and subtracts 1 on the wire.

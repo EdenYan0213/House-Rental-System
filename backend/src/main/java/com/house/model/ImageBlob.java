@@ -33,6 +33,10 @@ public class ImageBlob {
   @Column(name = "original_name", length = 255)
   private String originalName;
 
+  /** 原磁盘文件名（UUID_原名）。仅用于兼容旧 `/api/files/<name>` URL，新上传不再落盘。 */
+  @Column(name = "stored_name", length = 255)
+  private String storedName;
+
   @Lob
   @Column(name = "data", nullable = false, columnDefinition = "LONGBLOB")
   private byte[] data;

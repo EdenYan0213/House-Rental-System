@@ -10,4 +10,7 @@ public interface ImageBlobRepository extends JpaRepository<ImageBlob, Long> {
 
   /** 清理上传后从未被保存引用的孤儿图片（超过指定时间仍未被引用）。 */
   List<ImageBlob> findByRefCountAndCreatedAtBefore(Integer refCount, LocalDateTime before);
+
+  /** 按原磁盘文件名查找，兼容旧 `/api/files/<name>` URL。 */
+  java.util.Optional<ImageBlob> findByStoredName(String storedName);
 }

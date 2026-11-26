@@ -122,7 +122,9 @@ public class BackupService {
             }
 
             String zipFilePath = backupStoragePath + "/" + fileName;
-            boolean zipSuccess = createZipArchive(sqlFile, uploadDir, zipFilePath);
+            // 文件（含图片）已全部存于数据库，备份 zip 只需包含 database.sql。
+            // 传 null 表示不打包磁盘目录；createZipArchive 会跳过不存在的路径。
+            boolean zipSuccess = createZipArchive(sqlFile, null, zipFilePath);
             if (!zipSuccess) {
                 throw new RuntimeException("文件压缩失败");
             }
@@ -218,23 +220,25 @@ public class BackupService {
                 zos.closeEntry();
             }
 
-            Path uploadPath = Paths.get(filesDir);
-            if (Files.exists(uploadPath) && Files.isDirectory(uploadPath)) {
-                Files.walk(uploadPath)
-                        .filter(Files::isRegularFile)
-                        .forEach(file -> {
-                            try {
-                                String entryName = "uploads/"
-                                        + uploadPath.relativize(file).toString().replace("\\", "/");
-                                zos.putNextEntry(new java.util.zip.ZipEntry(entryName));
-                                Files.copy(file, zos);
-                                zos.closeEntry();
-                            } catch (IOException e) {
-                                logger.error("添加文件到压缩包失败: " + file, e);
-                            }
-                        });
+            // filesDir 为 null 表示不打包磁盘附件（文件已存数据库）
+            if (filesDir != null && !filesDir.isBlank()) {
+                Path uploadPath = Paths.get(filesDir);
+                if (Files.exists(uploadPath) && Files.isDirectory(uploadPath)) {
+                    Files.walk(uploadPath)
+                            .filter(Files::isRegularFile)
+                            .forEach(file -> {
+                                try {
+                                    String entryName = "uploads/"
+                                            + uploadPath.relativize(file).toString().replace("\\", "/");
+                                    zos.putNextEntry(new java.util.zip.ZipEntry(entryName));
+                                    Files.copy(file, zos);
+                                    zos.closeEntry();
+                                } catch (IOException e) {
+                                    logger.error("添加文件到压缩包失败: " + file, e);
+                                }
+                            });
+                }
             }
-
             }  // end try-with-resources
             return true;
 
@@ -311,8 +315,11 @@ public class BackupService {
                 restoreDatabase(dbName, sqlFile);
             }
 
+            // 旧备份包里可能带 uploads/ 目录（文件当时存磁盘）。
+            // 现在文件已存数据库、随 database.sql 一起恢复，
+            // 因此这里仅在存在时做一次并回磁盘，保证老备份仍可恢复。
             String extractedUploads = tempDir + "uploads/";
-            if (Files.exists(Paths.get(extractedUploads))) {
+            if (Files.exists(Paths.get(extractedUploads)) && uploadDir != null && !uploadDir.isBlank()) {
                 Path targetUploads = Paths.get(uploadDir);
                 Files.createDirectories(targetUploads);
                 copyDirectory(Paths.get(extractedUploads), targetUploads);
@@ -366,8 +373,11 @@ public class BackupService {
                 restoreDatabase(dbName, sqlFile);
             }
 
+            // 旧备份包里可能带 uploads/ 目录（文件当时存磁盘）。
+            // 现在文件已存数据库、随 database.sql 一起恢复，
+            // 因此这里仅在存在时做一次并回磁盘，保证老备份仍可恢复。
             String extractedUploads = tempDir + "uploads/";
-            if (Files.exists(Paths.get(extractedUploads))) {
+            if (Files.exists(Paths.get(extractedUploads)) && uploadDir != null && !uploadDir.isBlank()) {
                 Path targetUploads = Paths.get(uploadDir);
                 Files.createDirectories(targetUploads);
                 copyDirectory(Paths.get(extractedUploads), targetUploads);

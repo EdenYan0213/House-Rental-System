@@ -67,6 +67,7 @@ mysql -uroot -proot < backend/sql/migrate_add_repair_and_appliance.sql
 mysql -uroot -proot < backend/sql/migrate_add_operation_snapshot.sql
 mysql -uroot -proot < backend/sql/migrate_add_theme_preference.sql
 mysql -uroot -proot < backend/sql/migrate_normalize_status_values.sql
+mysql -uroot -proot < backend/sql/migrate_files_to_db.sql   # 文件统一存数据库（image_blob.stored_name）
 ```
 
 说明：

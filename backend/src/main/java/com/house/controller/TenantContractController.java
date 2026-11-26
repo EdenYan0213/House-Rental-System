@@ -1,7 +1,7 @@
 package com.house.controller;
 
-import com.house.config.FileStorageConfig;
 import com.house.model.Contract;
+import com.house.model.ImageBlob;
 import com.house.model.DepositRecord;
 import com.house.model.ContractStatus;
 import com.house.model.Feedback;
@@ -13,8 +13,8 @@ import com.house.repo.DepositRecordRepository;
 import com.house.repo.FeedbackRepository;
 import com.house.repo.RenewApplicationRepository;
 import com.house.repo.RoomRepository;
+import com.house.service.FileStorageService;
 import com.house.service.TenantTokenService;
-import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -22,8 +22,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -43,7 +41,7 @@ public class TenantContractController {
   private final ContractRepository contractRepository;
   private final RenewApplicationRepository renewApplicationRepository;
   private final RoomRepository roomRepository;
-  private final FileStorageConfig fileStorageConfig;
+  private final FileStorageService fileStorageService;
   private final FeedbackRepository feedbackRepository;
   private final DepositRecordRepository depositRecordRepository;
   private final TenantPhase2Support support;
@@ -52,7 +50,7 @@ public class TenantContractController {
       ContractRepository contractRepository,
       RenewApplicationRepository renewApplicationRepository,
       RoomRepository roomRepository,
-      FileStorageConfig fileStorageConfig,
+      FileStorageService fileStorageService,
       FeedbackRepository feedbackRepository,
       DepositRecordRepository depositRecordRepository,
       TenantPhase2Support support) {
@@ -60,7 +58,7 @@ public class TenantContractController {
     this.contractRepository = contractRepository;
     this.renewApplicationRepository = renewApplicationRepository;
     this.roomRepository = roomRepository;
-    this.fileStorageConfig = fileStorageConfig;
+    this.fileStorageService = fileStorageService;
     this.feedbackRepository = feedbackRepository;
     this.depositRecordRepository = depositRecordRepository;
     this.support = support;
@@ -238,17 +236,17 @@ public class TenantContractController {
       return ResponseEntity.status(302).header(HttpHeaders.LOCATION, url).build();
     }
 
+    // 附件现在存 image_blob，按 URL 里的文件名回查
     String filename = url.substring(url.lastIndexOf('/') + 1);
-    Path path = Paths.get(fileStorageConfig.getUploadDir()).resolve(filename).normalize();
-    Resource resource = new FileSystemResource(path);
-    if (!resource.exists()) {
+    ImageBlob blob = fileStorageService.findBlobByStoredName(filename);
+    if (blob == null || blob.getData() == null) {
       return ResponseEntity.notFound().build();
     }
 
     return ResponseEntity.ok()
         .contentType(MediaType.APPLICATION_OCTET_STREAM)
         .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
-        .body(resource);
+        .body(blob.getData());
   }
 
   @PostMapping("/contract/renew/apply")
