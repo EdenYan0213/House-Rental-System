@@ -146,6 +146,8 @@ export const startRepairOrder = (id) => api.put(`/repair-orders/${id}/start`)
 export const completeRepairOrder = (id, data) => api.put(`/repair-orders/${id}/complete`, data)
 export const acceptRepairOrder = (id) => api.put(`/repair-orders/${id}/accept`)
 export const rejectRepairOrder = (id, data) => api.put(`/repair-orders/${id}/reject`, data)
+export const expireContractsNow = () => api.post('/contracts/expire-now')
+
 export const cancelRepairOrder = (id, data) => api.put(`/repair-orders/${id}/cancel`, data)
 export const generateRepairBill = (id) => api.put(`/repair-orders/${id}/generate-bill`)
 export const getRoomRepairOrders = (roomId) => api.get(`/repair-orders/room/${roomId}`)

@@ -10,6 +10,7 @@
           <div class="page-actions">
             <el-button :icon="Refresh" @click="loadContracts">刷新</el-button>
             <el-button :icon="Download" @click="exportCurrent">导出</el-button>
+            <el-button v-if="canAddContract()" @click="handleExpireNow" :loading="expiring">处理到期</el-button>
             <el-button type="primary" :icon="Plus" @click="$router.push('/contracts/new')" v-if="canAdd">
               新建合同
             </el-button>
@@ -352,6 +353,7 @@ import {
   canRenewContract,
   canTerminateContract,
   exportModuleData,
+  expireContractsNow,
   getContract,
   getContracts,
   renewContract,
@@ -703,6 +705,40 @@ async function exportCurrent() {
     ElMessage.error('导出失败')
   }
 }
+
+// —— 合同到期手动处理 ——
+const expiring = ref(false)
+
+async function handleExpireNow() {
+  const ok = await ElMessageBox.confirm(
+    '将把已过到期日、仍标记为「生效中」的合同置为「已到期」，并释放对应房间。\n有未结清账单的合同只改状态、不释放房间。是否继续？',
+    '处理到期合同',
+    { type: 'warning', confirmButtonText: '开始处理', cancelButtonText: '取消' }
+  ).catch(() => false)
+  if (!ok) return
+
+  expiring.value = true
+  try {
+    const { data } = await expireContractsNow()
+    const counts = `过期 ${data.expiredCount || 0} 份，释放房间 ${data.releasedRoomCount || 0} 间`
+    const kept = Number(data.keptRoomCount || 0)
+    if (kept > 0) {
+      const list = (data.expired || [])
+        .filter(it => it.keptRoomReason)
+        .map(it => `${it.contractNo}：${it.keptRoomReason}`)
+        .join('\n')
+      ElMessage.warning(`${counts}；${kept} 间未释放\n${list}`)
+    } else {
+      ElMessage.success(counts)
+    }
+    await loadContracts()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '处理失败'))
+  } finally {
+    expiring.value = false
+  }
+}
+
 
 onMounted(() => {
   if (route.query.expiring === 'true') {

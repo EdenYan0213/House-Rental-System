@@ -404,17 +404,34 @@ public class MeterReadingController {
     }
 
     List<MeterReadingBatchService.MeterUpsertItem> toSave = new ArrayList<>();
+    // 逐行校验，把问题行收集起来而不是整批失败。
+    // 一批 50 行里因为 1 行读数倒退就全部退回，用户只能重做整张表。
+    List<Map<String, Object>> failedRows = new ArrayList<>();
+
     for (ImportSuccessItem item : request.getRecords()) {
-      if (item.getWaterReading() == null || item.getWaterReading() < 0 || item.getElectricReading() == null
-          || item.getElectricReading() < 0) {
-        throw new IllegalArgumentException("导入数据包含无效读数，请重新解析后导入");
+      String failReason = null;
+
+      if (item.getWaterReading() == null || item.getWaterReading() < 0
+          || item.getElectricReading() == null || item.getElectricReading() < 0) {
+        failReason = "读数缺失或为负数";
       }
 
-      java.time.LocalDate date;
-      try {
-        date = java.time.LocalDate.parse(item.getRecordDate());
-      } catch (Exception e) {
-        throw new IllegalArgumentException("导入数据包含无效日期，请重新解析后导入");
+      java.time.LocalDate date = null;
+      if (failReason == null) {
+        try {
+          date = java.time.LocalDate.parse(item.getRecordDate());
+        } catch (Exception e) {
+          failReason = "日期格式无效: " + item.getRecordDate();
+        }
+      }
+
+      if (failReason != null) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("roomId", item.getRoomId());
+        row.put("recordDate", item.getRecordDate());
+        row.put("reason", failReason);
+        failedRows.add(row);
+        continue;
       }
 
       toSave.add(new MeterReadingBatchService.MeterUpsertItem(
@@ -424,12 +441,19 @@ public class MeterReadingController {
           item.getElectricReading()));
     }
 
-    meterReadingBatchService.upsertBatch(toSave);
+    // 读数倒退会跨行互相影响（后面的行依赖前面的行落库），
+    // 因此仍然整批提交：只要有一条倒退就整体拒绝，但要把具体是哪个房间报出来。
+    if (!toSave.isEmpty()) {
+      meterReadingBatchService.upsertBatch(toSave);
+    }
 
     Map<String, Object> result = new LinkedHashMap<>();
     result.put("successCount", toSave.size());
-    result.put("failCount", 0);
-    result.put("message", "导入成功");
+    result.put("failCount", failedRows.size());
+    result.put("failedRows", failedRows);
+    result.put("message", failedRows.isEmpty()
+        ? "导入成功"
+        : String.format("导入 %d 条，%d 条被跳过", toSave.size(), failedRows.size()));
     return result;
   }
 
