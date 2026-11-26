@@ -85,7 +85,53 @@ public class MeterReadingBatchService {
       toSave.add(reading);
     }
 
+    // 读数倒退校验：水/电表读数只会增不会减，倒退通常是录错数字，
+    // 一旦存进去会生成金额离谱的账单。这里按「同房间上一条更早的记录」比对。
+    assertNotRegressing(normalized);
+
     return meterReadingRepository.saveAll(toSave);
+  }
+
+  /**
+   * 校验读数不倒退。
+   *
+   * <p>只与 <b>日期更早</b> 的上一条记录比较：同一房间允许补录或修正历史数据，
+   * 但不能出现「今天读数比昨天小」。
+   *
+   * @throws IllegalArgumentException 发现倒退时抛出，消息里带上房间、日期与上次读数
+   */
+  private void assertNotRegressing(List<MeterUpsertItem> items) {
+    for (MeterUpsertItem item : items) {
+      MeterReading previous = meterReadingRepository
+          .findTopByRoomIdAndRecordDateLessThanOrderByRecordDateDesc(item.getRoomId(), item.getRecordDate());
+      if (previous == null) {
+        continue;
+      }
+
+      Double prevWater = previous.getWaterReading();
+      if (prevWater != null && item.getWaterReading() < prevWater) {
+        throw new IllegalArgumentException(String.format(
+            "房间(ID:%d) %s 的水表读数 %s 小于上次 %s（%s），请确认是否录错",
+            item.getRoomId(), item.getRecordDate(), fmt(item.getWaterReading()),
+            fmt(prevWater), previous.getRecordDate()));
+      }
+
+      Double prevElectric = previous.getElectricReading();
+      if (prevElectric != null && item.getElectricReading() < prevElectric) {
+        throw new IllegalArgumentException(String.format(
+            "房间(ID:%d) %s 的电表读数 %s 小于上次 %s（%s），请确认是否录错",
+            item.getRoomId(), item.getRecordDate(), fmt(item.getElectricReading()),
+            fmt(prevElectric), previous.getRecordDate()));
+      }
+    }
+  }
+
+  private String fmt(Double value) {
+    if (value == null) {
+      return "-";
+    }
+    // 去掉多余的小数零，便于在提示里读
+    return value == Math.floor(value) ? String.valueOf(value.longValue()) : String.valueOf(value);
   }
 
   public static class MeterUpsertItem {

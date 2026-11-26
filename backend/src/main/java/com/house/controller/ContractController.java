@@ -6,6 +6,7 @@ import com.house.model.OperationSnapshot;
 import com.house.model.Room;
 import com.house.repo.ContractRepository;
 import com.house.repo.RoomRepository;
+import com.house.service.ContractExpiryService;
 import com.house.service.ContractService;
 import com.house.service.OperationLogService;
 import com.house.dto.MoveOutRequest;
@@ -30,17 +31,20 @@ public class ContractController {
   private final RoomRepository roomRepository;
   private final OperationSnapshotService operationSnapshotService;
   private final MoveOutService moveOutService;
+  private final ContractExpiryService contractExpiryService;
 
   public ContractController(ContractService contractService, OperationLogService operationLogService,
       ContractRepository contractRepository, RoomRepository roomRepository,
       OperationSnapshotService operationSnapshotService,
-      MoveOutService moveOutService) {
+      MoveOutService moveOutService,
+      ContractExpiryService contractExpiryService) {
     this.contractService = contractService;
     this.operationLogService = operationLogService;
     this.contractRepository = contractRepository;
     this.roomRepository = roomRepository;
     this.operationSnapshotService = operationSnapshotService;
     this.moveOutService = moveOutService;
+    this.contractExpiryService = contractExpiryService;
   }
 
   /**
@@ -249,5 +253,23 @@ public class ContractController {
     } catch (Exception e) {
       return ResponseEntity.badRequest().body(e.getMessage());
     }
+  }
+
+  /**
+   * 手动触发「合同到期处理」。
+   *
+   * <p>定时任务每天 0:15 自动跑一次；此端点用于手动补跑（例如服务停机错过执行、
+   * 或导入历史数据后立即修正状态）。返回处理明细，便于核对。
+   */
+  @PostMapping("/expire-now")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
+  public ResponseEntity<?> expireNow(HttpServletRequest request) {
+    Map<String, Object> result = contractExpiryService.expireContracts(java.time.LocalDate.now());
+    int expiredCount = (int) result.get("expiredCount");
+    if (expiredCount > 0) {
+      operationLogService.log("合同管理",
+          "手动触发到期处理：" + expiredCount + " 份合同置为已到期", request);
+    }
+    return ResponseEntity.ok(result);
   }
 }
