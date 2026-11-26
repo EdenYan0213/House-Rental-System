@@ -23,10 +23,11 @@ CREATE TABLE IF NOT EXISTS `sys_user` (
   UNIQUE KEY `uk_username` (`username`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户表';
 
--- 初始化超级管理员用户 (密码: admin123)
-INSERT INTO `sys_user` (`username`, `password`, `real_name`, `role`, `enabled`)
-SELECT 'admin', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EH', '系统管理员', 'SUPER_ADMIN', 1
-WHERE NOT EXISTS (SELECT 1 FROM `sys_user` WHERE `username` = 'admin');
+-- 超级管理员由应用首次启动时播种（UserService.initDefaultAdmin），
+-- 密码取自环境变量 ADMIN_INIT_PASSWORD；未设置则回退开发默认 admin123 并告警。
+--
+-- 此处刻意不再插入固定哈希的 admin 记录：历史版本预置的哈希对应一个未知密码，
+-- 会让 ADMIN_INIT_PASSWORD 因「账号已存在」被跳过，最终把人锁在账号外。
 
 -- 新手引导关闭记录表
 CREATE TABLE IF NOT EXISTS `guide_dismiss` (
