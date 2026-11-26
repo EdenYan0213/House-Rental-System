@@ -8,6 +8,8 @@
 --
 -- 幂等：可重复执行。
 
+USE house_db;
+
 SET @col_exists := (
   SELECT COUNT(*) FROM information_schema.COLUMNS
   WHERE TABLE_SCHEMA = DATABASE()

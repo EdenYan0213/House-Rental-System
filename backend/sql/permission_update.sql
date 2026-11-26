@@ -26,26 +26,36 @@ ALTER TABLE `sys_user`
     MODIFY COLUMN `password` varchar(255) NOT NULL COMMENT '密码';
 
 -- 添加缺失的字段
-ALTER TABLE `sys_user` ADD COLUMN IF NOT EXISTS `email` varchar(100) COMMENT '邮箱';
-ALTER TABLE `sys_user` ADD COLUMN IF NOT EXISTS `enabled` tinyint(1) DEFAULT 1 COMMENT '是否启用: 1-启用, 0-禁用';
-ALTER TABLE `sys_user` ADD COLUMN IF NOT EXISTS `last_login_time` datetime COMMENT '最后登录时间';
+-- MySQL 8 不支持 ADD COLUMN IF NOT EXISTS（MariaDB 语法），改用 information_schema 判断
+SET @sql := IF((SELECT COUNT(*) FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sys_user'
+                  AND COLUMN_NAME = 'email') = 0,
+  'ALTER TABLE `sys_user` ADD COLUMN `email` varchar(100) COMMENT ''邮箱''', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
 
--- 更新admin用户为超级管理员
+SET @sql := IF((SELECT COUNT(*) FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sys_user'
+                  AND COLUMN_NAME = 'enabled') = 0,
+  'ALTER TABLE `sys_user` ADD COLUMN `enabled` tinyint(1) DEFAULT 1 COMMENT ''是否启用: 1-启用, 0-禁用''', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+
+SET @sql := IF((SELECT COUNT(*) FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sys_user'
+                  AND COLUMN_NAME = 'last_login_time') = 0,
+  'ALTER TABLE `sys_user` ADD COLUMN `last_login_time` datetime COMMENT ''最后登录时间''', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
+
+-- 把已有 admin 提升为超级管理员
 UPDATE `sys_user` SET `role` = 'SUPER_ADMIN', `enabled` = 1 WHERE `username` = 'admin';
 
--- 如果没有admin用户，则创建（密码: admin123）
-INSERT INTO `sys_user` (`username`, `password`, `real_name`, `role`, `enabled`)
-SELECT 'admin', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EH', '系统管理员', 'SUPER_ADMIN', 1
-WHERE NOT EXISTS (SELECT 1 FROM `sys_user` WHERE `username` = 'admin');
-
--- 创建示例用户（密码都是 123456）
-INSERT INTO `sys_user` (`username`, `password`, `real_name`, `phone`, `role`, `enabled`)
-SELECT 'manager', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EH', '运营经理', '13800138001', 'ADMIN', 1
-WHERE NOT EXISTS (SELECT 1 FROM `sys_user` WHERE `username` = 'manager');
-
-INSERT INTO `sys_user` (`username`, `password`, `real_name`, `phone`, `role`, `enabled`)
-SELECT 'user1', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EH', '前台接待', '13800138002', 'USER', 1
-WHERE NOT EXISTS (SELECT 1 FROM `sys_user` WHERE `username` = 'user1');
+-- 不再在此插入 admin / manager / user1：
+-- 原先插入的密码哈希对应一个未知口令，会让 ADMIN_INIT_PASSWORD 因「账号已存在」
+-- 被跳过，最终把人锁在账号外；额外插入的 manager/user1 更会在生产库里留下未知口令的账号。
+-- 管理员由应用首次启动时按 ADMIN_INIT_PASSWORD 播种，其余账号请登录后在「用户管理」里创建。
 
 -- 操作日志表增加用户ID字段
-ALTER TABLE `operation_log` ADD COLUMN IF NOT EXISTS `user_id` bigint COMMENT '操作用户ID';
+SET @sql := IF((SELECT COUNT(*) FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'operation_log'
+                  AND COLUMN_NAME = 'user_id') = 0,
+  'ALTER TABLE `operation_log` ADD COLUMN `user_id` bigint COMMENT ''操作用户ID''', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;

@@ -53,6 +53,14 @@ npm run build                # -> tenant-frontend/dist
 
 Existing migration scripts are ordered and must be applied by hand on old databases. New columns default to readable Chinese status strings (`"空闲"`, `"已租"`) or English (`PENDING`, `ACTIVE`), and the code accepts both forms — check the existing comparisons before introducing a third spelling.
 
+**Migration scripts must be idempotent and MySQL 8 compatible.** A full deploy runs every `backend/sql/migrate_*.sql` in filename order, so each one has to be safe to run twice and must work on MySQL 8 (not MariaDB). Rules learned the hard way:
+
+- **Never use `ADD COLUMN IF NOT EXISTS` / `ADD INDEX IF NOT EXISTS`** — MariaDB-only syntax. On MySQL 8 the whole statement fails with error 1064, and any `CREATE TABLE` after it in the same file **silently never runs** (this is how `renew_application` / `feedback` / `repair_order.expected_time` went missing). Use the `information_schema` + `PREPARE`/`EXECUTE` pattern already used across the repo.
+- **Every script needs `USE house_db;`** — deploys run `mysql < file` without a database argument, so a missing `USE` fails with 1046 and the whole file is skipped.
+- **Filename order matters.** `migrate_00_images_blob_base.sql` creates `image_blob` and must stay first (`00_` prefix) because other scripts reference that table. Renaming it back to `migrate_images_to_db.sql` breaks clean deploys.
+- **Don't verify a deploy by table count.** Counts can coincidentally match while tables are missing. Diff `@Table(name=...)` from `com.house.model.*` against `information_schema.tables` instead — see `deploy/DEPLOY_MINIMAL.md`.
+- **`init_db.sql` must not seed users.** It used to insert an admin with a hash whose plaintext nobody knows, which made `ADMIN_INIT_PASSWORD` get skipped ("account already exists") and locked people out. Admin is seeded at startup instead.
+
 ## Persistence: JPA is primary, MyBatis-Plus is an exception
 
 - Most data access goes through `com.house.repo.*Repository` extending `JpaRepository` (**42 repos**), with derived query methods (`findByRoomIdAndStatus`, `findByStatusIn`, `findByNameContainingOrPhoneContaining`).

@@ -43,9 +43,15 @@ UPDATE `bill` SET `status` = UPPER(`status`)
   WHERE `status` REGEXP '^[a-z]+$';
 
 -- 建议索引：状态 + 账单月份是账单列表最常用的筛选组合
--- 若已存在同名索引，请注释掉本段。
-ALTER TABLE `bill`
-  ADD INDEX `idx_bill_status_month` (`status`, `bill_month`);
+-- 幂等：索引已存在时跳过，不会报 1061 Duplicate key name。
+SET @sql := IF((SELECT COUNT(*) FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bill'
+                  AND INDEX_NAME = 'idx_bill_status_month') = 0,
+  'ALTER TABLE `bill` ADD INDEX `idx_bill_status_month` (`status`, `bill_month`)', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;
 
-ALTER TABLE `room`
-  ADD INDEX `idx_room_building_status` (`building_id`, `status`);
+SET @sql := IF((SELECT COUNT(*) FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'room'
+                  AND INDEX_NAME = 'idx_room_building_status') = 0,
+  'ALTER TABLE `room` ADD INDEX `idx_room_building_status` (`building_id`, `status`)', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;

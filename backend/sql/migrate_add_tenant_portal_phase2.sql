@@ -1,10 +1,29 @@
 -- Tenant portal phase 2: repair/complaint self-service, contract renew, feedback, profile enhance
+--
+-- MySQL 8 兼容说明：原脚本用 `ADD COLUMN IF NOT EXISTS`，这是 MariaDB 专有语法。
+-- 在 MySQL 8 上整条 ALTER 会报 1064，导致紧随其后的 CREATE TABLE 全部不执行
+-- （表现为缺 renew_application / feedback 两张表、缺 repair_order 两个列）。
+-- 现改为「查 information_schema + PREPARE 动态执行」，幂等且兼容 MySQL 8。
 
 USE house_db;
 
-ALTER TABLE `repair_order`
-  ADD COLUMN IF NOT EXISTS `expected_time` datetime NULL COMMENT '租客期望维修时间',
-  ADD COLUMN IF NOT EXISTS `contact_phone` varchar(20) NULL COMMENT '租客联系电话';
+-- repair_order.expected_time
+SET @col := (SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'repair_order'
+               AND COLUMN_NAME = 'expected_time');
+SET @sql := IF(@col = 0,
+  'ALTER TABLE `repair_order` ADD COLUMN `expected_time` datetime NULL COMMENT ''租客期望维修时间''',
+  'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- repair_order.contact_phone
+SET @col := (SELECT COUNT(*) FROM information_schema.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'repair_order'
+               AND COLUMN_NAME = 'contact_phone');
+SET @sql := IF(@col = 0,
+  'ALTER TABLE `repair_order` ADD COLUMN `contact_phone` varchar(20) NULL COMMENT ''租客联系电话''',
+  'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 CREATE TABLE IF NOT EXISTS `renew_application` (
   `id` bigint NOT NULL AUTO_INCREMENT,

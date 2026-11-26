@@ -1,4 +1,6 @@
 -- 操作日志增强迁移
+
+USE house_db;
 set @db = database();
 
 -- operation_log 字段增强

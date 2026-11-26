@@ -41,4 +41,8 @@ CREATE TABLE IF NOT EXISTS `notice` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Optional helper index for tenant bill list speed
-CREATE INDEX `idx_bill_contract_id` ON `bill` (`contract_id`);
+SET @sql := IF((SELECT COUNT(*) FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bill'
+                  AND INDEX_NAME = 'idx_bill_contract_id') = 0,
+  'CREATE INDEX `idx_bill_contract_id` ON `bill` (`contract_id`)', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;

@@ -1,4 +1,6 @@
 -- Create remind_rule, sms_config, remind_log
+
+USE house_db;
 CREATE TABLE IF NOT EXISTS remind_rule (
   id INT AUTO_INCREMENT PRIMARY KEY,
   overdue_days INT NOT NULL,
@@ -36,4 +38,8 @@ CREATE TABLE IF NOT EXISTS remind_log (
 );
 
 -- Indexes for quick lookup
-CREATE INDEX idx_remind_log_tenant_overdue ON remind_log(tenant_id, overdue_days);
+SET @sql := IF((SELECT COUNT(*) FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'remind_log'
+                  AND INDEX_NAME = 'idx_remind_log_tenant_overdue') = 0,
+  'CREATE INDEX idx_remind_log_tenant_overdue ON remind_log(tenant_id, overdue_days)', 'SELECT 1');
+PREPARE s FROM @sql; EXECUTE s; DEALLOCATE PREPARE s;

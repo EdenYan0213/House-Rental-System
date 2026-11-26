@@ -74,20 +74,27 @@ done
 sudo mysql -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='house_db';"
 ```
 
-> 迁移脚本未接入 Flyway，必须手工按顺序执行。脚本大多带幂等判断，可重复跑。
+> 迁移脚本未接入 Flyway，必须手工按顺序执行（全部已做到幂等，可重复跑）。
 >
-> **部分脚本在全新库上会报错，属正常现象**，不影响功能（已实测验证）：
-> - `migrate_add_building_image_url.sql` / `migrate_add_theme_preference.sql`
->   → `Duplicate column`：这些列已由 `init_db.sql` 建好
-> - `migrate_clean_dangling_image_refs.sql` / `migrate_files_to_db.sql`
->   → `image_blob doesn't exist`：按字母序排在 `migrate_images_to_db.sql` 之前
-> - `migrate_add_ai_assistant_operation_log.sql` / `migrate_add_tenant_portal_phase2.sql`
->   → 语法告警：相关列已存在
+> **验收标准不是「表数量」。** 表数量会因为 `CREATE TABLE IF NOT EXISTS` 被跳过
+> 或其他表补齐而恰好凑够，掩盖真实缺失。请按下述方式核对：
 >
-> 判断标准：**最终表数应为 39 张，且 `image_blob` 表存在**。达标即可继续。
-> 若某个脚本报的是权限/连接类错误，那才是真问题。
-
-
+> ```bash
+> # 1. 从实体类提取应有的表名
+> cd /opt/house/backend
+> grep -rhoE '@Table\(name = "[a-z_]+"\)|@TableName\("[a-z_]+"\)' \
+>   src/main/java/com/house/model/*.java | grep -oE '"[a-z_]+"' | tr -d '"' | sort -u > /tmp/expected.txt
+>
+> # 2. 与数据库实际表比对，输出必须为空
+> mysql -N -e "SELECT table_name FROM information_schema.tables \
+>   WHERE table_schema='house_db' ORDER BY table_name;" > /tmp/actual.txt
+> comm -23 /tmp/expected.txt /tmp/actual.txt
+> ```
+>
+> 输出为空 = 所有实体表都存在。若某个脚本报错，先记下脚本名，
+> 执行完其余脚本后再单独重跑它，并再次比对。
+>
+> 预期：29 张实体表 + 若干辅助表，总计约 43 张。
 
 ---
 
