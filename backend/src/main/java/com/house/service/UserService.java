@@ -21,6 +21,15 @@ public class UserService {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    /**
+     * 首次启动时播种的超级管理员初始密码。
+     *
+     * <p>生产环境务必通过环境变量 {@code ADMIN_INIT_PASSWORD} 指定；
+     * 留空则使用开发默认值，并在日志里明确告警，避免有人把默认密码带上线。
+     */
+    @org.springframework.beans.factory.annotation.Value("${app.admin.init-password:}")
+    private String adminInitPassword;
+
     public User findByUsername(String username) {
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(User::getUsername, username);
@@ -156,15 +165,29 @@ public class UserService {
 
     public void initDefaultAdmin() {
         User admin = findByUsername("admin");
-        if (admin == null) {
-            User newAdmin = User.builder()
-                    .username("admin")
-                    .password("admin123")
-                    .realName("系统管理员")
-                    .role(com.house.model.Role.SUPER_ADMIN)
-                    .enabled(true)
-                    .build();
-            createUser(newAdmin);
+        if (admin != null) {
+            return;
+        }
+
+        String password = adminInitPassword == null ? "" : adminInitPassword.trim();
+        boolean usingDefault = password.isEmpty();
+        if (usingDefault) {
+            // 仅供本地开发；上线必须设置 ADMIN_INIT_PASSWORD
+            password = "admin123";
+        }
+
+        User newAdmin = User.builder()
+                .username("admin")
+                .password(password)
+                .realName("系统管理员")
+                .role(com.house.model.Role.SUPER_ADMIN)
+                .enabled(true)
+                .build();
+        createUser(newAdmin);
+
+        if (usingDefault) {
+            org.slf4j.LoggerFactory.getLogger(UserService.class).warn(
+                "已用默认密码创建管理员 admin，请立即修改或改用 ADMIN_INIT_PASSWORD 环境变量重新部署");
         }
     }
 }

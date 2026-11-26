@@ -22,9 +22,6 @@
       </div>
       <p class="api-tip">当前后端：{{ currentApiBase }}</p>
 
-      <div class="tips">
-        <p>默认管理员: admin / admin123</p>
-      </div>
     </el-card>
   </div>
 </template>

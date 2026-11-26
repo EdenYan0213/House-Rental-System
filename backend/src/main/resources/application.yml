@@ -70,6 +70,10 @@ app:
       expiration: 86400000
       header: Authorization
       prefix: Bearer
+  admin:
+    # 首次启动播种 admin 的初始密码。生产环境必须设置 ADMIN_INIT_PASSWORD，
+    # 留空则用开发默认值并打印告警日志。
+    init-password: ${ADMIN_INIT_PASSWORD:}
   snapshot:
     undo-window-minutes: ${SNAPSHOT_UNDO_WINDOW_MINUTES:30}
     history-retention-days: ${SNAPSHOT_HISTORY_RETENTION_DAYS:30}

@@ -52,6 +52,13 @@ JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn spring-boot:run
 mysql -uroot -proot < backend/sql/init_db.sql
 ```
 
+首次启动会播种超级管理员 `admin`。密码取自环境变量 `ADMIN_INIT_PASSWORD`；
+未设置时使用开发默认值 `admin123` 并在日志中告警——**生产环境必须显式设置**：
+
+```bash
+export ADMIN_INIT_PASSWORD='<强密码>'
+```
+
 老版本升级按顺序执行增量脚本（全部幂等，可重复执行）：
 
 ```bash

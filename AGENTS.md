@@ -183,7 +183,7 @@ The package is split by concern — put new code in the matching file:
 - **Financial summary must not be derived from a page.** `GET /api/bills/summary` computes totals over *all* filtered rows and returns the same shape the summary cards need (`total/paid/unpaid/rate/activeCount/paidCount`). Never recompute those numbers from `content` in the browser — that silently reports one page as the whole month.
 - **Styling** uses Element Plus plus CSS variables from `frontend/src/styles/theme.css`. Use `--bg-main`, `--bg-surface`, `--text-main`, `--text-muted`, `--border-color`, `--accent-color`, `--danger-color`, `--success-color` — hardcoded colors break dark mode. Theme switching (`utils/theme.js`) writes a `theme-dark`/`theme-light` class on `<html>` and is persisted per user via `updateProfile`. Exception: print/PDF style blocks and room-status badges keep fixed colors intentionally.
 - `HouseApplication` seeds a `SUPER_ADMIN` `admin` in a `CommandLineRunner` and swallows exceptions (`catch (Exception e) { // ignore }`). If login fails after a schema change, that swallowed error is a likely cause.
-- The seeded admin password exists in three places (`init_db.sql`, `UserService.initDefaultAdmin`, `Login.vue` hint). They must stay in sync.
+- **The seeded admin password comes from `ADMIN_INIT_PASSWORD`** (`app.admin.init-password`). Empty → falls back to `admin123` for local dev and logs a warning. Never display it in any UI: the old `Login.vue` hints (admin/staff-mobile) were removed — don't reintroduce them.
 - `TestController`/`GET /api/test/ping` was removed — it had no `@PreAuthorize` and was reachable by any authenticated user. Don't revive it as a template for new endpoints.
 
 ## Regression checks before you commit
