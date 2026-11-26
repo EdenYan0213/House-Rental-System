@@ -1,10 +1,7 @@
 <template>
   <div class="page">
     <section class="panel">
-      <div class="row-between">
-        <div class="card-title" style="margin:0">申请续租</div>
-        <span class="link" @click="$router.back()">返回</span>
-      </div>
+    <PageHeader title="申请续租" to="/contract" />
 
       <!-- 无合同：直接说明，不展示无法使用的表单 -->
       <template v-if="loaded && !form.contractId">
@@ -44,7 +41,9 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { applyRenew, getCurrentContract } from '../api'
+import { applyRenew, getCurrentContract, getErrorMessage } from '../api'
+import { showSuccess } from '../utils/toast'
+import PageHeader from '../components/PageHeader.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -78,7 +77,7 @@ async function init() {
     contractNo.value = current.contractNo || ''
   } catch (e) {
     // 加载失败与「确实没有合同」要区分，否则用户不知道该重试还是放弃
-    errorMsg.value = e?.response?.data?.message || '合同信息加载失败，请稍后重试'
+    errorMsg.value = getErrorMessage(e, '合同信息加载失败，请稍后重试')
   } finally {
     loaded.value = true
   }
@@ -97,9 +96,10 @@ async function submit() {
       duration: form.duration,
       remark: form.remark
     })
-    router.replace({ path: '/contract', query: { renewSubmitted: '1' } })
+    showSuccess('续租申请已提交')
+    router.replace({ path: '/contract' })
   } catch (e) {
-    errorMsg.value = e?.response?.data?.message || '提交失败，请稍后重试'
+    errorMsg.value = getErrorMessage(e, '提交失败，请稍后重试')
   } finally {
     submitting.value = false
   }

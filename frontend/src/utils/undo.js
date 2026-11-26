@@ -1,6 +1,6 @@
 import { h } from 'vue'
 import { ElButton, ElMessage, ElNotification } from 'element-plus'
-import { recoverOperationSnapshot } from '../api'
+import { recoverOperationSnapshot, getErrorMessage } from '../api'
 
 export function showUndoToast(payload, onRecovered) {
   const snapshotIds = Array.isArray(payload?.undoSnapshotIds)
@@ -32,7 +32,7 @@ export function showUndoToast(payload, onRecovered) {
               await onRecovered()
             }
           } catch (e) {
-            ElMessage.error(e?.response?.data || e?.message || '撤销失败')
+            ElMessage.error(getErrorMessage(e, '撤销失败'))
           }
         }
       }, () => snapshotIds.length > 1 ? '批量撤销' : '撤销')

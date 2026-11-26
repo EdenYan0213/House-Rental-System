@@ -86,7 +86,13 @@ public class BackupService {
 
     @Transactional
     public BackupConfig saveConfig(BackupConfig config) {
-        config.setId(1L);
+        // 沿用已存在行的主键；硬编码 setId(1L) 会在表为空时被 Hibernate 当成
+        // "更新不存在的行"，抛 ObjectOptimisticLockingFailureException。
+        Long existingId = backupConfigRepository.findAll().stream()
+            .findFirst()
+            .map(BackupConfig::getId)
+            .orElse(null);
+        config.setId(existingId);
         return backupConfigRepository.save(config);
     }
 

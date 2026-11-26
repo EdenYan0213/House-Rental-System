@@ -257,7 +257,8 @@ import {
   restoreBackup,
   uploadAndRestoreBackup,
   getBackupConfig,
-  updateBackupConfig
+  updateBackupConfig,
+  getErrorMessage
 } from '@/api'
 import { backupTypeText, backupStatusText } from '@/utils/labels'
 
@@ -340,7 +341,7 @@ const handleManualBackup = async () => {
     ElMessage.success('备份创建成功')
     await loadBackups()
   } catch (error) {
-    ElMessage.error('备份创建失败: ' + (error.response?.data?.message || error.message))
+    ElMessage.error(getErrorMessage(error, '备份创建失败'))
   } finally {
     backupLoading.value = false
   }
@@ -404,7 +405,7 @@ const handleUploadAndRestore = async (options) => {
     options.onError?.(new Error(reason))
   } catch (error) {
     if (error !== 'cancel') {
-      ElMessage.error('上传恢复失败: ' + (error.response?.data?.message || error.message))
+      ElMessage.error(getErrorMessage(error, '上传恢复失败'))
       options.onError?.(error)
     }
   } finally {
@@ -419,7 +420,7 @@ const confirmRestore = async () => {
     ElMessage.success('恢复成功')
     restoreDialogVisible.value = false
   } catch (error) {
-    ElMessage.error('恢复失败: ' + (error.response?.data?.message || error.message))
+    ElMessage.error(getErrorMessage(error, '恢复失败'))
   } finally {
     restoreLoading.value = false
   }

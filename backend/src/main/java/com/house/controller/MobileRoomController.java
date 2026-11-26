@@ -56,10 +56,11 @@ public class MobileRoomController {
 
     Building building = buildingRepository.findById(room.getBuildingId()).orElse(null);
 
-    Contract activeContract = contractRepository.findByRoomIdAndStatus(roomId, "ACTIVE")
+    Contract activeContract = contractRepository.findByRoomIdAndStatusIn(
+            roomId, ContractStatus.ACTIVE_RAW_VALUES)
         .stream()
         .findFirst()
-        .orElseGet(() -> contractRepository.findByRoomIdAndStatus(roomId, "进行中").stream().findFirst().orElse(null));
+        .orElse(null);
 
     Tenant tenant = null;
     if (activeContract != null && activeContract.getTenantId() != null) {
@@ -104,11 +105,12 @@ public class MobileRoomController {
 
     Map<String, Object> contractData = null;
     if (activeContract != null) {
-      contractData = Map.of(
-          "id", activeContract.getId(),
-          "startDate", activeContract.getStartDate(),
-          "endDate", activeContract.getEndDate(),
-          "monthlyRent", activeContract.getMonthlyRent() == null ? 0D : activeContract.getMonthlyRent());
+      // startDate/endDate 在历史数据里可能为 null，Map.of 会抛 NPE
+      contractData = new LinkedHashMap<>();
+      contractData.put("id", activeContract.getId());
+      contractData.put("startDate", activeContract.getStartDate());
+      contractData.put("endDate", activeContract.getEndDate());
+      contractData.put("monthlyRent", activeContract.getMonthlyRent() == null ? 0D : activeContract.getMonthlyRent());
     }
 
     // tenantData / contractData 在房间空闲时为 null，
@@ -127,14 +129,7 @@ public class MobileRoomController {
   }
 
   private boolean isUnpaid(Bill bill) {
-    if (bill.getStatus() == null) {
-      return true;
-    }
-    String status = bill.getStatus().toUpperCase();
-    return !("PAID".equals(status)
-        || "已支付".equals(bill.getStatus())
-        || "VOID".equals(status)
-        || "作废".equals(bill.getStatus())
-        || "OBSOLETE".equals(status));
+    // isOutstanding = 非终态（既未付清也未作废）
+    return BillStatus.isOutstanding(bill.getStatus());
   }
 }

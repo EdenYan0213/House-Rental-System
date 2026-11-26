@@ -62,13 +62,13 @@ public class BillService {
     LocalDate end = lastMonth.atEndOfMonth();
     String billMonth = lastMonth.toString(); // yyyy-MM
 
-    List<Contract> active = contractRepository.findByStatus("ACTIVE");
+    List<Contract> active = contractRepository.findByStatusIn(ContractStatus.ACTIVE_RAW_VALUES);
     for (Contract c : active) {
       try {
         createBillForContract(c, start, end, billMonth);
       } catch (Exception e) {
-        // TODO: log error per contract, continue
-        e.printStackTrace();
+        // 单份合同失败不影响其余合同，但必须留日志
+        log.warn("账单生成失败 contractNo={} reason={}", c.getContractNo(), e.getMessage(), e);
       }
     }
   }
@@ -105,7 +105,7 @@ public class BillService {
     LocalDate end = ym.atEndOfMonth();
     String billMonth = ym.toString();
 
-    List<Contract> active = contractRepository.findByStatus("ACTIVE");
+    List<Contract> active = contractRepository.findByStatusIn(ContractStatus.ACTIVE_RAW_VALUES);
     int successCount = 0;
     List<Map<String, Object>> failures = new ArrayList<>();
 
@@ -144,7 +144,7 @@ public class BillService {
     }
     Contract c = contractOpt.get();
 
-    if (!"ACTIVE".equals(c.getStatus())) {
+    if (!ContractStatus.isActive(c.getStatus())) {
       throw new IllegalStateException("只有进行中的合同才能生成账单");
     }
 
@@ -180,8 +180,7 @@ public class BillService {
     List<Contract> contracts = contractRepository.findByRoomId(roomId);
     List<Contract> activeContracts = new ArrayList<>();
     for (Contract c : contracts) {
-      String status = c.getStatus();
-      if ("ACTIVE".equalsIgnoreCase(status) || "进行中".equals(status)) {
+      if (ContractStatus.isActive(c.getStatus())) {
         activeContracts.add(c);
       }
     }
@@ -219,7 +218,7 @@ public class BillService {
       throw new IllegalArgumentException("月份不能为空");
     }
     Contract c = contractRepository.findById(contractId).orElseThrow(() -> new IllegalArgumentException("合同不存在"));
-    if (!"ACTIVE".equals(c.getStatus())) {
+    if (!ContractStatus.isActive(c.getStatus())) {
       throw new IllegalStateException("只有进行中的合同才能生成账单");
     }
     YearMonth ym = YearMonth.parse(month);
@@ -283,7 +282,7 @@ public class BillService {
 
     // 如果已存在该合同对应月份的账单，且未付款，则先删除旧账单（及其明细），以便重新生成；若已付款则拒绝覆盖
     billRepository.findByContractIdAndBillMonth(c.getId(), billMonth).ifPresent(existing -> {
-      if ("PAID".equals(existing.getStatus())) {
+      if (BillStatus.isPaid(existing.getStatus())) {
         throw new IllegalStateException("已有已付款账单，不能重新生成");
       }
       List<BillDetail> old = billDetailRepository.findByBillId(existing.getId());

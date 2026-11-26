@@ -1,6 +1,7 @@
 package com.house.controller;
 
 import com.house.model.Bill;
+import com.house.model.ContractStatus;
 import com.house.model.Building;
 import com.house.model.Contract;
 import com.house.model.Notice;
@@ -131,7 +132,7 @@ public class TenantHomeController {
     Set<Long> roomsWithActiveContract = idleRooms.isEmpty()
         ? Set.of()
         : contractRepository.findByRoomIdInAndStatus(
-                idleRooms.stream().map(Room::getId).toList(), "ACTIVE")
+                idleRooms.stream().map(Room::getId).toList(), ContractStatus.ACTIVE)
             .stream()
             .map(Contract::getRoomId)
             .filter(java.util.Objects::nonNull)

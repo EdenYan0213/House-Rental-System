@@ -1,6 +1,7 @@
 package com.house.ai;
 
 import com.house.model.Bill;
+import com.house.model.ContractStatus;
 import com.house.model.Building;
 import com.house.model.Contract;
 import com.house.model.MeterReading;
@@ -384,8 +385,7 @@ public class AiIntentHandlers {
     for (com.house.model.Tenant tenant : tenants) {
       List<Contract> contracts = contractRepository.findByTenantId(tenant.getId());
       Contract active = contracts.stream()
-          .filter(c -> "ACTIVE".equalsIgnoreCase(resolver.safe(c.getStatus()))
-              || "进行中".equals(c.getStatus()))
+          .filter(c -> ContractStatus.isActive(resolver.safe(c.getStatus())))
           .findFirst()
           .orElse(contracts.stream().findFirst().orElse(null));
       Room room = active == null || active.getRoomId() == null ? null

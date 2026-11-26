@@ -3,8 +3,10 @@ package com.house.service;
 import com.house.dto.PaymentRequest;
 import com.house.model.Bill;
 import com.house.model.BillStatus;
+import com.house.model.PaymentOrder;
 import com.house.model.PaymentRecord;
 import com.house.repo.BillRepository;
+import com.house.repo.PaymentOrderRepository;
 import com.house.repo.PaymentRecordRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,10 +21,54 @@ import java.util.Map;
 public class PaymentService {
   private final PaymentRecordRepository paymentRecordRepository;
   private final BillRepository billRepository;
+  private final PaymentOrderRepository paymentOrderRepository;
 
-  public PaymentService(PaymentRecordRepository paymentRecordRepository, BillRepository billRepository) {
+  public PaymentService(PaymentRecordRepository paymentRecordRepository, BillRepository billRepository,
+      PaymentOrderRepository paymentOrderRepository) {
     this.paymentRecordRepository = paymentRecordRepository;
     this.billRepository = billRepository;
+    this.paymentOrderRepository = paymentOrderRepository;
+  }
+
+  /**
+   * 处理支付网关回调：更新订单状态 + 记一笔收款，整体在一个事务里。
+   *
+   * <p>放在 Service 而不是 Controller，是因为原先 controller 里先
+   * {@code paymentOrderRepository.save(order)} 再调 {@code recordPayment}，
+   * 后者抛异常时会留下「订单已置成功、账单却没收款」的脏数据。
+   * 这里任何一步失败都整体回滚。
+   *
+   * @param order    已按 outTradeNo 查到的订单（调用方负责校验存在性）
+   * @param success  网关回调是否成功
+   * @param transactionId 网关流水号，可为 null
+   * @return true 表示本次完成了收款（幂等重复回调返回 false）
+   */
+  @Transactional
+  public boolean settlePaymentCallback(PaymentOrder order, boolean success, String transactionId) {
+    if (order.getStatus() != null && order.getStatus() == 1) {
+      return false; // 已处理过，幂等
+    }
+
+    order.setUpdatedAt(LocalDateTime.now());
+    if (transactionId != null) {
+      order.setTransactionId(transactionId);
+    }
+
+    if (!success) {
+      order.setStatus(2);
+      paymentOrderRepository.save(order);
+      return false;
+    }
+
+    order.setStatus(1);
+    paymentOrderRepository.save(order);
+
+    PaymentRequest paymentRequest = new PaymentRequest();
+    paymentRequest.setPaidAmount(order.getAmount());
+    paymentRequest.setPaymentMethod("wx".equalsIgnoreCase(order.getPayType()) ? "WECHAT" : "ALIPAY");
+    paymentRequest.setRemark("租客端在线支付");
+    recordPayment(order.getBillId(), paymentRequest);
+    return true;
   }
 
   @Transactional

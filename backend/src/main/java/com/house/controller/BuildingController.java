@@ -9,6 +9,7 @@ import com.house.service.OperationSnapshotService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -40,6 +41,7 @@ public class BuildingController {
    * 楼栋列表。不传 page 返回纯数组（兼容现有调用），传了 page 返回分页对象。
    */
   @GetMapping
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'USER')")
   public Object list(@RequestParam(required = false) Integer page,
       @RequestParam(defaultValue = "50") int size) {
     List<Building> all = buildingRepository.findAll();
@@ -61,6 +63,7 @@ public class BuildingController {
   }
 
   @GetMapping("/{id}")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'USER')")
   public ResponseEntity<Building> get(@PathVariable Long id) {
     return buildingRepository.findById(id)
         .map(ResponseEntity::ok)
@@ -68,6 +71,7 @@ public class BuildingController {
   }
 
   @PostMapping
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'USER')")
   public Building create(@RequestBody Building building) {
     Building saved = buildingRepository.save(building);
     markBuildingImagesReferenced(saved);
@@ -75,6 +79,7 @@ public class BuildingController {
   }
 
   @PutMapping("/{id}")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'USER')")
   public ResponseEntity<Building> update(@PathVariable Long id, @RequestBody Building building) {
     return buildingRepository.findById(id).map(b -> {
       b.setName(building.getName());
@@ -111,6 +116,7 @@ public class BuildingController {
   }
 
   @DeleteMapping("/{id}")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'USER')")
   public ResponseEntity<?> delete(@PathVariable Long id) {
     Building before = buildingRepository.findById(id).orElse(null);
     if (before == null)

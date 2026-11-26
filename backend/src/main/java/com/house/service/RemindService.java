@@ -1,6 +1,7 @@
 package com.house.service;
 
 import com.house.model.Bill;
+import com.house.model.BillStatus;
 import com.house.model.RemindLog;
 import com.house.model.RemindRule;
 import com.house.repo.BillRepository;
@@ -56,12 +57,11 @@ public class RemindService {
 
     // fetch bills in待支付 or 部分支付
     List<Bill> all = billRepository.findAll();
-    List<Bill> overdueCandidates = all.stream().filter(b -> {
-      if (b.getStatus() == null)
-        return false;
-      String s = b.getStatus();
-      return s.contains("待支付") || s.contains("部分支付");
-    }).collect(Collectors.toList());
+    // 用 BillStatus 归一化：BillService 写入的是英文 PENDING/PARTIAL，
+    // 原先的 contains("待支付") 永远匹配不到英文数据，导致未付账单催缴静默失效
+    List<Bill> overdueCandidates = all.stream()
+        .filter(b -> BillStatus.isPending(b.getStatus()) || BillStatus.isPartial(b.getStatus()))
+        .collect(Collectors.toList());
 
     LocalDate today = LocalDate.now();
 

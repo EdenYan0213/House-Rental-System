@@ -28,6 +28,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
 
 /**
@@ -76,7 +77,7 @@ class MoveOutServiceTest {
         .thenReturn(Optional.of(Building.builder().id(5L).name("A栋").build()));
     when(tenantService.findById(10L)).thenReturn(Optional.empty());
     when(billRepository.findByContractId(1L)).thenReturn(List.of());
-    when(depositRecordRepository.findAll()).thenReturn(List.of());
+    when(depositRecordRepository.findByContractIdIn(anyList())).thenReturn(List.of());
   }
 
   @Test
@@ -93,7 +94,7 @@ class MoveOutServiceTest {
   @Test
   @DisplayName("押金余额 = 已收 - 已退")
   void depositBalanceIsReceivedMinusRefunded() {
-    when(depositRecordRepository.findAll()).thenReturn(List.of(
+    when(depositRecordRepository.findByContractIdIn(anyList())).thenReturn(List.of(
         DepositRecord.builder().contractId(1L).type("RECEIVE").amount(2800.0).build(),
         DepositRecord.builder().contractId(1L).type("REFUND").amount(300.0).build()
     ));
@@ -108,7 +109,7 @@ class MoveOutServiceTest {
   @Test
   @DisplayName("已退超过已收时余额归零，不出现负数")
   void depositBalanceNeverNegative() {
-    when(depositRecordRepository.findAll()).thenReturn(List.of(
+    when(depositRecordRepository.findByContractIdIn(anyList())).thenReturn(List.of(
         DepositRecord.builder().contractId(1L).type("RECEIVE").amount(1000.0).build(),
         DepositRecord.builder().contractId(1L).type("REFUND").amount(1500.0).build()
     ));
@@ -119,12 +120,15 @@ class MoveOutServiceTest {
   @Test
   @DisplayName("其它合同的押金记录不计入本单")
   void depositRecordsAreScopedToContract() {
-    when(depositRecordRepository.findAll()).thenReturn(List.of(
-        DepositRecord.builder().contractId(1L).type("RECEIVE").amount(1000.0).build(),
-        DepositRecord.builder().contractId(2L).type("RECEIVE").amount(9999.0).build()
+    // 现在按合同直查，不再把全表读进内存过滤：
+    // 断言只请求了本合同的记录，不会退化成 findAll
+    when(depositRecordRepository.findByContractIdIn(anyList())).thenReturn(List.of(
+        DepositRecord.builder().contractId(1L).type("RECEIVE").amount(1000.0).build()
     ));
 
     assertEquals(1000.0, moveOutService.check(1L).receivedDeposit());
+    verify(depositRecordRepository).findByContractIdIn(List.of(1L));
+    verify(depositRecordRepository, never()).findAll();
   }
 
   @Test
@@ -224,7 +228,7 @@ class MoveOutServiceTest {
         Bill.builder().id(11L).totalAmount(1000.0).paidAmount(0.0)
             .status(BillStatus.PENDING).build()
     ));
-    when(depositRecordRepository.findAll()).thenReturn(List.of(
+    when(depositRecordRepository.findByContractIdIn(anyList())).thenReturn(List.of(
         DepositRecord.builder().contractId(1L).type("RECEIVE").amount(2000.0).build()
     ));
 
@@ -241,7 +245,7 @@ class MoveOutServiceTest {
   @Test
   @DisplayName("退押金时扣款生效：实退 = 余额 - 扣款")
   void settleAppliesDeduction() {
-    when(depositRecordRepository.findAll()).thenReturn(List.of(
+    when(depositRecordRepository.findByContractIdIn(anyList())).thenReturn(List.of(
         DepositRecord.builder().contractId(1L).type("RECEIVE").amount(3000.0).build()
     ));
 
@@ -256,7 +260,7 @@ class MoveOutServiceTest {
   @Test
   @DisplayName("不勾选退押金时不产生押金记录")
   void settleWithoutRefundSkipsDepositRecord() {
-    when(depositRecordRepository.findAll()).thenReturn(List.of(
+    when(depositRecordRepository.findByContractIdIn(anyList())).thenReturn(List.of(
         DepositRecord.builder().contractId(1L).type("RECEIVE").amount(3000.0).build()
     ));
 

@@ -1,6 +1,7 @@
 package com.house.service;
 
 import com.house.model.Contract;
+import com.house.model.ContractStatus;
 import com.house.model.Room;
 import com.house.model.Tenant;
 import com.house.repo.ContractRepository;
@@ -14,7 +15,6 @@ import java.util.*;
 
 @Service
 public class TenantTokenService {
-  private static final List<String> ACTIVE_CONTRACT_STATUS = List.of("ACTIVE", "进行中");
 
   private final JwtUtil jwtUtil;
   private final TenantRepository tenantRepository;
@@ -52,7 +52,7 @@ public class TenantTokenService {
     }
 
     Tenant tenant = tenantRepository.findById(tenantId).orElseThrow(() -> new IllegalArgumentException("租客不存在"));
-    List<Contract> contracts = contractRepository.findByTenantIdAndStatusIn(tenantId, ACTIVE_CONTRACT_STATUS);
+    List<Contract> contracts = contractRepository.findByTenantIdAndStatusIn(tenantId, ContractStatus.ACTIVE_RAW_VALUES);
     Set<Long> roomIds = new HashSet<>();
     for (Contract contract : contracts) {
       if (contract.getRoomId() != null) {

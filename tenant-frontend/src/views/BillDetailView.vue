@@ -1,112 +1,158 @@
 <template>
   <div class="page">
-    <section class="panel" style="margin-bottom:10px">
-      <div class="row-between">
-        <div class="card-title" style="margin:0">账单详情</div>
-        <span class="link" @click="$router.back()">返回</span>
-      </div>
-      <p>账单月份：{{ bill.billMonth || '-' }}</p>
-      <p>生成时间：{{ formatTime(bill.generatedDate) }}</p>
-      <p>状态：<span :class="statusClass(bill.status)">{{ statusText(bill.status) }}</span></p>
-      <p>总金额：￥{{ Number(bill.totalAmount || 0).toFixed(2) }}</p>
-      <p>已付金额：￥{{ Number(bill.paidAmount || 0).toFixed(2) }}</p>
-      <p>待付金额：￥{{ Number(bill.unpaidAmount || 0).toFixed(2) }}</p>
-    </section>
+    <PageHeader title="账单详情" to="/bills" />
 
-    <section class="panel" style="margin-bottom:10px">
-      <div class="card-title">费用明细</div>
-      <div v-for="(item, idx) in details" :key="idx" class="list-item">
+    <LoadingBlock v-if="loading" />
+
+    <template v-else>
+      <section class="panel" style="margin-bottom:10px">
         <div class="row-between">
-          <strong>{{ item.name || '-' }}</strong>
-          <span>￥{{ Number(item.amount || 0).toFixed(2) }}</span>
+          <span class="muted">{{ bill.billMonth || '-' }}</span>
+          <span :class="billStatusClass(bill.status)">{{ billStatusText(bill.status) }}</span>
         </div>
-        <p class="muted" style="margin:8px 0 0">用量：{{ item.usage ?? '-' }}</p>
-      </div>
-      <p v-if="!details.length" class="muted">暂无明细</p>
-    </section>
+        <h2 style="margin:12px 0 4px">￥{{ money(bill.totalAmount) }}</h2>
+        <p class="muted" style="margin:0">生成时间：{{ formatTime(bill.generatedDate) }}</p>
 
-    <section class="panel" style="margin-bottom:10px">
-      <div class="card-title">支付记录</div>
-      <div v-for="(item, idx) in payments" :key="idx" class="list-item">
-        <div class="row-between">
-          <strong>￥{{ Number(item.paidAmount || 0).toFixed(2) }}</strong>
-          <span>{{ item.paymentMethod || '-' }}</span>
+        <div class="stat-row" style="margin-top:14px">
+          <div class="stat-card">
+            <div class="stat-value">￥{{ money(bill.totalAmount) }}</div>
+            <div class="stat-label">应缴</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="color: var(--success)">￥{{ money(bill.paidAmount) }}</div>
+            <div class="stat-label">已缴</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="color: var(--danger)">￥{{ money(bill.unpaidAmount) }}</div>
+            <div class="stat-label">待缴</div>
+          </div>
         </div>
-        <p class="muted" style="margin:8px 0 0">{{ formatTime(item.paidDate) }}</p>
-      </div>
-      <p v-if="!payments.length" class="muted">暂无支付记录</p>
-    </section>
+      </section>
 
-    <section class="panel" v-if="canPay">
-      <div class="grid-two">
-        <button class="btn btn-primary" :disabled="paying" @click="pay('wx')">微信支付</button>
-        <button class="btn btn-primary" :disabled="paying" @click="pay('alipay')">支付宝支付</button>
-      </div>
-    </section>
+      <section class="panel" style="margin-bottom:10px">
+        <div class="card-title">费用明细</div>
+        <div v-for="(item, idx) in details" :key="idx" class="list-item">
+          <div class="row-between">
+            <strong>{{ item.name || '-' }}</strong>
+            <span>￥{{ money(item.amount) }}</span>
+          </div>
+          <p class="muted" style="margin:8px 0 0">用量：{{ item.usage ?? '-' }}</p>
+        </div>
+        <EmptyState v-if="!details.length" text="暂无明细" />
+      </section>
+
+      <section class="panel" style="margin-bottom:10px">
+        <div class="card-title">支付记录</div>
+        <div v-for="(item, idx) in payments" :key="idx" class="list-item">
+          <div class="row-between">
+            <strong>￥{{ money(item.paidAmount) }}</strong>
+            <span class="muted">{{ payMethodText(item.paymentMethod) }}</span>
+          </div>
+          <p class="muted" style="margin:8px 0 0">{{ formatTime(item.paidDate) }}</p>
+        </div>
+        <EmptyState v-if="!payments.length" text="暂无支付记录" />
+      </section>
+
+      <section class="panel" v-if="canPay">
+        <div class="card-title">在线支付</div>
+        <p class="muted" style="margin:0 0 12px">
+          待缴金额 <strong style="color: var(--danger)">￥{{ money(bill.unpaidAmount) }}</strong>
+        </p>
+        <div class="grid-two">
+          <button class="btn btn-light" :disabled="paying" @click="pay('wx')">微信支付</button>
+          <button class="btn btn-light" :disabled="paying" @click="pay('alipay')">支付宝支付</button>
+        </div>
+        <p class="muted" style="margin:10px 0 0;text-align:center">
+          {{ paying ? '支付处理中，请勿关闭页面…' : '当前为演示支付，不会产生真实扣款' }}
+        </p>
+      </section>
+    </template>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { createPaymentOrder, getBillDetail, paymentCallback } from '../api'
+import {
+  createPaymentOrder,
+  getBillDetail,
+  getErrorMessage,
+  getPaymentOrder,
+  paymentCallback
+} from '../api'
+import { billStatusClass, billStatusText, formatTime, money } from '../utils/format'
+import { confirmDialog, showError, showSuccess } from '../utils/toast'
+import PageHeader from '../components/PageHeader.vue'
+import EmptyState from '../components/EmptyState.vue'
+import LoadingBlock from '../components/LoadingBlock.vue'
 
 const route = useRoute()
 const bill = ref({})
 const details = ref([])
 const payments = ref([])
 const paying = ref(false)
+const loading = ref(true)
 
-const canPay = computed(() => ['PENDING', 'PARTIAL'].includes(String(bill.value.status || '').toUpperCase()))
+const canPay = computed(() =>
+  ['PENDING', 'PARTIAL'].includes(String(bill.value.status || '').toUpperCase())
+)
 
 onMounted(load)
 
 async function load() {
-  const res = await getBillDetail(route.params.id)
-  bill.value = res.data?.bill || {}
-  details.value = res.data?.details || []
-  payments.value = res.data?.payments || []
+  loading.value = true
+  try {
+    const res = await getBillDetail(route.params.id)
+    bill.value = res.data?.bill || {}
+    details.value = res.data?.details || []
+    payments.value = res.data?.payments || []
+  } catch (error) {
+    showError(getErrorMessage(error, '账单加载失败'))
+  } finally {
+    loading.value = false
+  }
 }
 
 async function pay(payType) {
+  const label = payType === 'wx' ? '微信' : '支付宝'
+  const ok = await confirmDialog(
+    `确认使用${label}支付 ￥${money(bill.value.unpaidAmount)}？`,
+    { title: '确认支付', okText: '去支付' }
+  )
+  if (!ok) return
+
   paying.value = true
   try {
     const createRes = await createPaymentOrder(Number(route.params.id), payType)
     const outTradeNo = createRes.data?.outTradeNo
     if (!outTradeNo) {
-      throw new Error('创建支付单失败')
+      throw new Error('创建支付单失败，请稍后重试')
     }
 
-    // 第一阶段使用模拟回调完成账单状态更新。
+    // 演示阶段由前端触发模拟回调；真实接入后应改为只轮询订单状态
     await paymentCallback(outTradeNo, 'success', `${payType.toUpperCase()}_${Date.now()}`)
-    await load()
-    alert('支付成功')
+
+    // 回调后再确认订单状态，避免"回调成功但账单未更新"的假成功
+    const statusRes = await getPaymentOrder(outTradeNo)
+    if (statusRes.data?.paid) {
+      showSuccess('支付成功')
+      await load()
+    } else {
+      showError('支付状态确认失败，请稍后在支付记录中查看')
+    }
   } catch (error) {
-    alert(error?.response?.data?.message || error.message || '支付失败，请重试')
+    showError(getErrorMessage(error, '支付失败，请重试'))
   } finally {
     paying.value = false
   }
 }
 
-function statusText(value) {
-  return {
-    PENDING: '待支付',
-    PARTIAL: '部分支付',
-    PAID: '已支付',
-    VOID: '已作废'
-  }[String(value || '').toUpperCase()] || value
-}
-
-function statusClass(value) {
-  const statusValue = String(value || '').toUpperCase()
-  if (statusValue === 'PENDING') return 'tag tag-pending'
-  if (statusValue === 'PAID') return 'tag tag-paid'
-  if (statusValue === 'PARTIAL') return 'tag tag-partial'
-  return 'tag tag-void'
-}
-
-function formatTime(value) {
-  if (!value) return '-'
-  return new Date(value).toLocaleString('zh-CN')
+function payMethodText(method) {
+  const key = String(method || '').toUpperCase()
+  if (key === 'WECHAT' || key === 'WX') return '微信支付'
+  if (key === 'ALIPAY') return '支付宝'
+  if (key === 'CASH') return '现金'
+  if (key === 'TRANSFER' || key === 'BANK') return '银行转账'
+  return method || '-'
 }
 </script>

@@ -121,7 +121,7 @@ public class ContractController {
     try {
       return ResponseEntity.ok(moveOutService.check(id));
     } catch (IllegalArgumentException e) {
-      return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("message", e.getMessage() == null ? "操作失败" : e.getMessage()));
     }
   }
 
@@ -158,7 +158,7 @@ public class ContractController {
       result.putAll(UndoResponse.of(snapshot, "退租完成，可在30分钟内撤销"));
       return ResponseEntity.ok(result);
     } catch (IllegalArgumentException | IllegalStateException e) {
-      return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("message", e.getMessage() == null ? "操作失败" : e.getMessage()));
     }
   }
 

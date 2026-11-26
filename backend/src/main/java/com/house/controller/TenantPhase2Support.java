@@ -2,6 +2,7 @@ package com.house.controller;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.house.model.WorkflowStatus;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -123,10 +124,10 @@ public class TenantPhase2Support {
   public List<String> repairStatusGroup(String status) {
     String key = status.trim().toLowerCase();
     if ("processing".equals(key)) {
-      return List.of("pending", "processing", "pending_accept");
+      return List.of(WorkflowStatus.PENDING, WorkflowStatus.PROCESSING, WorkflowStatus.PENDING_ACCEPT);
     }
     if ("completed".equals(key)) {
-      return List.of("completed", "cancelled");
+      return List.of(WorkflowStatus.COMPLETED, WorkflowStatus.CANCELLED);
     }
     return List.of(status);
   }
@@ -134,10 +135,10 @@ public class TenantPhase2Support {
   public List<String> complaintStatusGroup(String status) {
     String key = status.trim().toLowerCase();
     if ("processing".equals(key)) {
-      return List.of("pending", "processing", "pending_confirm");
+      return List.of(WorkflowStatus.PENDING, WorkflowStatus.PROCESSING, WorkflowStatus.PENDING_CONFIRM);
     }
     if ("completed".equals(key)) {
-      return List.of("completed", "closed");
+      return List.of(WorkflowStatus.COMPLETED, WorkflowStatus.CLOSED);
     }
     return List.of(status);
   }

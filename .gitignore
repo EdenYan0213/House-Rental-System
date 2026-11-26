@@ -110,6 +110,10 @@ staff-mobile/android/app/build/
 backend/backups/
 backups/
 
+# 本地调试脚本/凭证，禁止入库（曾含默认口令 admin/admin123）
+frontend/login.json
+frontend/send_login.js
+
 # tenant-frontend
 tenant-frontend/node_modules/
 tenant-frontend/dist/

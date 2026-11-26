@@ -2,11 +2,14 @@ package com.house.controller;
 
 import com.house.config.FileStorageConfig;
 import com.house.model.Contract;
+import com.house.model.DepositRecord;
+import com.house.model.ContractStatus;
 import com.house.model.Feedback;
 import com.house.model.RenewApplication;
 import com.house.model.Room;
 import com.house.model.Tenant;
 import com.house.repo.ContractRepository;
+import com.house.repo.DepositRecordRepository;
 import com.house.repo.FeedbackRepository;
 import com.house.repo.RenewApplicationRepository;
 import com.house.repo.RoomRepository;
@@ -36,14 +39,13 @@ import java.util.*;
 @RequestMapping("/api")
 public class TenantContractController {
 
-  private static final List<String> ACTIVE_STATUS = List.of("ACTIVE", "进行中");
-
   private final TenantTokenService tenantTokenService;
   private final ContractRepository contractRepository;
   private final RenewApplicationRepository renewApplicationRepository;
   private final RoomRepository roomRepository;
   private final FileStorageConfig fileStorageConfig;
   private final FeedbackRepository feedbackRepository;
+  private final DepositRecordRepository depositRecordRepository;
   private final TenantPhase2Support support;
 
   public TenantContractController(TenantTokenService tenantTokenService,
@@ -52,6 +54,7 @@ public class TenantContractController {
       RoomRepository roomRepository,
       FileStorageConfig fileStorageConfig,
       FeedbackRepository feedbackRepository,
+      DepositRecordRepository depositRecordRepository,
       TenantPhase2Support support) {
     this.tenantTokenService = tenantTokenService;
     this.contractRepository = contractRepository;
@@ -59,6 +62,7 @@ public class TenantContractController {
     this.roomRepository = roomRepository;
     this.fileStorageConfig = fileStorageConfig;
     this.feedbackRepository = feedbackRepository;
+    this.depositRecordRepository = depositRecordRepository;
     this.support = support;
   }
 
@@ -70,7 +74,7 @@ public class TenantContractController {
     Long roomId = (Long) context.get("roomId");
 
     Contract current = contractRepository.findByTenantIdAndRoomIdOrderByStartDateDesc(tenantId, roomId).stream()
-        .filter(c -> c.getStatus() != null && ACTIVE_STATUS.stream().anyMatch(s -> s.equalsIgnoreCase(c.getStatus())))
+        .filter(c -> c.getStatus() != null && ContractStatus.ACTIVE_RAW_VALUES.stream().anyMatch(s -> s.equalsIgnoreCase(c.getStatus())))
         .findFirst()
         .orElse(null);
 
@@ -96,6 +100,75 @@ public class TenantContractController {
     result.put("roomNumber", room == null ? "-" : room.getRoomNumber());
     result.put("canApplyRenew", daysToEnd <= 90);
     return ResponseEntity.ok(result);
+  }
+
+  /**
+   * 我的押金记录。
+   *
+   * <p>管理端 {@code /api/deposits} 是全局视图，租客不能访问（已加角色门禁）。
+   * 这里只返回该租客名下合同的记录，并按收取/退还汇总余额。
+   */
+  @GetMapping("/contract/deposits")
+  @PreAuthorize("hasRole('TENANT')")
+  public ResponseEntity<?> myDeposits(@RequestHeader("Authorization") String authHeader) {
+    Map<String, Object> context = tenantTokenService.parseAndValidateTenant(authHeader);
+    Long tenantId = (Long) context.get("tenantId");
+
+    List<Long> contractIds = contractRepository.findByTenantId(tenantId).stream()
+        .map(Contract::getId)
+        .filter(Objects::nonNull)
+        .toList();
+    if (contractIds.isEmpty()) {
+      Map<String, Object> empty = new LinkedHashMap<>();
+      empty.put("content", List.of());
+      empty.put("summary", depositSummary(0D, 0D));
+      return ResponseEntity.ok(empty);
+    }
+
+    List<DepositRecord> records = depositRecordRepository.findByContractIdIn(contractIds).stream()
+        .sorted(Comparator.comparing(DepositRecord::getDate,
+            Comparator.nullsLast(Comparator.reverseOrder())))
+        .toList();
+
+    double received = 0D;
+    double refunded = 0D;
+    List<Map<String, Object>> rows = new ArrayList<>();
+    for (DepositRecord r : records) {
+      double amount = r.getAmount() == null ? 0D : r.getAmount();
+      // 历史数据里 type 有英文也有中文两种写法
+      boolean isRefund = "REFUND".equalsIgnoreCase(r.getType()) || "退还".equals(r.getType());
+      if (isRefund) {
+        refunded += amount;
+      } else {
+        received += amount;
+      }
+
+      Map<String, Object> row = new LinkedHashMap<>();
+      row.put("id", r.getId());
+      row.put("type", isRefund ? "REFUND" : "RECEIVE");
+      row.put("typeText", isRefund ? "退还" : "收取");
+      row.put("amount", amount);
+      row.put("date", r.getDate());
+      row.put("remark", r.getRemark());
+      rows.add(row);
+    }
+
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("content", rows);
+    body.put("summary", depositSummary(received, refunded));
+    return ResponseEntity.ok(body);
+  }
+
+  private Map<String, Object> depositSummary(double received, double refunded) {
+    Map<String, Object> summary = new LinkedHashMap<>();
+    summary.put("received", roundDeposit(received));
+    summary.put("refunded", roundDeposit(refunded));
+    summary.put("balance", roundDeposit(received - refunded));
+    return summary;
+  }
+
+  private double roundDeposit(double value) {
+    return Math.round(value * 100.0) / 100.0;
   }
 
   @GetMapping("/contract/history")

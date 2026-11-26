@@ -1,6 +1,7 @@
 package com.house.controller;
 
 import com.house.model.Contract;
+import com.house.model.ContractStatus;
 import com.house.model.SignAgreement;
 import com.house.model.Tenant;
 import com.house.model.TenantMessage;
@@ -148,7 +149,7 @@ public class TenantSignController {
     agreement.setUpdatedAt(LocalDateTime.now());
     signAgreementRepository.save(agreement);
 
-    contract.setStatus("ACTIVE");
+    contract.setStatus(ContractStatus.ACTIVE);
     contractRepository.save(contract);
 
     Tenant tenant = (Tenant) context.get("tenant");

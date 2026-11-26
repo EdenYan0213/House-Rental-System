@@ -4,6 +4,7 @@ import com.house.dto.TenantSmsLoginRequest;
 import com.house.dto.TenantSmsSendRequest;
 import com.house.dto.TenantSwitchRoomRequest;
 import com.house.model.Contract;
+import com.house.model.ContractStatus;
 import com.house.model.RemindLog;
 import com.house.model.SystemMessage;
 import com.house.model.Tenant;
@@ -36,7 +37,6 @@ import java.util.*;
 public class TenantAuthController {
 
   private static final Logger log = LoggerFactory.getLogger(TenantAuthController.class);
-  private static final List<String> ACTIVE_CONTRACT_STATUS = List.of("ACTIVE", "进行中");
 
   private final TenantTokenService tenantTokenService;
   private final TenantRepository tenantRepository;
@@ -219,7 +219,7 @@ public class TenantAuthController {
     boolean isProspect = Boolean.TRUE.equals(context.get("isProspect"));
 
     List<Contract> activeContracts = contractRepository.findByTenantIdAndStatusIn(tenant.getId(),
-        ACTIVE_CONTRACT_STATUS);
+        ContractStatus.ACTIVE_RAW_VALUES);
     List<Map<String, Object>> rooms = tenantTokenService.buildRoomList(activeContracts);
 
     Map<String, Object> tenantInfo = new HashMap<>();
@@ -402,7 +402,7 @@ public class TenantAuthController {
 
   private ResponseEntity<?> buildTenantLoginResult(Tenant tenant) {
     List<Contract> contracts = contractRepository.findByTenantIdAndStatusIn(
-        tenant.getId(), ACTIVE_CONTRACT_STATUS);
+        tenant.getId(), ContractStatus.ACTIVE_RAW_VALUES);
     List<Map<String, Object>> roomList = tenantTokenService.buildRoomList(contracts);
     boolean isProspect = roomList.isEmpty();
     Long defaultRoomId = isProspect ? null : (Long) roomList.get(0).get("roomId");

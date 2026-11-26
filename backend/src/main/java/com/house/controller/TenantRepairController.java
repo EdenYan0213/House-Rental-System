@@ -1,6 +1,7 @@
 package com.house.controller;
 
 import com.house.model.RepairOrder;
+import com.house.model.WorkflowStatus;
 import com.house.model.RepairWorker;
 import com.house.model.Room;
 import com.house.model.Tenant;
@@ -169,7 +170,7 @@ public class TenantRepairController {
         .faultType(faultType)
         .description(description)
         .images(support.toJson(images))
-        .status("pending")
+        .status(WorkflowStatus.PENDING)
         .expectedTime(expected)
         .contactPhone(phone)
         .materialFee(0D)
@@ -199,7 +200,7 @@ public class TenantRepairController {
     if (!tenantId.equals(order.getTenantId())) {
       return ResponseEntity.status(403).body(Map.of("message", "无权操作该报修单"));
     }
-    if (!"pending_accept".equals(order.getStatus())) {
+    if (!WorkflowStatus.PENDING_ACCEPT.equals(order.getStatus())) {
       return ResponseEntity.badRequest().body(Map.of("message", "当前状态不可确认完成"));
     }
 
@@ -212,7 +213,7 @@ public class TenantRepairController {
       return ResponseEntity.badRequest().body(Map.of("message", "评价内容不能超过200字"));
     }
 
-    order.setStatus("completed");
+    order.setStatus(WorkflowStatus.COMPLETED);
     order.setAcceptTime(LocalDateTime.now());
     order.setRating(rating);
     order.setComment(comment);

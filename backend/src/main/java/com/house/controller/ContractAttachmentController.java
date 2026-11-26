@@ -41,7 +41,7 @@ public class ContractAttachmentController {
       return ResponseEntity.ok(
           attachmentService.addVersion(contractId, fileUrl, fileName, fileSize, category, remark));
     } catch (IllegalArgumentException e) {
-      return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("message", e.getMessage() == null ? "操作失败" : e.getMessage()));
     }
   }
 
@@ -52,7 +52,7 @@ public class ContractAttachmentController {
       attachmentService.deleteVersion(contractId, attachmentId);
       return ResponseEntity.ok(Map.of("success", true));
     } catch (IllegalArgumentException | IllegalStateException e) {
-      return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("message", e.getMessage() == null ? "操作失败" : e.getMessage()));
     }
   }
 }

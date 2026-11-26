@@ -1,12 +1,14 @@
 package com.house.controller;
 
 import com.house.model.ComplaintLog;
+import com.house.model.WorkflowStatus;
 import com.house.model.ComplaintSuggestion;
 import com.house.model.Room;
 import com.house.repo.ComplaintLogRepository;
 import com.house.repo.ComplaintSuggestionRepository;
 import com.house.repo.RoomRepository;
 import com.house.service.TenantTokenService;
+import com.house.service.ComplaintService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -29,17 +31,20 @@ public class TenantComplaintController {
   private final ComplaintLogRepository complaintLogRepository;
   private final RoomRepository roomRepository;
   private final TenantPhase2Support support;
+  private final ComplaintService complaintService;
 
   public TenantComplaintController(TenantTokenService tenantTokenService,
       ComplaintSuggestionRepository complaintSuggestionRepository,
       ComplaintLogRepository complaintLogRepository,
       RoomRepository roomRepository,
-      TenantPhase2Support support) {
+      TenantPhase2Support support,
+      ComplaintService complaintService) {
     this.tenantTokenService = tenantTokenService;
     this.complaintSuggestionRepository = complaintSuggestionRepository;
     this.complaintLogRepository = complaintLogRepository;
     this.roomRepository = roomRepository;
     this.support = support;
+    this.complaintService = complaintService;
   }
 
   @GetMapping("/list")
@@ -145,32 +150,12 @@ public class TenantComplaintController {
       return ResponseEntity.badRequest().body(Map.of("message", "最多上传5张图片"));
     }
 
-    ComplaintSuggestion item = ComplaintSuggestion.builder()
-        .complaintNo("CP" + System.currentTimeMillis())
-        .tenantId(tenantId)
-        .roomId(roomId)
-        .reporterType("tenant")
-        .reportedBy(tenantId)
-        .type(type)
-        .title(title)
-        .content(content)
-        .images(support.toJson(images))
-        .isAnonymous(0)
-        .priority("normal")
-        .status("pending")
-        .createdAt(LocalDateTime.now())
-        .updatedAt(LocalDateTime.now())
-        .build();
-
-    ComplaintSuggestion saved = complaintSuggestionRepository.save(item);
-    complaintLogRepository.save(ComplaintLog.builder()
-        .complaintId(saved.getId())
-        .operatorType("tenant")
-        .operatorId(tenantId)
-        .action("submit")
-        .content("租客提交投诉")
-        .createdAt(LocalDateTime.now())
-        .build());
+    ComplaintSuggestion saved;
+    try {
+      saved = complaintService.createByTenant(tenantId, roomId, type, title, content, images);
+    } catch (IllegalArgumentException | IllegalStateException e) {
+      return ResponseEntity.badRequest().body(Map.of("message", e.getMessage() == null ? "操作失败" : e.getMessage()));
+    }
 
     return ResponseEntity.ok(Map.of("id", saved.getId(), "complaintNo", saved.getComplaintNo()));
   }
@@ -190,7 +175,7 @@ public class TenantComplaintController {
     if (!tenantId.equals(item.getTenantId())) {
       return ResponseEntity.status(403).body(Map.of("message", "无权操作该投诉"));
     }
-    if (!"pending_confirm".equals(item.getStatus())) {
+    if (!WorkflowStatus.PENDING_CONFIRM.equals(item.getStatus())) {
       return ResponseEntity.badRequest().body(Map.of("message", "当前状态不可确认完成"));
     }
 
@@ -203,7 +188,7 @@ public class TenantComplaintController {
       return ResponseEntity.badRequest().body(Map.of("message", "评价内容不能超过200字"));
     }
 
-    item.setStatus("completed");
+    item.setStatus(WorkflowStatus.COMPLETED);
     item.setRating(rating);
     item.setComment(comment);
     item.setUpdatedAt(LocalDateTime.now());

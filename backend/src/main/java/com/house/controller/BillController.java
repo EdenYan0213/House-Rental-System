@@ -104,7 +104,7 @@ public class BillController {
       return ResponseEntity.ok(result);
     } catch (Exception e) {
       log.error("批量生成账单失败 month={}", targetMonth, e);
-      return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("message", e.getMessage() == null ? "操作失败" : e.getMessage()));
     }
   }
 
@@ -461,7 +461,7 @@ public class BillController {
           "data", saved,
           "billStatus", bill != null ? BillStatus.normalize(bill.getStatus()) : BillStatus.PENDING));
     } catch (IllegalArgumentException | IllegalStateException e) {
-      return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("message", e.getMessage() == null ? "操作失败" : e.getMessage()));
     }
   }
 
@@ -486,7 +486,7 @@ public class BillController {
           "批量收款: " + result.get("successCount") + " 张, 合计 " + result.get("totalPaid"), request);
       return ResponseEntity.ok(result);
     } catch (Exception e) {
-      return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+      return ResponseEntity.badRequest().body(Map.of("message", e.getMessage() == null ? "操作失败" : e.getMessage()));
     }
   }
 

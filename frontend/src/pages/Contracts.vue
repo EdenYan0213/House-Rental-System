@@ -608,7 +608,7 @@ async function confirmRenew() {
     showDetail.value = false
     await loadContracts()
   } catch (e) {
-    ElMessage.error(e.response?.data || e.message || '续租失败')
+    ElMessage.error(getErrorMessage(e, '续租失败'))
   } finally {
     renewing.value = false
   }

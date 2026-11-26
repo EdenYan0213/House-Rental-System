@@ -3,6 +3,7 @@ package com.house.controller;
 import com.house.model.ComplaintSuggestion;
 import com.house.model.Handler;
 import com.house.service.ComplaintService;
+import com.house.util.RequestValues;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
@@ -54,7 +55,7 @@ public class ComplaintController {
   public ComplaintSuggestion accept(@PathVariable Long id, @RequestBody Map<String, Object> body,
       HttpServletRequest request) {
     String note = body.get("note") == null ? "" : body.get("note").toString();
-    Long assignedTo = parseLong(body.get("assignedTo"));
+    Long assignedTo = RequestValues.parseLong(body.get("assignedTo"));
     return complaintService.accept(id, note, assignedTo, request);
   }
 
@@ -82,7 +83,7 @@ public class ComplaintController {
   @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public ComplaintSuggestion reassign(@PathVariable Long id, @RequestBody Map<String, Object> body,
       HttpServletRequest request) {
-    Long assignedTo = parseLong(body.get("assignedTo"));
+    Long assignedTo = RequestValues.parseLong(body.get("assignedTo"));
     String note = body.get("note") == null ? "" : body.get("note").toString();
     return complaintService.reassign(id, assignedTo, note, request);
   }
@@ -119,17 +120,4 @@ public class ComplaintController {
     return complaintService.stats(startDate, endDate, buildingId);
   }
 
-  private Long parseLong(Object value) {
-    if (value == null) {
-      return null;
-    }
-    if (value instanceof Number n) {
-      return n.longValue();
-    }
-    String s = value.toString().trim();
-    if (s.isBlank()) {
-      return null;
-    }
-    return Long.parseLong(s);
-  }
 }

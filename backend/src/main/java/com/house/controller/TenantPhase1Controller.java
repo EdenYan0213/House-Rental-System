@@ -3,6 +3,7 @@ package com.house.controller;
 import com.house.dto.PaymentCreateRequest;
 import com.house.dto.PaymentRequest;
 import com.house.model.Bill;
+import com.house.model.BillStatus;
 import com.house.model.BillDetail;
 import com.house.model.Contract;
 import com.house.model.Notice;
@@ -74,14 +75,26 @@ public class TenantPhase1Controller {
         ? List.of()
         : billRepository.findByContractIdInOrderByBillMonthDescIdDesc(contractIds);
 
+    // 批量取收款记录，避免每张账单查一次库（原来是循环内 findById，N+1）
+    Map<Long, Double> paidByBill = paidAmountByBill(source);
+
     List<Map<String, Object>> allRows = new ArrayList<>();
+    double totalAll = 0D;
+    double paidAll = 0D;
+    int unpaidCount = 0;
+
     for (Bill bill : source) {
-      double paid = paymentRecordRepository.findByBillId(bill.getId())
-          .stream()
-          .mapToDouble(item -> item.getPaidAmount() == null ? 0D : item.getPaidAmount())
-          .sum();
+      double paid = paidByBill.getOrDefault(bill.getId(), 0D);
       double total = bill.getTotalAmount() == null ? 0D : bill.getTotalAmount();
       String billStatus = normalizeStatus(bill.getStatus(), total, paid);
+
+      // 汇总统计始终基于全部账单，不受 status 过滤影响
+      totalAll += total;
+      paidAll += paid;
+      if (BillStatus.isOutstanding(billStatus)) {
+        unpaidCount++;
+      }
+
       if (status != null && !status.isBlank() && !status.equalsIgnoreCase(billStatus)) {
         continue;
       }
@@ -106,7 +119,14 @@ public class TenantPhase1Controller {
         "content", allRows.subList(from, to),
         "totalElements", allRows.size(),
         "page", safePage,
-        "size", safeSize));
+        "size", safeSize,
+        // 汇总来自全部账单，前端不要用当前页数据自己算
+        "summary", Map.of(
+            "totalAmount", round(totalAll),
+            "paidAmount", round(paidAll),
+            "unpaidAmount", round(Math.max(0D, totalAll - paidAll)),
+            "unpaidCount", unpaidCount,
+            "billCount", source.size())));
   }
 
   @GetMapping("/bill/detail/{id}")
@@ -168,6 +188,49 @@ public class TenantPhase1Controller {
   }
 
   // Phase 1: Tenant online payment flow.
+
+  /**
+   * 查询支付订单状态。
+   *
+   * <p>租客端起单后轮询这个接口确认是否已支付：接入真实网关后，
+   * 状态由网关异步回调写入，前端不能只靠本地"调用回调即成功"判断。
+   */
+  @GetMapping("/tenant/payment/order/{outTradeNo}")
+  @PreAuthorize("hasRole('TENANT')")
+  public ResponseEntity<?> paymentOrderStatus(@RequestHeader("Authorization") String authHeader,
+      @PathVariable String outTradeNo) {
+    Map<String, Object> context = tenantTokenService.parseAndValidateTenant(authHeader);
+    Tenant tenant = (Tenant) context.get("tenant");
+    Long roomId = (Long) context.get("roomId");
+
+    PaymentOrder order = paymentOrderRepository.findByOutTradeNo(outTradeNo).orElse(null);
+    if (order == null) {
+      return ResponseEntity.notFound().build();
+    }
+
+    // 只能查自己的订单：经由账单 → 合同校验租户与房间
+    Bill bill = billRepository.findById(order.getBillId()).orElse(null);
+    if (bill == null) {
+      return ResponseEntity.notFound().build();
+    }
+    Contract contract = contractRepository.findById(bill.getContractId()).orElse(null);
+    if (contract == null || !tenant.getId().equals(contract.getTenantId())
+        || !roomId.equals(contract.getRoomId())) {
+      return ResponseEntity.status(403).body(Map.of("message", "无权限访问该订单"));
+    }
+
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("outTradeNo", order.getOutTradeNo());
+    body.put("billId", order.getBillId());
+    body.put("amount", order.getAmount());
+    body.put("payType", order.getPayType());
+    // status: 0=待支付 1=已支付 2=失败
+    body.put("status", order.getStatus());
+    body.put("paid", order.getStatus() != null && order.getStatus() == 1);
+    body.put("transactionId", order.getTransactionId());
+    body.put("updatedAt", order.getUpdatedAt());
+    return ResponseEntity.ok(body);
+  }
 
   @PostMapping("/payment/create")
   @PreAuthorize("hasRole('TENANT')")
@@ -246,25 +309,12 @@ public class TenantPhase1Controller {
     }
 
     boolean success = "success".equalsIgnoreCase(result) || "paid".equalsIgnoreCase(result);
-    order.setUpdatedAt(LocalDateTime.now());
-    order.setTransactionId(transactionId == null ? order.getTransactionId() : transactionId);
-
+    // 订单状态与收款记录在 PaymentService 里同一事务提交，避免「订单已成功但账单未收款」
+    boolean recorded = paymentService.settlePaymentCallback(order, success, transactionId);
     if (!success) {
-      order.setStatus(2);
-      paymentOrderRepository.save(order);
       return ResponseEntity.ok(Map.of("success", false, "message", "支付失败"));
     }
-
-    order.setStatus(1);
-    paymentOrderRepository.save(order);
-
-    PaymentRequest paymentRequest = new PaymentRequest();
-    paymentRequest.setPaidAmount(order.getAmount());
-    paymentRequest.setPaymentMethod("wx".equalsIgnoreCase(order.getPayType()) ? "WECHAT" : "ALIPAY");
-    paymentRequest.setRemark("租客端在线支付");
-    paymentService.recordPayment(order.getBillId(), paymentRequest);
-
-    return ResponseEntity.ok(Map.of("success", true, "message", "支付成功"));
+    return ResponseEntity.ok(Map.of("success", recorded, "message", "支付成功"));
   }
 
   // Phase 1: Tenant notice flow.
@@ -345,18 +395,44 @@ public class TenantPhase1Controller {
     return ResponseEntity.ok(noticeRepository.save(saved));
   }
 
+  /**
+   * 账单向租客展示时的状态：以实收金额为准重算，避免历史脏状态。
+   *
+   * <p>注意这与 {@link BillStatus#normalize(String)} 不同——后者只做拼写归一，
+   * 这里额外按 paid/total 推导 PARTIAL/PAID。作废判断直接复用助手，不要另写字面量。
+   */
+  /**
+   * 一次查出多张账单的已付总额。
+   *
+   * <p>替代循环内 {@code findByBillId}：账单页动辄几十条，逐条查询是 N+1。
+   */
+  private Map<Long, Double> paidAmountByBill(List<Bill> bills) {
+    if (bills == null || bills.isEmpty()) {
+      return Map.of();
+    }
+    List<Long> ids = bills.stream().map(Bill::getId).filter(java.util.Objects::nonNull).toList();
+    if (ids.isEmpty()) {
+      return Map.of();
+    }
+    Map<Long, Double> result = new HashMap<>();
+    for (PaymentRecord record : paymentRecordRepository.findByBillIdIn(ids)) {
+      double amount = record.getPaidAmount() == null ? 0D : record.getPaidAmount();
+      result.merge(record.getBillId(), amount, Double::sum);
+    }
+    return result;
+  }
+
   private String normalizeStatus(String status, double total, double paid) {
-    String raw = status == null ? "" : status.trim().toUpperCase();
-    if ("VOID".equals(raw) || "OBSOLETE".equals(raw) || "作废".equals(status) || "已作废".equals(status)) {
-      return "VOID";
+    if (BillStatus.isVoid(status)) {
+      return BillStatus.VOID;
     }
     if (paid >= total - 0.0001 && total > 0) {
-      return "PAID";
+      return BillStatus.PAID;
     }
     if (paid > 0) {
-      return "PARTIAL";
+      return BillStatus.PARTIAL;
     }
-    return "PENDING";
+    return BillStatus.PENDING;
   }
 
   private double round(double value) {

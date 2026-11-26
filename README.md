@@ -1,15 +1,17 @@
 # 房屋租赁管理系统
 
-包含后端（Spring Boot 3.4.2，Java 17）和 **三个独立前端**：
+包含后端（Spring Boot 3.4.2，Java 17）和 **三个独立前端**（管理端 / 员工移动端 / 租户自助端）：
 
 | 目录 | 说明 | 端口 |
 |---|---|---|
 | `backend/` | 后端服务，唯一 API 提供方 | 8081 |
-| `frontend/` | 管理端（桌面浏览器） | 5173 |
+| `frontend/` | 管理端（桌面浏览器，Element Plus） | 5173 |
 | `staff-mobile/` | 员工移动端（扫码录入/报修，Capacitor 打 APK） | 5180 |
-| `tenant-frontend/` | 租户自助端（查账单/报修/续租申请/合同签署） | 5188 |
+| `tenant-frontend/` | 租户自助端（查账单/在线支付/报修/投诉/续租申请/电子签署） | 5188 |
 
 移动端已从 `frontend/` 完全拆出：独立依赖、独立构建产物、独立 Android 工程（`com.house.staff`），可单独部署与发版。
+
+租户自助端是独立部署的 Web 应用（手机浏览器即可，无需装 App），与员工端共用同一套后端接口，但**面向租客**：查看账单并在线支付、提交报修/投诉并确认评价、申请续租、完成电子签约。
 
 ## 环境要求
 
@@ -227,7 +229,8 @@ JAVA_HOME=$(/usr/libexec/java_home -v 17) mvn test
 - 引入 Flyway 收敛 SQL 迁移，避免新环境漂移。
 - 为长列表接口补后端分页与索引。
 - 为身份证等敏感字段完善密钥管理（轮换、KMS 托管）。
-- 清理仓库内的开发残留文件（`frontend/login.json`、`frontend/send_login.js` 含默认口令）。
+- 为在线支付回调增加签名校验（当前 `POST /api/payment/callback` 仅依赖 outTradeNo 不可猜）。
+- 拆分超过 700 行的大页面（`Rooms.vue`、`MeterReadings.vue`、`Bills.vue` 等）为 composable。
 
 ## 性能压测与优化
 

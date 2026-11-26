@@ -45,7 +45,8 @@
 
 <script setup>
 import { onMounted, ref } from 'vue'
-import { getVacantRooms, submitRentIntent } from '../api'
+import { getVacantRooms, submitRentIntent, getErrorMessage } from '../api'
+import { showError, showSuccess } from '../utils/toast'
 
 const rooms = ref([])
 const messages = ref({})
@@ -74,23 +75,32 @@ function markBroken(roomId) {
 
 onMounted(refresh)
 
+const loading = ref(false)
+
 async function refresh() {
-  const res = await getVacantRooms()
-  rooms.value = res.data || []
+  loading.value = true
+  try {
+    const res = await getVacantRooms()
+    rooms.value = res.data || []
+  } catch (error) {
+    showError(getErrorMessage(error, '房源加载失败'))
+  } finally {
+    loading.value = false
+  }
 }
 
 async function submit(room) {
   const message = (messages.value[room.roomId] || '').trim()
   if (!message) {
-    alert('请先填写沟通内容')
+    showError('请先填写沟通内容')
     return
   }
   try {
     await submitRentIntent({ roomId: room.roomId, message })
     messages.value[room.roomId] = ''
-    alert('已提交，管理员会尽快联系您')
+    showSuccess('已提交，管理员会尽快联系您')
   } catch (error) {
-    alert(error?.response?.data?.message || '提交失败，请稍后重试')
+    showError(getErrorMessage(error, '提交失败，请稍后重试'))
   }
 }
 </script>

@@ -1,6 +1,8 @@
 package com.house.ai;
 
 import com.house.model.Bill;
+import com.house.model.BillStatus;
+import com.house.model.ContractStatus;
 import com.house.model.Building;
 import com.house.model.Contract;
 import com.house.model.Room;
@@ -188,7 +190,7 @@ public class AiEntityResolver {
       List<Contract> contracts = contractRepository.findByTenantId(tenant.getId());
       if (activeOnly) {
         contracts = contracts.stream()
-            .filter(c -> "ACTIVE".equalsIgnoreCase(safe(c.getStatus())) || "进行中".equals(c.getStatus()))
+            .filter(c -> ContractStatus.isActive(safe(c.getStatus())))
             .toList();
       }
       for (Contract contract : contracts) {
@@ -356,26 +358,28 @@ public class AiEntityResolver {
   // ---------------- 通用 ----------------
 
   public boolean isPendingStatus(Bill bill) {
-    String status = safe(bill.getStatus()).toUpperCase(Locale.ROOT);
-    return "PENDING".equals(status) || "PARTIAL".equals(status)
-        || "待支付".equals(bill.getStatus()) || "部分支付".equals(bill.getStatus());
+    // 待收 = 待支付或部分支付
+    return BillStatus.isPending(bill.getStatus()) || BillStatus.isPartial(bill.getStatus());
   }
 
   public String displayContractStatus(String status) {
-    String normalized = safe(status).toUpperCase(Locale.ROOT);
-    if ("ACTIVE".equals(normalized) || "进行中".equals(status)) {
-      return "进行中";
+    // 空状态展示为 "-"，不能落到 normalize 的 PENDING 默认值上
+    if (status == null || status.isBlank()) {
+      return "-";
     }
-    if ("PENDING".equals(normalized) || "待生效".equals(status)) {
-      return "待生效";
+    // 中文展示名；归一化统一交给 ContractStatus，避免这里再维护一套拼写表
+    switch (ContractStatus.normalize(status)) {
+      case ContractStatus.ACTIVE:
+        return "进行中";
+      case ContractStatus.PENDING:
+        return "待生效";
+      case ContractStatus.EXPIRED:
+        return "已到期";
+      case ContractStatus.TERMINATED:
+        return "已终止";
+      default:
+        return status;
     }
-    if ("EXPIRED".equals(normalized) || "已到期".equals(status)) {
-      return "已到期";
-    }
-    if ("TERMINATED".equals(normalized) || "已终止".equals(status)) {
-      return "已终止";
-    }
-    return status == null ? "-" : status;
   }
 
   public boolean hasText(String value) {

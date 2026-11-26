@@ -51,7 +51,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { changePassword, getUser, setUser, updateProfile } from '@/api'
+import { changePassword, getUser, setUser, updateProfile, getErrorMessage } from '@/api'
 
 const router = useRouter()
 const saving = ref(false)
@@ -137,7 +137,7 @@ async function saveProfile() {
     setUser(nextUser)
     ElMessage.success('个人资料已更新')
   } catch (error) {
-    ElMessage.error(error?.response?.data?.message || '更新资料失败')
+    ElMessage.error(getErrorMessage(error, '更新资料失败'))
   } finally {
     saving.value = false
   }
@@ -162,7 +162,7 @@ async function savePassword() {
     passwordForm.value.confirmPassword = ''
     ElMessage.success('密码修改成功')
   } catch (error) {
-    ElMessage.error(error?.response?.data?.message || '修改密码失败')
+    ElMessage.error(getErrorMessage(error, '修改密码失败'))
   } finally {
     saving.value = false
   }

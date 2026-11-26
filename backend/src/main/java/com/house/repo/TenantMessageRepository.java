@@ -20,4 +20,7 @@ public interface TenantMessageRepository extends JpaRepository<TenantMessage, Lo
       Integer isDeleted);
 
   long countByTenantIdAndIsReadAndIsDeleted(Long tenantId, Integer isRead, Integer isDeleted);
+
+  /** 批量已读：取该租客所有未读且未删除的消息。 */
+  List<TenantMessage> findByTenantIdAndIsReadAndIsDeleted(Long tenantId, Integer isRead, Integer isDeleted);
 }

@@ -9,21 +9,18 @@
 <script setup>
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { currentLanguage, t } from '../utils/i18n'
 
 const route = useRoute()
 const router = useRouter()
 
-const items = computed(() => {
-  const _lang = currentLanguage.value
-  return [
-    { label: t('tab_home'), path: '/home' },
-    { label: t('tab_repairs'), path: '/repairs' },
-    { label: t('tab_complaints'), path: '/complaints' },
-    { label: t('tab_bills'), path: '/bills' },
-    { label: t('tab_me'), path: '/me' }
-  ]
-})
+// 界面固定中文；语言偏好只影响后端下发的消息文案
+const items = [
+  { label: '首页', path: '/home' },
+  { label: '报修', path: '/repairs' },
+  { label: '投诉', path: '/complaints' },
+  { label: '账单', path: '/bills' },
+  { label: '我的', path: '/me' }
+]
 
 const currentPath = computed(() => route.path)
 

@@ -3,6 +3,8 @@ package com.house.service;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.house.model.ComplaintLog;
+import com.house.model.WorkflowStatus;
+import com.house.model.ContractStatus;
 import com.house.model.ComplaintSuggestion;
 import com.house.model.Contract;
 import com.house.model.Handler;
@@ -45,12 +47,6 @@ import java.util.Set;
  */
 @Service
 public class ComplaintService {
-
-  private static final String STATUS_PENDING = "pending";
-  private static final String STATUS_PROCESSING = "processing";
-  private static final String STATUS_PENDING_CONFIRM = "pending_confirm";
-  private static final String STATUS_COMPLETED = "completed";
-  private static final String STATUS_CLOSED = "closed";
 
   private final ComplaintSuggestionRepository complaintSuggestionRepository;
   private final ComplaintLogRepository complaintLogRepository;
@@ -179,7 +175,7 @@ public class ComplaintService {
     Long tenantId = parseLong(body.get("tenantId"));
     if (tenantId == null) {
       // 未指定租户时，取该房间当前生效合同的租户
-      Contract active = contractRepository.findByRoomIdAndStatus(roomId, "ACTIVE")
+      Contract active = contractRepository.findByRoomIdAndStatusIn(roomId, ContractStatus.ACTIVE_RAW_VALUES)
           .stream().findFirst().orElse(null);
       if (active != null) {
         tenantId = active.getTenantId();
@@ -221,25 +217,65 @@ public class ComplaintService {
     item.setIsAnonymous(parseIntOrDefault(body.get("isAnonymous"), 0));
     item.setPriority(toText(body.get("priority")).isBlank()
         ? "normal" : toText(body.get("priority")));
-    item.setStatus(STATUS_PENDING);
+    item.setStatus(WorkflowStatus.PENDING);
 
     LocalDateTime now = LocalDateTime.now();
     item.setCreatedAt(now);
     item.setUpdatedAt(now);
 
     ComplaintSuggestion saved = complaintSuggestionRepository.save(item);
-    addLog(saved.getId(), "admin", reportedBy, "submit", "提交投诉: " + saved.getTitle());
+    // 日志的操作人类型跟随实际提交方，不硬编码 admin（租客代提交时否则会记错）
+    String operatorType = "tenant".equalsIgnoreCase(item.getReporterType()) ? "tenant" : "admin";
+    addLog(saved.getId(), operatorType, reportedBy, "submit", "提交投诉: " + saved.getTitle());
     operationLogService.log("投诉管理", "创建投诉: " + saved.getComplaintNo(), request);
 
     return respond(saved);
   }
 
-  // ---------------- 状态流转 ----------------
+  /**
+   * 租客端提交投诉。
+   *
+   * <p>与后台 {@link #create} 共享同一套落库与日志逻辑，差别只在：
+   * 投诉人固定为租客本人、状态从 pending 起、并做 24 小时频次限制。
+   * 控制器只负责鉴权和字段格式校验，业务规则留在这里。
+   */
+  @Transactional
+  public ComplaintSuggestion createByTenant(Long tenantId, Long roomId, String type, String title,
+      String content, List<String> images) {
+    LocalDateTime now = LocalDateTime.now();
+    long count24h = complaintSuggestionRepository.countByTenantIdAndRoomIdAndCreatedAtBetween(
+        tenantId, roomId, now.minusHours(24), now);
+    if (count24h >= 5) {
+      throw new IllegalStateException("同一租户同一房间24小时内最多提交5条投诉");
+    }
 
+    ComplaintSuggestion item = ComplaintSuggestion.builder()
+        .complaintNo(generateComplaintNo())
+        .tenantId(tenantId)
+        .roomId(roomId)
+        .reporterType("tenant")
+        .reportedBy(tenantId)
+        .type(type)
+        .title(title)
+        .content(content)
+        .images(toJsonArray(images))
+        .isAnonymous(0)
+        .priority("normal")
+        .status(WorkflowStatus.PENDING)
+        .createdAt(now)
+        .updatedAt(now)
+        .build();
+
+    ComplaintSuggestion saved = complaintSuggestionRepository.save(item);
+    addLog(saved.getId(), "tenant", tenantId, "submit", "租客提交投诉: " + saved.getTitle());
+    return saved;
+  }
+
+  // ---------------- 状态流转 ----------------
   @Transactional
   public ComplaintSuggestion accept(Long id, String note, Long assignedTo, HttpServletRequest request) {
     ComplaintSuggestion item = requireById(id);
-    requireStatus(item, STATUS_PENDING, "仅待受理状态可受理");
+    requireStatus(item, WorkflowStatus.PENDING, "仅待受理状态可受理");
 
     User current = getCurrentUser();
     Long target = assignedTo;
@@ -247,7 +283,7 @@ public class ComplaintService {
       target = current.getId();
     }
 
-    item.setStatus(STATUS_PROCESSING);
+    item.setStatus(WorkflowStatus.PROCESSING);
     item.setAssignedTo(target);
     item.setAssignedAt(LocalDateTime.now());
     item.setUpdatedAt(LocalDateTime.now());
@@ -265,8 +301,8 @@ public class ComplaintService {
   @Transactional
   public ComplaintSuggestion reply(Long id, String content, HttpServletRequest request) {
     ComplaintSuggestion item = requireById(id);
-    if (!STATUS_PROCESSING.equals(item.getStatus())
-        && !STATUS_PENDING_CONFIRM.equals(item.getStatus())) {
+    if (!WorkflowStatus.PROCESSING.equals(item.getStatus())
+        && !WorkflowStatus.PENDING_CONFIRM.equals(item.getStatus())) {
       throw new IllegalStateException("当前状态不可回复");
     }
     if (content == null || content.isBlank()) {
@@ -287,10 +323,10 @@ public class ComplaintService {
   public ComplaintSuggestion complete(Long id, String result, boolean requireConfirm,
       HttpServletRequest request) {
     ComplaintSuggestion item = requireById(id);
-    requireStatus(item, STATUS_PROCESSING, "仅处理中状态可完成处理");
+    requireStatus(item, WorkflowStatus.PROCESSING, "仅处理中状态可完成处理");
 
     item.setCompletedAt(LocalDateTime.now());
-    item.setStatus(requireConfirm ? STATUS_PENDING_CONFIRM : STATUS_COMPLETED);
+    item.setStatus(requireConfirm ? WorkflowStatus.PENDING_CONFIRM : WorkflowStatus.COMPLETED);
     item.setUpdatedAt(LocalDateTime.now());
     ComplaintSuggestion saved = complaintSuggestionRepository.save(item);
 
@@ -306,7 +342,7 @@ public class ComplaintService {
   @Transactional
   public ComplaintSuggestion reassign(Long id, Long assignedTo, String note, HttpServletRequest request) {
     ComplaintSuggestion item = requireById(id);
-    requireStatus(item, STATUS_PROCESSING, "仅处理中状态可转派");
+    requireStatus(item, WorkflowStatus.PROCESSING, "仅处理中状态可转派");
     if (assignedTo == null) {
       throw new IllegalArgumentException("处理人不能为空");
     }
@@ -329,11 +365,11 @@ public class ComplaintService {
   @Transactional
   public ComplaintSuggestion close(Long id, String reason, HttpServletRequest request) {
     ComplaintSuggestion item = requireById(id);
-    if (STATUS_COMPLETED.equals(item.getStatus()) || STATUS_CLOSED.equals(item.getStatus())) {
+    if (WorkflowStatus.COMPLETED.equals(item.getStatus()) || WorkflowStatus.CLOSED.equals(item.getStatus())) {
       throw new IllegalStateException("当前状态不可关闭");
     }
 
-    item.setStatus(STATUS_CLOSED);
+    item.setStatus(WorkflowStatus.CLOSED);
     item.setClosedAt(LocalDateTime.now());
     item.setClosedReason(reason);
     item.setUpdatedAt(LocalDateTime.now());
@@ -350,9 +386,9 @@ public class ComplaintService {
   @Transactional
   public ComplaintSuggestion confirmComplete(Long id, HttpServletRequest request) {
     ComplaintSuggestion item = requireById(id);
-    requireStatus(item, STATUS_PENDING_CONFIRM, "仅待确认状态可确认完成");
+    requireStatus(item, WorkflowStatus.PENDING_CONFIRM, "仅待确认状态可确认完成");
 
-    item.setStatus(STATUS_COMPLETED);
+    item.setStatus(WorkflowStatus.COMPLETED);
     item.setUpdatedAt(LocalDateTime.now());
     ComplaintSuggestion saved = complaintSuggestionRepository.save(item);
 

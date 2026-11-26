@@ -141,4 +141,84 @@ class StatusNormalizeTest {
     assertTrue(BillStatus.isPartial("PARTIAL"));
     assertFalse(BillStatus.isPartial("PAID"));
   }
+
+  // ---------- ContractStatus ----------
+
+  @ParameterizedTest
+  @NullAndEmptySource
+  @ValueSource(strings = {"  "})
+  @DisplayName("合同状态为空时归一化为待生效")
+  void contractStatusBlankDefaultsToPending(String raw) {
+    assertEquals(ContractStatus.PENDING, ContractStatus.normalize(raw));
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+      "ACTIVE, ACTIVE",
+      "active, ACTIVE",
+      "进行中, ACTIVE",
+      "生效中, ACTIVE",
+      "PENDING, PENDING",
+      "待生效, PENDING",
+      "待签署, PENDING",
+      "TERMINATED, TERMINATED",
+      "已终止, TERMINATED",
+      "已退租, TERMINATED",
+      "EXPIRED, EXPIRED",
+      "已到期, EXPIRED",
+      "已过期, EXPIRED"
+  })
+  @DisplayName("合同状态兼容中英文与历史别名")
+  void contractStatusNormalizesAliases(String raw, String expected) {
+    assertEquals(expected, ContractStatus.normalize(raw));
+  }
+
+  @Test
+  @DisplayName("合同生效判定兼容历史中文写法")
+  void contractActiveHelpers() {
+    assertTrue(ContractStatus.isActive("ACTIVE"));
+    assertTrue(ContractStatus.isActive("进行中"));
+    assertFalse(ContractStatus.isActive("TERMINATED"));
+    assertTrue(ContractStatus.isFinal("TERMINATED"));
+    assertTrue(ContractStatus.isFinal("已到期"));
+    assertFalse(ContractStatus.isFinal("ACTIVE"));
+  }
+
+  @Test
+  @DisplayName("ACTIVE_RAW_VALUES 覆盖英文与中文，供 JPA 派生查询使用")
+  void contractActiveRawValuesCoversBothSpellings() {
+    assertTrue(ContractStatus.ACTIVE_RAW_VALUES.contains("ACTIVE"));
+    assertTrue(ContractStatus.ACTIVE_RAW_VALUES.contains("进行中"));
+    // 每个原始值归一化后必须都是 ACTIVE，否则查询会漏数据
+    ContractStatus.ACTIVE_RAW_VALUES.forEach(raw ->
+        assertTrue(ContractStatus.isActive(raw), "应归一化为 ACTIVE: " + raw));
+  }
+
+  // ---------- WorkflowStatus ----------
+
+  @Test
+  @DisplayName("工单终态判定")
+  void workflowFinalStates() {
+    assertTrue(WorkflowStatus.isFinal("completed"));
+    assertTrue(WorkflowStatus.isFinal("CLOSED"));
+    assertTrue(WorkflowStatus.isFinal("cancelled"));
+    assertFalse(WorkflowStatus.isFinal("pending"));
+    assertFalse(WorkflowStatus.isFinal("pending_confirm"));
+    assertFalse(WorkflowStatus.isFinal(null));
+  }
+
+  @Test
+  @DisplayName("工单完成判定忽略大小写与空白")
+  void workflowIsCompleted() {
+    assertTrue(WorkflowStatus.isCompleted("completed"));
+    assertTrue(WorkflowStatus.isCompleted(" COMPLETED "));
+    assertFalse(WorkflowStatus.isCompleted("closed"));
+  }
+
+  @Test
+  @DisplayName("IN_PROGRESS 不含任何终态")
+  void workflowInProgressExcludesFinal() {
+    WorkflowStatus.IN_PROGRESS.forEach(s ->
+        assertFalse(WorkflowStatus.isFinal(s), "进行中列表不应包含终态: " + s));
+  }
 }

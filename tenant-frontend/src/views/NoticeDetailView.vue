@@ -1,11 +1,11 @@
 <template>
   <div class="page">
-    <section class="panel">
-      <div class="row-between">
-        <div class="card-title" style="margin:0">公告详情</div>
-        <span class="link" @click="$router.back()">返回</span>
-      </div>
-      <h2 style="margin-bottom:6px">{{ detail.title || '-' }}</h2>
+    <PageHeader title="公告详情" to="/notices" />
+
+    <LoadingBlock v-if="loading" />
+
+    <section class="panel" v-else>
+      <h2 style="margin:0 0 6px">{{ detail.title || '-' }}</h2>
       <p class="muted">{{ formatTime(detail.createdAt) }}</p>
       <img v-if="detail.image" :src="detail.image" alt="公告图片" style="width:100%;border-radius:10px;margin:10px 0" />
       <div class="notice-content" v-html="detail.content || '暂无内容'"></div>
@@ -16,20 +16,26 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { getNoticeDetail } from '../api'
+import { getErrorMessage, getNoticeDetail } from '../api'
+import { formatTime } from '../utils/format'
+import { showError } from '../utils/toast'
+import PageHeader from '../components/PageHeader.vue'
+import LoadingBlock from '../components/LoadingBlock.vue'
 
 const route = useRoute()
 const detail = ref({})
+const loading = ref(true)
 
 onMounted(async () => {
-  const res = await getNoticeDetail(route.params.id)
-  detail.value = res.data || {}
+  try {
+    const res = await getNoticeDetail(route.params.id)
+    detail.value = res.data || {}
+  } catch (error) {
+    showError(getErrorMessage(error, '公告加载失败'))
+  } finally {
+    loading.value = false
+  }
 })
-
-function formatTime(value) {
-  if (!value) return '-'
-  return new Date(value).toLocaleString('zh-CN')
-}
 </script>
 
 <style scoped>

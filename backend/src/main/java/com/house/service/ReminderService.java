@@ -58,7 +58,7 @@ public class ReminderService {
 
     LocalDate today = LocalDate.now();
     List<Contract> activeContracts = contractRepository.findAll().stream()
-        .filter(c -> "ACTIVE".equals(c.getStatus()))
+        .filter(c -> ContractStatus.isActive(c.getStatus()))
         .filter(c -> c.getEndDate() != null)
         .toList();
 
@@ -165,7 +165,7 @@ public class ReminderService {
   public List<Contract> getExpiringContracts(int days) {
     LocalDate threshold = LocalDate.now().plusDays(days);
     return contractRepository.findAll().stream()
-        .filter(c -> "ACTIVE".equals(c.getStatus()))
+        .filter(c -> ContractStatus.isActive(c.getStatus()))
         .filter(c -> c.getEndDate() != null && !c.getEndDate().isAfter(threshold))
         .filter(c -> {
           long daysLeft = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), c.getEndDate());

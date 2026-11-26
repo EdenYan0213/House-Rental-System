@@ -1,6 +1,7 @@
 package com.house.controller;
 
 import com.house.model.SystemMessage;
+import com.house.model.ContractStatus;
 import com.house.model.Tenant;
 import com.house.model.Contract;
 import com.house.model.Room;
@@ -115,7 +116,7 @@ public class MessageController {
 
     for (Tenant tenant : tenants) {
       Contract active = contractRepository.findByTenantId(tenant.getId()).stream()
-          .filter(c -> "ACTIVE".equals(c.getStatus()))
+          .filter(c -> ContractStatus.isActive(c.getStatus()))
           .findFirst()
           .orElse(null);
       String roomNo = "-";

@@ -1,10 +1,7 @@
 <template>
   <div class="page">
     <section class="panel">
-      <div class="row-between">
-        <div class="card-title" style="margin:0">意见反馈</div>
-        <span class="link" @click="$router.back()">返回</span>
-      </div>
+    <PageHeader title="意见反馈" to="/me" />
 
       <label class="field-label" style="margin-top:10px">反馈类型</label>
       <select class="select" v-model="form.type">
@@ -39,7 +36,9 @@
 <script setup>
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { createFeedback, uploadTenantImage } from '../api'
+import { createFeedback, uploadTenantImage, getErrorMessage } from '../api'
+import { showError, showSuccess } from '../utils/toast'
+import PageHeader from '../components/PageHeader.vue'
 
 const router = useRouter()
 const submitting = ref(false)
@@ -56,14 +55,21 @@ async function onSelectFiles(event) {
   if (!files.length) return
   const remaining = 3 - form.images.length
   const targetFiles = files.slice(0, Math.max(remaining, 0))
-  for (const file of targetFiles) {
-    const res = await uploadTenantImage(file)
-    const url = res.data?.url || res.data?.data || ''
-    if (url) {
-      form.images.push(url)
+  try {
+    for (const file of targetFiles) {
+      if (file.size > 5 * 1024 * 1024) {
+        showError(`${file.name} 超过 5MB，已跳过`)
+        continue
+      }
+      const res = await uploadTenantImage(file)
+      const url = res.data?.url || res.data?.data || ''
+      if (url) form.images.push(url)
     }
+  } catch (error) {
+    showError(getErrorMessage(error, '图片上传失败'))
+  } finally {
+    event.target.value = ''
   }
-  event.target.value = ''
 }
 
 async function submit() {
@@ -80,10 +86,10 @@ async function submit() {
       content: form.content,
       images: form.images
     })
-    alert('感谢您的反馈')
+    showSuccess('感谢您的反馈')
     router.replace('/me')
   } catch (error) {
-    errorMsg.value = error?.response?.data?.message || '提交失败，请稍后重试'
+    errorMsg.value = getErrorMessage(error, '提交失败，请稍后重试')
   } finally {
     submitting.value = false
   }

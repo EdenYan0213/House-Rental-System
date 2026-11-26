@@ -74,7 +74,7 @@ public class ExportController {
 
       Building building = room.getBuildingId() == null ? null
           : buildingRepository.findById(room.getBuildingId()).orElse(null);
-      Contract activeContract = contractRepository.findByRoomIdAndStatus(roomId, "ACTIVE").stream().findFirst()
+      Contract activeContract = contractRepository.findByRoomIdAndStatusIn(roomId, ContractStatus.ACTIVE_RAW_VALUES).stream().findFirst()
           .orElse(null);
       Tenant tenant = activeContract == null || activeContract.getTenantId() == null ? null
           : tenantRepository.findById(activeContract.getTenantId()).orElse(null);

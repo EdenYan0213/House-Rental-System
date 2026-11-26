@@ -1,10 +1,7 @@
 <template>
   <div class="page">
     <section class="panel">
-      <div class="row-between">
-        <div class="card-title" style="margin:0">修改手机号</div>
-        <span class="link" @click="$router.back()">返回</span>
-      </div>
+    <PageHeader title="修改手机号" to="/me" />
 
       <label class="field-label" style="margin-top:10px">原手机号</label>
       <input class="input" v-model.trim="form.oldPhone" placeholder="请输入当前手机号" />
@@ -31,7 +28,9 @@
 <script setup>
 import { onBeforeUnmount, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { setTenantToken, sendUpdatePhoneCode, updateTenantPhone } from '../api'
+import { setTenantToken, sendUpdatePhoneCode, updateTenantPhone, getErrorMessage } from '../api'
+import { showError, showSuccess } from '../utils/toast'
+import PageHeader from '../components/PageHeader.vue'
 
 const router = useRouter()
 const sending = ref(false)
@@ -67,9 +66,9 @@ async function sendCode() {
         timer = null
       }
     }, 1000)
-    alert('验证码已发送')
+    showSuccess('验证码已发送')
   } catch (error) {
-    errorMsg.value = error?.response?.data?.message || '发送失败，请稍后再试'
+    errorMsg.value = getErrorMessage(error, '发送失败，请稍后再试')
   } finally {
     sending.value = false
   }
@@ -79,6 +78,14 @@ async function submit() {
   errorMsg.value = ''
   if (!form.oldPhone || !form.newPhone || !form.code) {
     errorMsg.value = '请完整填写信息'
+    return
+  }
+  if (!/^1\d{10}$/.test(form.newPhone)) {
+    errorMsg.value = '请输入 11 位有效手机号'
+    return
+  }
+  if (form.newPhone === form.oldPhone) {
+    errorMsg.value = '新手机号不能与原手机号相同'
     return
   }
   submitting.value = true
@@ -91,10 +98,10 @@ async function submit() {
     if (res.data?.token) {
       setTenantToken(res.data.token)
     }
-    alert('手机号修改成功')
+    showSuccess('手机号修改成功')
     router.replace('/me')
   } catch (error) {
-    errorMsg.value = error?.response?.data?.message || '修改失败，请稍后重试'
+    errorMsg.value = getErrorMessage(error, '修改失败，请稍后重试')
   } finally {
     submitting.value = false
   }

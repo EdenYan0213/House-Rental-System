@@ -215,7 +215,8 @@ public class UserController {
                 "user", "reset_password", String.valueOf(id), user.getUsername(),
                 Map.of("username", user.getUsername()), Map.of("username", user.getUsername()),
                 "重置用户密码: " + user.getUsername(), request, true, null, null,
-                Map.of("userId", id, "newPassword", newPassword));
+                // 不要把明文密码写进操作日志
+                Map.of("userId", id));
         return ResponseEntity.ok(Map.of("message", "密码重置成功"));
     }
 

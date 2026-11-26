@@ -114,10 +114,10 @@ public class RepairOrderService {
       order.setReporterType("admin");
     }
     if (order.getStatus() == null || order.getStatus().isBlank()) {
-      order.setStatus("pending");
+      order.setStatus(WorkflowStatus.PENDING);
     }
     if (order.getTenantId() == null) {
-      Contract active = contractRepository.findByRoomIdAndStatus(order.getRoomId(), "ACTIVE").stream().findFirst()
+      Contract active = contractRepository.findByRoomIdAndStatusIn(order.getRoomId(), ContractStatus.ACTIVE_RAW_VALUES).stream().findFirst()
           .orElse(null);
       if (active != null) {
         order.setTenantId(active.getTenantId());
@@ -153,7 +153,7 @@ public class RepairOrderService {
     }
     order.setWorkerId(workerId);
     order.setAssignedAt(LocalDateTime.now());
-    order.setStatus("processing");
+    order.setStatus(WorkflowStatus.PROCESSING);
     if (order.getStartTime() == null) {
       order.setStartTime(LocalDateTime.now());
     }
@@ -170,7 +170,7 @@ public class RepairOrderService {
     if (order.getWorkerId() == null) {
       throw new IllegalStateException("请先分配维修工");
     }
-    order.setStatus("processing");
+    order.setStatus(WorkflowStatus.PROCESSING);
     order.setStartTime(LocalDateTime.now());
     order.setUpdatedAt(LocalDateTime.now());
     RepairOrder saved = repairOrderRepository.save(order);
@@ -183,7 +183,7 @@ public class RepairOrderService {
   public RepairOrder completeRepair(Long id, String result, Double materialFee, Double laborFee,
       Integer isTenantCharge, String feeRemark, HttpServletRequest request) {
     RepairOrder order = repairOrderRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("工单不存在"));
-    if (!"processing".equals(order.getStatus())) {
+    if (!WorkflowStatus.PROCESSING.equals(order.getStatus())) {
       throw new IllegalStateException("当前状态不可完成维修");
     }
     order.setRepairResult(result);
@@ -193,7 +193,7 @@ public class RepairOrderService {
     order.setIsTenantCharge(isTenantCharge == null ? 0 : isTenantCharge);
     order.setFeeRemark(feeRemark);
     order.setFinishTime(LocalDateTime.now());
-    order.setStatus("pending_accept");
+    order.setStatus(WorkflowStatus.PENDING_ACCEPT);
     order.setUpdatedAt(LocalDateTime.now());
     RepairOrder saved = repairOrderRepository.save(order);
     fillDisplayFields(saved);
@@ -204,10 +204,10 @@ public class RepairOrderService {
   @Transactional
   public RepairOrder accept(Long id, HttpServletRequest request) {
     RepairOrder order = repairOrderRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("工单不存在"));
-    if (!"pending_accept".equals(order.getStatus())) {
+    if (!WorkflowStatus.PENDING_ACCEPT.equals(order.getStatus())) {
       throw new IllegalStateException("当前状态不可验收");
     }
-    order.setStatus("completed");
+    order.setStatus(WorkflowStatus.COMPLETED);
     order.setAcceptTime(LocalDateTime.now());
     order.setUpdatedAt(LocalDateTime.now());
     RepairOrder saved = repairOrderRepository.save(order);
@@ -219,10 +219,10 @@ public class RepairOrderService {
   @Transactional
   public RepairOrder reject(Long id, String reason, HttpServletRequest request) {
     RepairOrder order = repairOrderRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("工单不存在"));
-    if (!"pending_accept".equals(order.getStatus())) {
+    if (!WorkflowStatus.PENDING_ACCEPT.equals(order.getStatus())) {
       throw new IllegalStateException("当前状态不可驳回");
     }
-    order.setStatus("processing");
+    order.setStatus(WorkflowStatus.PROCESSING);
     order.setFeeRemark(appendRemark(order.getFeeRemark(), "验收驳回原因: " + (reason == null ? "" : reason)));
     order.setUpdatedAt(LocalDateTime.now());
     RepairOrder saved = repairOrderRepository.save(order);
@@ -259,7 +259,7 @@ public class RepairOrderService {
       throw new IllegalStateException("已生成账单");
     }
 
-    Contract active = contractRepository.findByRoomIdAndStatus(order.getRoomId(), "ACTIVE").stream().findFirst()
+    Contract active = contractRepository.findByRoomIdAndStatusIn(order.getRoomId(), ContractStatus.ACTIVE_RAW_VALUES).stream().findFirst()
         .orElse(null);
     if (active == null) {
       throw new IllegalStateException("该房间无进行中合同，无法生成账单");

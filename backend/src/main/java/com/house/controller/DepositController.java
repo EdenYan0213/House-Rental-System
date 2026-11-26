@@ -6,6 +6,7 @@ import com.house.repo.DepositRecordRepository;
 import com.house.repo.RoomRepository;
 import com.house.repo.TenantRepository;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -62,6 +63,7 @@ public class DepositController {
    * 现在按类型/日期过滤后再分页，返回结构与其它分页接口一致（content/totalElements）。
    */
   @GetMapping
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
   public Map<String, Object> list(
       @RequestParam(required = false) String type,
       @RequestParam(required = false) String startDate,
@@ -111,11 +113,13 @@ public class DepositController {
   }
 
   @PostMapping
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
   public DepositRecord create(@RequestBody DepositRecord depositRecord) {
     return depositRecordRepository.save(depositRecord);
   }
 
   @PutMapping("/{id}")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
   public ResponseEntity<DepositRecord> update(@PathVariable Long id, @RequestBody DepositRecord depositRecord) {
     return depositRecordRepository.findById(id).map(existing -> {
       depositRecord.setId(id);

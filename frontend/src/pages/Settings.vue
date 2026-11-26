@@ -269,7 +269,7 @@ async function saveGuideSettings() {
     }
     ElMessage.success("引导设置已保存");
   } catch (e) {
-    ElMessage.error("保存失败: " + (e.response?.data?.message || e.message));
+    ElMessage.error(getErrorMessage(e, "保存失败"));
   } finally {
     savingGuide.value = false;
   }
@@ -292,7 +292,7 @@ async function resetOnboarding() {
     guideForm.value = { showContextTips: true, showTaskCard: true };
     ElMessage.success("新手引导已重置，下次进入会重新触发");
   } catch (e) {
-    ElMessage.error("重置失败: " + (e.response?.data?.message || e.message));
+    ElMessage.error(getErrorMessage(e, "重置失败"));
   } finally {
     resettingGuide.value = false;
   }

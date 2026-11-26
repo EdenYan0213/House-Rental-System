@@ -54,7 +54,7 @@ import { nextTick, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Promotion, ArrowLeft } from '@element-plus/icons-vue'
-import { executeAiCommand } from '@/api'
+import { executeAiCommand, getErrorMessage } from '@/api'
 
 const router = useRouter()
 const historyRef = ref(null)
@@ -106,7 +106,7 @@ async function send() {
       link: data.detailLink || ''
     })
   } catch (error) {
-    const msg = error?.response?.data?.message || '请求失败，请稍后重试'
+    const msg = getErrorMessage(error, '请求失败，请稍后重试')
     messages.value.push({ id: seq.value++, role: 'assistant', text: msg })
     ElMessage.error(msg)
   } finally {

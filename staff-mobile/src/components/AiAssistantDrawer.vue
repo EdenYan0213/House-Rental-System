@@ -36,7 +36,7 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { executeAiCommand } from '@/api'
+import { executeAiCommand, getErrorMessage } from '@/api'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false }
@@ -98,7 +98,7 @@ async function send() {
       link: data.detailLink || ''
     })
   } catch (error) {
-    const msg = error?.response?.data?.message || '请求失败，请稍后重试'
+    const msg = getErrorMessage(error, '请求失败，请稍后重试')
     messages.value.push({ id: sequence.value++, role: 'assistant', text: msg })
     ElMessage.error(msg)
   } finally {

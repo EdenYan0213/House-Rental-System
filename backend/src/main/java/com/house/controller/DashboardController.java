@@ -6,6 +6,7 @@ import com.house.model.Room;
 import com.house.model.RoomStatus;
 import com.house.repo.*;
 import com.house.service.ReminderService;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -35,6 +36,7 @@ public class DashboardController {
   }
 
   @GetMapping("/stats")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'USER')")
   public Map<String, Object> stats() {
     Map<String, Object> result = new HashMap<>();
 
@@ -79,6 +81,7 @@ public class DashboardController {
   }
 
   @GetMapping("/charts")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'USER')")
   public Map<String, Object> charts() {
     Map<String, Object> result = new HashMap<>();
 
@@ -139,6 +142,7 @@ public class DashboardController {
   }
 
   @GetMapping("/expiring-contracts")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'USER')")
   public Map<String, Object> getExpiringContracts(@RequestParam(defaultValue = "3") int days) {
     List<?> contracts = reminderService.getExpiringContracts(days);
     long count = reminderService.getExpiringCount(days);

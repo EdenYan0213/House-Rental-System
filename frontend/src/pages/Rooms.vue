@@ -653,7 +653,7 @@ async function handleUrlUpload() {
       ElMessage.error(res.data.message || '图片上传失败')
     }
   } catch (error) {
-    ElMessage.error('图片上传失败: ' + (error.response?.data?.message || error.message))
+    ElMessage.error(getErrorMessage(error, '图片上传失败'))
   } finally {
     urlUploading.value = false
   }
@@ -736,7 +736,7 @@ async function batchDelete() {
     await load()
   } catch (e) {
     if (e && e !== 'cancel') {
-      ElMessage.error(e.response?.data || e.message || '批量删除失败')
+      ElMessage.error(getErrorMessage(e, '批量删除失败'))
     }
   }
 }

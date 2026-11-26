@@ -2,6 +2,7 @@ package com.house.service;
 
 import com.house.dto.FinanceReportResult;
 import com.house.model.Bill;
+import com.house.model.ContractStatus;
 import com.house.model.BillDetail;
 import com.house.model.BillStatus;
 import com.house.model.Building;
@@ -253,7 +254,7 @@ public class FinanceReportService {
       String bName = room.getBuildingId() == null ? null
           : buildingById.getOrDefault(room.getBuildingId(), new Building()).getName();
       Contract active = contractById.values().stream()
-          .filter(c -> e.getKey().equals(c.getRoomId()) && "ACTIVE".equals(c.getStatus()))
+          .filter(c -> e.getKey().equals(c.getRoomId()) && ContractStatus.isActive(c.getStatus()))
           .findFirst().orElse(null);
 
       Map<String, Object> item = new LinkedHashMap<>();

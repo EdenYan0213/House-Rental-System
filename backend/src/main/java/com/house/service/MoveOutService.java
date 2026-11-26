@@ -3,6 +3,7 @@ package com.house.service;
 import com.house.dto.MoveOutCheckResult;
 import com.house.dto.MoveOutRequest;
 import com.house.model.Bill;
+import com.house.model.ContractStatus;
 import com.house.model.BillStatus;
 import com.house.model.Building;
 import com.house.model.Contract;
@@ -63,10 +64,7 @@ public class MoveOutService {
     double depositAmount = nz(contract.getDeposit());
     double received = 0;
     double refunded = 0;
-    for (DepositRecord r : depositRecordRepository.findAll()) {
-      if (!contractId.equals(r.getContractId())) {
-        continue;
-      }
+    for (DepositRecord r : depositRecordRepository.findByContractIdIn(List.of(contractId))) {
       double amt = nz(r.getAmount());
       if ("RECEIVE".equalsIgnoreCase(r.getType())) {
         received += amt;
@@ -145,7 +143,7 @@ public class MoveOutService {
   public Map<String, Object> settle(Long contractId, MoveOutRequest req) {
     Contract contract = contractRepository.findById(contractId)
         .orElseThrow(() -> new IllegalArgumentException("合同不存在"));
-    if (!"ACTIVE".equalsIgnoreCase(contract.getStatus())) {
+    if (!ContractStatus.isActive(contract.getStatus())) {
       throw new IllegalStateException("仅进行中的合同可办理退租，当前状态：" + contract.getStatus());
     }
 

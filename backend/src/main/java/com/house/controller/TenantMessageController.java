@@ -1,6 +1,8 @@
 package com.house.controller;
 
 import com.house.model.Bill;
+import com.house.model.WorkflowStatus;
+import com.house.model.ContractStatus;
 import com.house.model.ComplaintSuggestion;
 import com.house.model.Contract;
 import com.house.model.Notice;
@@ -43,10 +45,12 @@ import java.util.*;
 @RequestMapping("/api/tenant")
 public class TenantMessageController {
 
-  private static final Set<String> REPAIR_PENDING_STATUS =
-      Set.of("pending", "assigned", "processing", "pending_accept");
-  private static final Set<String> COMPLAINT_PENDING_STATUS =
-      Set.of("pending", "assigned", "processing", "pending_confirm");
+  private static final Set<String> REPAIR_PENDING_STATUS = Set.of(
+      WorkflowStatus.PENDING, WorkflowStatus.ASSIGNED,
+      WorkflowStatus.PROCESSING, WorkflowStatus.PENDING_ACCEPT);
+  private static final Set<String> COMPLAINT_PENDING_STATUS = Set.of(
+      WorkflowStatus.PENDING, WorkflowStatus.ASSIGNED,
+      WorkflowStatus.PROCESSING, WorkflowStatus.PENDING_CONFIRM);
 
   private final TenantTokenService tenantTokenService;
   private final TenantRepository tenantRepository;
@@ -216,6 +220,27 @@ public class TenantMessageController {
     return ResponseEntity.ok(Map.of("success", true));
   }
 
+  @PostMapping("/messages/read-all")
+  @PreAuthorize("hasRole('TENANT')")
+  public ResponseEntity<?> readAllMessages(@RequestHeader("Authorization") String authHeader) {
+    Map<String, Object> context = tenantTokenService.parseAndValidateTenant(authHeader);
+    Long tenantId = (Long) context.get("tenantId");
+
+    List<TenantMessage> unread =
+        tenantMessageRepository.findByTenantIdAndIsReadAndIsDeleted(tenantId, 0, 0);
+    if (unread.isEmpty()) {
+      return ResponseEntity.ok(Map.of("success", true, "updated", 0));
+    }
+
+    LocalDateTime now = LocalDateTime.now();
+    for (TenantMessage msg : unread) {
+      msg.setIsRead(1);
+      msg.setReadAt(now);
+    }
+    tenantMessageRepository.saveAll(unread);
+    return ResponseEntity.ok(Map.of("success", true, "updated", unread.size()));
+  }
+
   @PostMapping("/messages/{id}/delete")
   @PreAuthorize("hasRole('TENANT')")
   public ResponseEntity<?> deleteMessage(@RequestHeader("Authorization") String authHeader, @PathVariable Long id) {
@@ -302,7 +327,7 @@ public class TenantMessageController {
         .count();
 
     Contract active = contracts.stream()
-        .filter(c -> "ACTIVE".equalsIgnoreCase(c.getStatus()) || "进行中".equals(c.getStatus()))
+        .filter(c -> ContractStatus.isActive(c.getStatus()))
         .max(Comparator.comparing(Contract::getStartDate, Comparator.nullsLast(Comparator.naturalOrder())))
         .orElse(null);
 
@@ -427,7 +452,8 @@ public class TenantMessageController {
 
       for (ComplaintSuggestion c : complaintSuggestionRepository
           .findByTenantIdOrderByCreatedAtDesc(tenantId).stream().limit(5).toList()) {
-        if (Set.of("processing", "pending_confirm", "completed").contains(support.text(c.getStatus()))) {
+        if (Set.of(WorkflowStatus.PROCESSING, WorkflowStatus.PENDING_CONFIRM, WorkflowStatus.COMPLETED)
+            .contains(support.text(c.getStatus()))) {
           createMessageIfAbsent(tenantId, roomId, "NOTICE", "COMPLAINT_PROGRESS", "COMPLAINT", c.getId(),
               "/complaints/" + c.getId(),
               text.ofLang(lang, "complaint_title"),

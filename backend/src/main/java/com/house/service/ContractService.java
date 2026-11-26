@@ -2,6 +2,8 @@ package com.house.service;
 
 import com.house.dto.ContractCreateRequest;
 import com.house.model.Contract;
+import com.house.model.BillStatus;
+import com.house.model.ContractStatus;
 import com.house.model.Room;
 import com.house.model.RoomStatus;
 import com.house.model.Tenant;
@@ -88,7 +90,7 @@ public class ContractService {
         .tenantPhone(tenant.getPhone())
         .startDate(startDate)
         .endDate(endDate)
-        .status("ACTIVE")
+        .status(ContractStatus.ACTIVE)
         .deposit(req.getDeposit())
         .monthlyRent(req.getMonthlyRent())
         .paymentMethod(req.getPaymentMethod() != null ? req.getPaymentMethod() : "MONTHLY")
@@ -123,7 +125,7 @@ public class ContractService {
       }
       LocalDate threshold = LocalDate.now().plusDays(days);
       all = all.stream()
-          .filter(c -> "ACTIVE".equals(c.getStatus()))
+          .filter(c -> ContractStatus.isActive(c.getStatus()))
           .filter(c -> c.getEndDate() != null && !c.getEndDate().isAfter(threshold))
           .filter(c -> {
             long daysLeft = java.time.temporal.ChronoUnit.DAYS.between(LocalDate.now(), c.getEndDate());
@@ -133,7 +135,7 @@ public class ContractService {
     } else if (status != null && status.equals("expiring")) {
       LocalDate thirtyDaysLater = LocalDate.now().plusDays(30);
       all = all.stream()
-          .filter(c -> "ACTIVE".equals(c.getStatus()))
+          .filter(c -> ContractStatus.isActive(c.getStatus()))
           .filter(c -> c.getEndDate() != null && c.getEndDate().isBefore(thirtyDaysLater))
           .collect(Collectors.toList());
     }
@@ -250,7 +252,7 @@ public class ContractService {
     Optional<Contract> oc = contractRepository.findById(id);
     if (oc.isPresent()) {
       Contract c = oc.get();
-      c.setStatus("TERMINATED");
+      c.setStatus(ContractStatus.TERMINATED);
       if (terminateDate != null) {
         c.setEndDate(LocalDate.parse(terminateDate));
       }
@@ -272,7 +274,7 @@ public class ContractService {
       throw new IllegalArgumentException("合同不存在");
     }
     Contract contract = oc.get();
-    if (!"ACTIVE".equals(contract.getStatus())) {
+    if (!ContractStatus.isActive(contract.getStatus())) {
       throw new IllegalStateException("仅进行中合同可续租");
     }
     if (newEndDate == null || newEndDate.isBlank()) {
@@ -307,7 +309,7 @@ public class ContractService {
     List<String> skipped = new ArrayList<>();
 
     for (Contract oldContract : contracts) {
-      if (!"ACTIVE".equals(oldContract.getStatus())) {
+      if (!ContractStatus.isActive(oldContract.getStatus())) {
         skipped.add("合同" + oldContract.getContractNo() + "不是进行中状态");
         continue;
       }
@@ -318,7 +320,7 @@ public class ContractService {
 
       List<Bill> bills = billRepository.findByContractId(oldContract.getId());
       boolean hasUnpaid = bills.stream()
-          .anyMatch(b -> b.getStatus() != null && !"PAID".equalsIgnoreCase(b.getStatus()));
+          .anyMatch(b -> !BillStatus.isPaid(b.getStatus()));
       if (hasUnpaid) {
         skipped.add("合同" + oldContract.getContractNo() + "存在未结清账单");
         continue;
@@ -352,7 +354,7 @@ public class ContractService {
           .tenantId(oldContract.getTenantId())
           .startDate(newStart)
           .endDate(newEnd)
-          .status("PENDING")
+          .status(ContractStatus.PENDING)
           .deposit(Boolean.FALSE.equals(inheritDeposit) ? 0D : oldContract.getDeposit())
           .monthlyRent(newRent)
           .paymentMethod(Boolean.FALSE.equals(inheritPaymentMethod) ? "MONTHLY" : oldContract.getPaymentMethod())
@@ -395,26 +397,48 @@ public class ContractService {
     List<String> blocked = new ArrayList<>();
     List<Contract> terminated = new ArrayList<>();
 
+    // 一次性把涉及合同的账单捞出来，避免循环里逐条查库（批量退租时是 N+1）
+    Map<Long, Boolean> hasUnpaidByContract = new java.util.HashMap<>();
+    if (!contracts.isEmpty()) {
+      List<Long> ids = contracts.stream().map(Contract::getId).filter(java.util.Objects::nonNull).toList();
+      if (!ids.isEmpty()) {
+        for (Bill b : billRepository.findByContractIdIn(ids)) {
+          if (!BillStatus.isPaid(b.getStatus())) {
+            hasUnpaidByContract.put(b.getContractId(), true);
+          } else {
+            hasUnpaidByContract.putIfAbsent(b.getContractId(), false);
+          }
+        }
+      }
+    }
+
+    // 房间同样批量预取，避免循环内 findById
+    Map<Long, Room> roomById = new java.util.HashMap<>();
+    List<Long> roomIds = contracts.stream().map(Contract::getRoomId).filter(java.util.Objects::nonNull).distinct().toList();
+    if (!roomIds.isEmpty()) {
+      for (Room r : roomRepository.findAllById(roomIds)) {
+        roomById.put(r.getId(), r);
+      }
+    }
+
     for (Contract c : contracts) {
-      if (!"ACTIVE".equals(c.getStatus())) {
+      if (!ContractStatus.isActive(c.getStatus())) {
         blocked.add("合同" + c.getContractNo() + "不是进行中状态");
         continue;
       }
-      List<Bill> bills = billRepository.findByContractId(c.getId());
-      boolean hasUnpaid = bills.stream()
-          .anyMatch(b -> b.getStatus() != null && !"PAID".equalsIgnoreCase(b.getStatus()));
+      boolean hasUnpaid = hasUnpaidByContract.getOrDefault(c.getId(), false);
       if (hasUnpaid && !allowForce) {
         blocked.add("合同" + c.getContractNo() + "存在未结清账单");
         continue;
       }
-      c.setStatus("TERMINATED");
+      c.setStatus(ContractStatus.TERMINATED);
       c.setEndDate(tDate);
       if (reason != null && !reason.isBlank()) {
         c.setRemark((c.getRemark() == null ? "" : c.getRemark() + " | ") + "批量退租原因: " + reason);
       }
       contractRepository.save(c);
 
-      Room room = roomRepository.findById(c.getRoomId()).orElse(null);
+      Room room = roomById.get(c.getRoomId());
       if (room != null) {
         room.setStatus(RoomStatus.IDLE);
         roomRepository.save(room);

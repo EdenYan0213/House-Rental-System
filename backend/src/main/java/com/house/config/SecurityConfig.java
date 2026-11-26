@@ -52,7 +52,9 @@ public class SecurityConfig {
                         // 图片本身不敏感，ID 亦不可枚举，这里放开只读访问
                         .requestMatchers(HttpMethod.GET, "/api/images/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/notice/**").permitAll()
-                        .requestMatchers("/internal/**").permitAll()
+                        // 电子签约平台的回调（外部服务无法携带 JWT），仅暴露这一个路径。
+                        // 绝不放开整个 /internal/**：那会让内部运维接口（如重置管理员密码）公网可达。
+                        .requestMatchers(HttpMethod.POST, "/internal/sign/callback").permitAll()
                         .requestMatchers(HttpMethod.PUT, "/api/users/profile").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/users/change-password").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/users").hasAnyAuthority("ROLE_SUPER_ADMIN", "ROLE_ADMIN")

@@ -18,6 +18,9 @@ import java.util.Map;
 @RequestMapping("/api/auth")
 @CrossOrigin(origins = "*")
 public class AuthController {
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(AuthController.class);
+
 
     @Autowired
     private UserService userService;
@@ -79,11 +82,13 @@ public class AuthController {
 
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("登录异常 username={}", request.getUsername(), e);
+            // e.getMessage() 可能为 null，Map.of 会 NPE
+            String reason = e.getMessage() == null ? "系统异常" : e.getMessage();
             operationLogService.log("登录认证", "登录", null, request.getUsername(), null, null,
                     "登录失败: 系统异常(" + request.getUsername() + ")", httpRequest,
-                    false, e.getMessage(), null, request);
-            return ResponseEntity.status(500).body(Map.of("message", "内部错误", "error", e.getMessage()));
+                    false, reason, null, request);
+            return ResponseEntity.status(500).body(Map.of("message", "内部错误", "error", reason));
         }
     }
 

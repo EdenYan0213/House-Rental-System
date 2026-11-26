@@ -1,6 +1,7 @@
 package com.house.service;
 
 import com.house.model.Contract;
+import com.house.model.ContractStatus;
 import com.house.model.Tenant;
 import com.house.repo.TenantRepository;
 import com.house.model.Room;
@@ -59,7 +60,7 @@ public class TenantService {
     }
     // 一次性取出所有在租合同，按租户索引，避免每个租户都全表扫描一次
     Map<Long, Contract> activeContractByTenant = contractRepository.findAll().stream()
-        .filter(c -> c.getTenantId() != null && "ACTIVE".equals(c.getStatus()))
+        .filter(c -> c.getTenantId() != null && ContractStatus.isActive(c.getStatus()))
         .collect(Collectors.toMap(Contract::getTenantId, c -> c, (a, b) -> a));
     for (Tenant tenant : tenants) {
       Contract active = activeContractByTenant.get(tenant.getId());

@@ -348,7 +348,7 @@ async function handleUrlUpload() {
       ElMessage.error(res.data?.message || '图片上传失败')
     }
   } catch (error) {
-    ElMessage.error('图片上传失败: ' + (error.response?.data?.message || error.message))
+    ElMessage.error(getErrorMessage(error, '图片上传失败'))
   } finally {
     urlUploading.value = false
   }

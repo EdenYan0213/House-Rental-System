@@ -6,6 +6,8 @@ import com.house.model.Building;
 import com.house.model.FeeItem;
 import com.house.model.Tenant;
 import com.house.model.RoomAppliance;
+import com.house.model.ContractStatus;
+import com.house.model.RoomStatus;
 import com.house.model.OperationSnapshot;
 import com.house.repo.BuildingRepository;
 import com.house.repo.ContractRepository;
@@ -99,7 +101,8 @@ public class RoomController {
       int affectedContracts = 0;
 
       for (Room room : rooms) {
-        List<Contract> activeContracts = contractRepository.findByRoomIdAndStatus(room.getId(), "ACTIVE");
+        List<Contract> activeContracts = contractRepository.findByRoomIdAndStatusIn(
+            room.getId(), ContractStatus.ACTIVE_RAW_VALUES);
         Double oldRent = activeContracts.isEmpty() ? 0D
             : (activeContracts.get(0).getMonthlyRent() == null ? 0D : activeContracts.get(0).getMonthlyRent());
         Double newRent;
@@ -194,10 +197,8 @@ public class RoomController {
       building = buildingRepository.findById(room.getBuildingId()).orElse(null);
     }
 
-    List<Contract> activeContracts = contractRepository.findByRoomIdAndStatus(room.getId(), "ACTIVE");
-    if (activeContracts == null || activeContracts.isEmpty()) {
-      activeContracts = contractRepository.findByRoomIdAndStatus(room.getId(), "进行中");
-    }
+    List<Contract> activeContracts = contractRepository.findByRoomIdAndStatusIn(
+        room.getId(), ContractStatus.ACTIVE_RAW_VALUES);
 
     Contract activeContract = (activeContracts == null || activeContracts.isEmpty()) ? null : activeContracts.get(0);
     Tenant tenant = null;
@@ -225,7 +226,7 @@ public class RoomController {
         .filter(f -> !f.getName().contains("水") && !f.getName().contains("电") && !f.getName().contains("基础房费") && !f.getName().contains("租金"))
         .toList();
 
-    boolean isRented = "已租".equals(room.getStatus()) || "RENTED".equalsIgnoreCase(room.getStatus()) || activeContract != null;
+    boolean isRented = RoomStatus.isRented(room.getStatus()) || activeContract != null;
 
     Map<String, Object> payload = new HashMap<>();
     payload.put("room", room);
@@ -326,11 +327,9 @@ public class RoomController {
     if (room == null) {
       return false;
     }
-    String status = room.getStatus() == null ? "" : room.getStatus().trim().toUpperCase(Locale.ROOT);
-    if ("已租".equals(room.getStatus()) || "RENTED".equals(status)) {
+    if (RoomStatus.isRented(room.getStatus())) {
       return true;
     }
-    return !contractRepository.findByRoomIdAndStatus(room.getId(), "ACTIVE").isEmpty()
-        || !contractRepository.findByRoomIdAndStatus(room.getId(), "进行中").isEmpty();
+    return !contractRepository.findByRoomIdAndStatusIn(room.getId(), ContractStatus.ACTIVE_RAW_VALUES).isEmpty();
   }
 }

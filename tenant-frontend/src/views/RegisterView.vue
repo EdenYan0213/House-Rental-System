@@ -1,9 +1,11 @@
 <template>
   <div class="page login-page">
     <div class="panel login-panel">
-      <h1>租客注册</h1>
+      <h1 style="margin:0 0 4px">租客注册</h1>
+      <p class="muted" style="margin:0 0 16px">注册后可查看可租房源、提交租房意向</p>
+
       <input v-model.trim="form.name" class="input" placeholder="姓名" maxlength="50" />
-      <input v-model.trim="form.phone" style="margin-top:10px" class="input" placeholder="手机号" maxlength="20" />
+      <input v-model.trim="form.phone" style="margin-top:10px" class="input" placeholder="手机号" type="tel" maxlength="11" />
       <div class="code-row" style="margin-top:10px">
         <input v-model.trim="form.code" class="input" placeholder="请输入6位验证码" maxlength="6" />
         <button class="btn btn-light" :disabled="sending || countdown > 0" @click="onSendCode">
@@ -24,14 +26,15 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { onBeforeUnmount, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   tenantRegister,
   sendRegisterSmsCode,
   setTenantToken,
   setTenantInfo,
-  setCurrentRoomCache
+  setCurrentRoomCache,
+  getErrorMessage
 } from '../api'
 
 const router = useRouter()
@@ -48,10 +51,14 @@ const form = ref({
   confirmPassword: ''
 })
 
+onBeforeUnmount(() => {
+  if (timer) clearInterval(timer)
+})
+
 async function onSendCode() {
   errorText.value = ''
-  if (!form.value.phone) {
-    errorText.value = '请先填写手机号'
+  if (!/^1\d{10}$/.test(form.value.phone)) {
+    errorText.value = '请输入 11 位有效手机号'
     return
   }
   sending.value = true
@@ -59,7 +66,7 @@ async function onSendCode() {
     await sendRegisterSmsCode(form.value.phone)
     startCountdown()
   } catch (error) {
-    errorText.value = error?.response?.data?.message || '验证码发送失败'
+    errorText.value = getErrorMessage(error, '验证码发送失败')
   } finally {
     sending.value = false
   }
@@ -101,12 +108,15 @@ async function onRegister() {
       password: form.value.password
     })
     const data = res.data || {}
+    if (!data.token) {
+      throw new Error('注册返回异常，请稍后重试')
+    }
     setTenantToken(data.token)
     setTenantInfo(data.tenantInfo || {})
     setCurrentRoomCache({})
     router.replace('/available-rooms')
   } catch (error) {
-    errorText.value = error?.response?.data?.message || '注册失败'
+    errorText.value = getErrorMessage(error, '注册失败')
   } finally {
     registering.value = false
   }
