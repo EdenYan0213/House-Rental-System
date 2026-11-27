@@ -244,10 +244,13 @@ function go(path) {
   position: relative;
 }
 
-/* 全屏页占满一屏，内部自己滚动 */
+/* 全屏页占满一屏，内部自己滚动。
+   注意不能只用 100vh/100dvh：OPPO/小米自带浏览器内核较旧，不支持 100dvh
+   会回落 100vh，而它的 100vh 把底部工具栏也算进去，比可见区高 60~100px，
+   整页就会溢出、输入框被挤出屏幕。AI 页会写入 --ai-viewport-h 精确值。 */
 .mobile-shell.is-fullscreen {
   height: 100vh;
-  height: 100dvh;
+  height: var(--ai-viewport-h, 100vh);
   overflow: hidden;
   display: flex;
   flex-direction: column;
