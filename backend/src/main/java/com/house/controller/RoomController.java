@@ -62,6 +62,7 @@ public class RoomController {
   }
 
   @PostMapping("/batch")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public ResponseEntity<?> batchCreate(@RequestBody BatchRoomRequest req) {
     try {
       BatchCreateResult result = roomService.createBatch(req);
@@ -72,6 +73,7 @@ public class RoomController {
   }
 
   @PostMapping("/batch/override")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public ResponseEntity<?> batchCreateWithOverride(@RequestBody BatchRoomRequest req) {
     try {
       BatchCreateResult result = roomService.createBatchWithOverride(req);
@@ -157,6 +159,7 @@ public class RoomController {
    * 传了 page 才返回 { content, totalElements, page, size } 分页对象。
    */
   @GetMapping
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','USER')")
   public Object list(@RequestParam(required = false) Long buildingId,
       @RequestParam(required = false) Integer floor,
       @RequestParam(required = false) String status,
@@ -220,11 +223,13 @@ public class RoomController {
   }
 
   @GetMapping("/{id}")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','USER')")
   public ResponseEntity<Room> get(@PathVariable Long id) {
     return roomService.findById(id).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());
   }
 
   @GetMapping("/{id}/detail")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','USER')")
   public ResponseEntity<?> getDetail(@PathVariable Long id) {
     Room room = roomService.findById(id).orElse(null);
     if (room == null) {
@@ -282,11 +287,13 @@ public class RoomController {
   }
 
   @PostMapping
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public Room create(@RequestBody Room room) {
     return roomService.create(room);
   }
 
   @PutMapping("/{id}")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public ResponseEntity<Room> update(@PathVariable Long id, @RequestBody Room room) {
     return roomService.findById(id).map(existing -> {
       room.setId(id);
@@ -296,6 +303,7 @@ public class RoomController {
   }
 
   @DeleteMapping("/{id}")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public ResponseEntity<?> delete(@PathVariable Long id, HttpServletRequest request) {
     Room before = roomService.findById(id).orElse(null);
     if (before == null) {
@@ -314,6 +322,7 @@ public class RoomController {
   }
 
   @PostMapping("/batch-delete")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   @Transactional
   public ResponseEntity<?> batchDelete(@RequestBody Map<String, Object> body) {
     Object roomIdsRaw = body == null ? null : body.get("roomIds");

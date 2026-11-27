@@ -2,6 +2,7 @@ package com.house.config;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -96,6 +97,32 @@ public class GlobalExceptionHandler {
   @ExceptionHandler({ NoHandlerFoundException.class, NoResourceFoundException.class })
   public ResponseEntity<Map<String, Object>> handleNotFound(Exception ex) {
     return build(HttpStatus.NOT_FOUND, "接口不存在");
+  }
+
+  /**
+   * 数据库约束冲突（必填列为空、外键不存在、唯一键重复）：属于客户端传参问题，
+   * 返回 400 并给出可读原因，不要暴露成 500「server error」。
+   */
+  @ExceptionHandler(DataIntegrityViolationException.class)
+  public ResponseEntity<Map<String, Object>> handleDataIntegrity(DataIntegrityViolationException ex) {
+    String raw = ex.getMostSpecificCause() == null ? null : ex.getMostSpecificCause().getMessage();
+    String message = "数据不完整或不符合约束，请检查必填项";
+    if (raw != null) {
+      if (raw.contains("cannot be null")) {
+        // 例如：Column 'building_id' cannot be null
+        java.util.regex.Matcher m = java.util.regex.Pattern
+            .compile("Column '([^']+)' cannot be null").matcher(raw);
+        if (m.find()) {
+          message = "缺少必填项：" + m.group(1);
+        }
+      } else if (raw.contains("Duplicate entry")) {
+        message = "数据重复，该记录已存在";
+      } else if (raw.contains("foreign key constraint")) {
+        message = "关联数据不存在，或仍被其他记录引用";
+      }
+    }
+    log.warn("数据约束校验失败: {}", raw);
+    return build(HttpStatus.BAD_REQUEST, message);
   }
 
   @ExceptionHandler(Exception.class)

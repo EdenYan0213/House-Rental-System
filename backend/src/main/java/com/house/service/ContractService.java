@@ -48,6 +48,12 @@ public class ContractService {
 
   @Transactional
   public Contract createContract(ContractCreateRequest req) {
+    // roomId 为空时直接给可读提示：findById(null) 会抛
+    // InvalidDataAccessApiUsageException（不是 IllegalArgumentException），
+    // 会被 controller 的 catch 漏掉，最终变成 500。
+    if (req.getRoomId() == null) {
+      throw new IllegalArgumentException("请选择房间");
+    }
     Optional<Room> or = roomService.findById(req.getRoomId());
     if (or.isEmpty())
       throw new IllegalArgumentException("房间不存在");
