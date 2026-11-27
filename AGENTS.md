@@ -150,6 +150,10 @@ The package is split by concern — put new code in the matching file:
 - Endpoint: `POST /api/ai-assistant/execute`, body `{"message": "..."}`, `SUPER_ADMIN`/`ADMIN` only. Per-user `ReentrantLock` prevents concurrent commands.
 - **No API key configured ⇒ `intent: "NOT_CONFIGURED"`** with an actionable Chinese message, not a generic 500. Keep that behavior: it's the difference between "broken" and "needs setup".
 - Keys come only from env (`AI_PRIMARY_API_KEY`, `AI_SILICONFLOW_API_KEY`, `AI_BACKUP_API_KEY`). `application.yml` defaults are empty on purpose — never commit a key.
+- **Meter OCR uses a separate `ocr` provider** (`app.ai-assistant.ocr.*`, env `AI_VISION_*`). The three chat providers are **text-only** models (GLM-4.7-flash / Qwen3-8B) and cannot read images — swapping the chat model for a vision one would break the assistant. Keep them separate.
+  - `POST /api/meter-readings/ocr` returns a **draft only, never writes**. The frontend must show an editable table and the user confirms before `POST /api/meter-readings` saves. Recognised digits going straight to bills is the failure mode this design prevents.
+  - Room matching is **building + room number**, not room number alone: every building has a `101`, so number-only matching is always `AMBIGUOUS`. The model is told to extract `buildingName` and to leave it null rather than infer it from the room number — entity resolution stays in Java (`AiEntityResolver` convention).
+  - Unconfigured key + `AI_OCR_SAMPLE_DATA=true` → returns sample rows flagged `sample: true` so the UI can warn. Set it to false in production.
 - Admin UI: `frontend/src/components/AiAssistantDrawer.vue` mounted in `App.vue`, opened by the header button or `Ctrl/⌘ + J`.
 - `suggestions` in the response is `List<Map<String,Object>>` (structured candidates: `tenantName` / `buildingName` / `roomNumber` / `contractStatus`), **not** a string array. Render via a formatter, and when the user clicks one, complete the sentence according to `intent` (`SEND_SMS` / `QUERY_CONTRACT`).
 

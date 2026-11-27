@@ -180,6 +180,45 @@ public class RoomController {
     return result;
   }
 
+  /**
+   * 房间选项（含楼栋名），供「拍照识别补全房间」等需要用户挑选场景使用。
+   *
+   * <p>为什么不直接用 {@code GET /api/rooms}：Room 实体只有 buildingId，
+   * 没有 buildingName，前端拿到的 101 无法区分是 A 栋还是 B 栋，
+   * 在弹选择时会出现 4 个一模一样的「101」。
+   *
+   * <p>返回结构轻量（id / buildingName / roomNumber / label），不分页——
+   * 房间总量通常在几百以内，一次拉全便于前端本地过滤搜索。
+   */
+  @GetMapping("/options")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','USER')")
+  public List<Map<String, Object>> options(@RequestParam(required = false) String status) {
+    List<Room> rooms = roomService.listByBuildingAndFloor(null, null, status);
+    Map<Long, String> buildingNameById = new java.util.HashMap<>();
+    for (Building b : buildingRepository.findAll()) {
+      if (b.getId() != null && b.getName() != null) {
+        buildingNameById.put(b.getId(), b.getName());
+      }
+    }
+
+    List<Map<String, Object>> result = new java.util.ArrayList<>();
+    for (Room room : rooms) {
+      String buildingName = room.getBuildingId() == null ? null : buildingNameById.get(room.getBuildingId());
+      Map<String, Object> item = new java.util.LinkedHashMap<>();
+      item.put("id", room.getId());
+      item.put("roomNumber", room.getRoomNumber());
+      item.put("buildingId", room.getBuildingId());
+      item.put("buildingName", buildingName);
+      item.put("floor", room.getFloor());
+      item.put("status", room.getStatus());
+      item.put("label", buildingName == null
+          ? String.valueOf(room.getRoomNumber())
+          : buildingName + " / " + room.getRoomNumber());
+      result.add(item);
+    }
+    return result;
+  }
+
   @GetMapping("/{id}")
   public ResponseEntity<Room> get(@PathVariable Long id) {
     return roomService.findById(id).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());

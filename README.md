@@ -193,6 +193,10 @@ export AI_SILICONFLOW_API_KEY=your-key
 
 # OpenAI 兼容
 export AI_BACKUP_API_KEY=your-key
+
+# 抄表拍照识别（需支持视觉的模型，如 glm-4v / qwen-vl / gpt-4o）
+export AI_VISION_API_KEY=your-key
+export AI_VISION_MODEL=glm-4v-flash
 ```
 
 `app.ai-assistant.default-model` 决定首选 provider（`primary` / `siliconflow` / `backup`），失败后按顺序降级重试，次数由 `max-retries` 控制。超时时间在 `application.yml` 的 `timeout-millis` 里，默认 2.5s——工具调用场景建议不要低于 2s。

@@ -14,6 +14,7 @@
       <div class="page-actions">
         <el-button v-if="canInput" :icon="Sort" @click="openBatchDelta">批量增量录入</el-button>
         <el-button v-if="canInput" :icon="Upload" @click="openImportDialog">Excel 导入</el-button>
+        <el-button v-if="canInput" :icon="Camera" @click="ocrVisible = true">拍照识别</el-button>
         <el-button :icon="Download" @click="exportBuildingCsv">导出 CSV</el-button>
         <el-button
           type="primary"
@@ -222,6 +223,8 @@
       </div>
     </div>
     </el-card>
+
+    <MeterOcrDialog v-model="ocrVisible" @saved="onOcrSaved" />
 
     <el-dialog v-model="importDialogVisible" title="水电读数 Excel 导入" width="900px" destroy-on-close>
       <el-steps :active="stepIndex" finish-status="success" align-center style="margin-bottom: 20px">
@@ -445,8 +448,9 @@ import {
   generateMeterReadingsByDelta,
   getErrorMessage} from '../api'
 import { ElMessage } from 'element-plus'
+import MeterOcrDialog from '../components/MeterOcrDialog.vue'
 import {
-  UploadFilled, Upload, Download, Check, Search, OfficeBuilding, Sort
+  UploadFilled, Upload, Download, Check, Search, OfficeBuilding, Sort, Camera
 } from '@element-plus/icons-vue'
 
 const buildings = ref([])
@@ -931,6 +935,16 @@ async function saveAll() {
     saving.value = false
   }
 }
+
+
+// —— 拍照识别 ——
+const ocrVisible = ref(false)
+
+/** 识别导入成功后刷新列表（本页数据由 loadRooms 一并拉取） */
+function onOcrSaved() {
+  loadRooms()
+}
+
 
 onMounted(async () => {
   await loadBuildings()

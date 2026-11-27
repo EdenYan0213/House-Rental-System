@@ -115,3 +115,16 @@ app:
         model: ${AI_BACKUP_MODEL:gpt-4o-mini}
         temperature: ${AI_BACKUP_TEMPERATURE:0}
         timeout-millis: ${AI_BACKUP_TIMEOUT_MS:2500}
+    # 抄表拍照识别专用视觉模型。
+    # 注意：GLM-4.7-flash / Qwen3-8B 都是纯文本模型，不能读图，
+    # 必须单独配置支持视觉的模型（glm-4v / qwen-vl / gpt-4o 等）。
+    # 未配置 api-key 时 OCR 接口返回「未配置」提示；如需联调可将
+    # AI_OCR_SAMPLE_DATA 保持 true 以返回示例数据。
+    ocr:
+      enabled: ${AI_OCR_ENABLED:true}
+      base-url: ${AI_VISION_BASE_URL:https://open.bigmodel.cn/api/paas/v4/chat/completions}
+      api-key: ${AI_VISION_API_KEY:}
+      model: ${AI_VISION_MODEL:glm-4v-flash}
+      temperature: ${AI_VISION_TEMPERATURE:0}
+      timeout-millis: ${AI_VISION_TIMEOUT_MS:30000}
+      sample-data-when-unconfigured: ${AI_OCR_SAMPLE_DATA:true}

@@ -229,6 +229,21 @@ export const getLastMeterReadings = (params) =>
 export const exportMeterReadingsCsv = (params) => api.get('/meter-readings/export-csv', { params, responseType: 'blob' })
 export const saveMeterReadings = (data) => api.post('/meter-readings', data)
 export const deleteMeterReading = (id) => api.delete(`/meter-readings/${id}`)
+
+/** 拍照识别抄表图片，返回草稿（不写库）。结果需确认后再保存。 */
+/** 房间选项（含楼栋名），用于弹选择补全房间。 */
+export const getRoomOptions = (params) => api.get('/rooms/options', { params })
+
+export const recognizeMeterImage = (file, roomId) => {
+  const form = new FormData()
+  form.append('file', file)
+  const params = roomId ? { roomId } : {}
+  return api.post('/meter-readings/ocr', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    params,
+    timeout: 60000
+  })
+}
 export const downloadMeterReadingImportTemplate = () => api.get('/meter-readings/import-template', { responseType: 'blob', timeout: 60000 })
 export const parseMeterReadingImportFile = (file) => {
   const formData = new FormData()

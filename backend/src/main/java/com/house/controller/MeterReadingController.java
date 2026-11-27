@@ -48,19 +48,22 @@ public class MeterReadingController {
   private final MeterReadingBatchService meterReadingBatchService;
   private final MeterReadingGenerateService meterReadingGenerateService;
   private final OperationSnapshotService operationSnapshotService;
+  private final com.house.ai.MeterOcrService meterOcrService;
 
   public MeterReadingController(MeterReadingRepository meterReadingRepository,
       RoomRepository roomRepository,
       BuildingRepository buildingRepository,
       MeterReadingBatchService meterReadingBatchService,
       MeterReadingGenerateService meterReadingGenerateService,
-      OperationSnapshotService operationSnapshotService) {
+      OperationSnapshotService operationSnapshotService,
+      com.house.ai.MeterOcrService meterOcrService) {
     this.meterReadingRepository = meterReadingRepository;
     this.roomRepository = roomRepository;
     this.buildingRepository = buildingRepository;
     this.meterReadingBatchService = meterReadingBatchService;
     this.meterReadingGenerateService = meterReadingGenerateService;
     this.operationSnapshotService = operationSnapshotService;
+    this.meterOcrService = meterOcrService;
   }
 
   /**
@@ -202,6 +205,31 @@ public class MeterReadingController {
       throw e;
     } catch (Exception e) {
       throw new RuntimeException("保存水电记录失败: " + e.getMessage());
+    }
+  }
+
+  /**
+   * 拍照识别水电表读数。
+   *
+   * <p><b>只返回草稿，不写数据库。</b>前端必须把结果放进可编辑表格，
+   * 由用户核对确认后再调用 {@code POST /api/meter-readings} 入库。
+   * 识别错误直接入库会生成错误账单，因此这条边界不能破。
+   *
+   * @param file   图片（jpg/png/webp）
+   * @param roomId 可选。单房间模式传目标房间，用于结果提示
+   */
+  @PostMapping("/ocr")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','USER')")
+  public ResponseEntity<?> recognizeMeterImage(
+      @RequestParam("file") MultipartFile file,
+      @RequestParam(required = false) Long roomId) {
+    try {
+      Map<String, Object> result = meterOcrService.recognize(file, roomId);
+      return ResponseEntity.ok(result);
+    } catch (IllegalArgumentException | IllegalStateException e) {
+      Map<String, Object> body = new LinkedHashMap<>();
+      body.put("message", e.getMessage() == null ? "识别失败" : e.getMessage());
+      return ResponseEntity.badRequest().body(body);
     }
   }
 
