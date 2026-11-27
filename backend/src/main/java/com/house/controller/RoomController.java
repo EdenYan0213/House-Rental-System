@@ -191,6 +191,7 @@ public class RoomController {
    * 房间总量通常在几百以内，一次拉全便于前端本地过滤搜索。
    */
   @GetMapping("/options")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','USER')")
   public List<Map<String, Object>> options(@RequestParam(required = false) String status) {
     List<Room> rooms = roomService.listByBuildingAndFloor(null, null, status);
     Map<Long, String> buildingNameById = new java.util.HashMap<>();
