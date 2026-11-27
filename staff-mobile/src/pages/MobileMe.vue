@@ -69,6 +69,33 @@
       </div>
     </section>
 
+    <!-- 业务管理：仅管理员可见 -->
+    <section v-if="canManageBusiness">
+      <div class="m-section-title">业务管理</div>
+      <div class="m-list">
+        <div class="m-list-item" @click="router.push('/mobile/contracts')">
+          <el-icon class="item-icon"><Document /></el-icon>
+          <div class="m-list-main"><div class="m-list-title">合同管理</div></div>
+          <el-icon class="item-arrow"><ArrowRight /></el-icon>
+        </div>
+        <div class="m-list-item" @click="router.push('/mobile/tenant-manage')">
+          <el-icon class="item-icon"><User /></el-icon>
+          <div class="m-list-main"><div class="m-list-title">租户管理</div></div>
+          <el-icon class="item-arrow"><ArrowRight /></el-icon>
+        </div>
+        <div class="m-list-item" @click="router.push('/mobile/deposits')">
+          <el-icon class="item-icon"><Coin /></el-icon>
+          <div class="m-list-main"><div class="m-list-title">押金管理</div></div>
+          <el-icon class="item-arrow"><ArrowRight /></el-icon>
+        </div>
+        <div class="m-list-item" @click="router.push('/mobile/fee-items')">
+          <el-icon class="item-icon"><Money /></el-icon>
+          <div class="m-list-main"><div class="m-list-title">费率配置</div></div>
+          <el-icon class="item-arrow"><ArrowRight /></el-icon>
+        </div>
+      </div>
+    </section>
+
     <!-- 操作 -->
     <section>
       <div class="m-section-title">操作</div>
@@ -100,7 +127,7 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { MagicStick, Setting, Delete, ArrowRight } from '@element-plus/icons-vue'
+import { MagicStick, Setting, Delete, ArrowRight, Document, User, Coin, Money } from '@element-plus/icons-vue'
 import {
   getUser,
   removeToken,
@@ -137,6 +164,12 @@ const roleText = computed(() => {
 })
 
 const canUseAiAssistant = computed(() => {
+  const role = user?.role?.toUpperCase()
+  return role === 'SUPER_ADMIN' || role === 'ADMIN'
+})
+
+/** 业务管理入口：仅管理员，与后端 @PreAuthorize 对齐。 */
+const canManageBusiness = computed(() => {
   const role = user?.role?.toUpperCase()
   return role === 'SUPER_ADMIN' || role === 'ADMIN'
 })

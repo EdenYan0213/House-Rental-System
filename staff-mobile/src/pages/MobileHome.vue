@@ -93,7 +93,8 @@ import { ElMessage } from 'element-plus'
 import { getContracts, getRepairOrders, getBills, getUser, getUnreadCount } from '@/api'
 import { unwrapList } from '@/utils/mobileApi'
 import {
-  Edit, Tools, Wallet, Bell, OfficeBuilding, Search, MagicStick, FullScreen, Document
+  Edit, Tools, Wallet, Bell, OfficeBuilding, Search, MagicStick, FullScreen, Document,
+  User, Coin, Setting
 } from '@element-plus/icons-vue'
 
 const router = useRouter()
@@ -127,6 +128,12 @@ const canUseAiAssistant = computed(() => {
   return role === 'SUPER_ADMIN' || role === 'ADMIN'
 })
 
+/** 写操作类入口（租户管理/押金/费率）仅管理员，与后端 @PreAuthorize 一致。 */
+const canManageBusiness = computed(() => {
+  const role = getUser()?.role?.toUpperCase()
+  return role === 'SUPER_ADMIN' || role === 'ADMIN'
+})
+
 const todayText = computed(() => {
   const d = new Date()
   const week = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()]
@@ -141,8 +148,15 @@ const tiles = computed(() => {
     { label: '账单收款', path: '/mobile/bills', icon: Wallet },
     { label: '消息中心', path: '/mobile/messages', icon: Bell, badge: true },
     { label: '楼栋房间', path: '/mobile/buildings', icon: OfficeBuilding },
+    { label: '合同管理', path: '/mobile/contracts', icon: Document },
     { label: '租户查询', path: '/mobile/tenants', icon: Search }
   ]
+  // 写操作类入口只对管理员开放，与后端 @PreAuthorize 对齐
+  if (canManageBusiness.value) {
+    list.push({ label: '租户管理', path: '/mobile/tenant-manage', icon: User })
+    list.push({ label: '押金管理', path: '/mobile/deposits', icon: Coin })
+    list.push({ label: '费率配置', path: '/mobile/fee-items', icon: Setting })
+  }
   if (canUseAiAssistant.value) {
     list.push({ label: 'AI 助手', path: '/mobile/ai-assistant', icon: MagicStick })
   }
