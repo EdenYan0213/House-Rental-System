@@ -54,6 +54,7 @@ public class ContractController {
    * 供需要翻页的前端使用；不传则保持旧行为（纯数组），兼容现有调用方。
    */
   @GetMapping
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','USER')")
   public Object list(
       @RequestParam(required = false) String status,
       @RequestParam(required = false) String q,
@@ -68,6 +69,7 @@ public class ContractController {
   }
 
   @PostMapping
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public ResponseEntity<?> create(@RequestBody ContractCreateRequest req) {
     try {
       Contract c = contractService.createContract(req);
@@ -80,11 +82,13 @@ public class ContractController {
   }
 
   @GetMapping("/{id}")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','USER')")
   public ResponseEntity<Contract> get(@PathVariable Long id) {
     return contractService.findById(id).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());
   }
 
   @PutMapping("/{id}")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public ResponseEntity<Contract> update(@PathVariable Long id, @RequestBody Contract contract,
       HttpServletRequest request) {
     return contractService.findById(id).map(existing -> {
@@ -102,6 +106,7 @@ public class ContractController {
   }
 
   @DeleteMapping("/{id}")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public ResponseEntity<?> delete(@PathVariable Long id, HttpServletRequest request) {
     Contract before = contractRepository.findById(id).orElse(null);
     if (before == null) {
@@ -167,6 +172,7 @@ public class ContractController {
   }
 
   @PostMapping("/{id}/terminate")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public ResponseEntity<?> terminate(@PathVariable Long id, @RequestBody java.util.Map<String, String> body,
       HttpServletRequest request) {
     try {
@@ -196,6 +202,7 @@ public class ContractController {
   }
 
   @PostMapping("/{id}/renew")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public ResponseEntity<?> renew(@PathVariable Long id, @RequestBody java.util.Map<String, Object> body) {
     try {
       Contract renewed = contractService.renew(id, (String) body.get("endDate"));

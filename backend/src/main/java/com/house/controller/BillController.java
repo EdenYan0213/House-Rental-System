@@ -91,6 +91,7 @@ public class BillController {
 
   // 手动生成账单，参数 month 可选，格式 yyyy-MM；若不传，生成上月账单
   @PostMapping("/generate")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public ResponseEntity<?> generate(@RequestParam(required = false) String month) {
     String targetMonth = month;
     try {
@@ -110,6 +111,7 @@ public class BillController {
 
   // 按房间生成账单，month 可选，格式 yyyy-MM；若不传，默认上月
   @PostMapping("/generate/room/{roomId}")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public ResponseEntity<?> generateByRoom(@PathVariable Long roomId, @RequestParam(required = false) String month) {
     try {
       int created = billService.generateBillsForRoomAndMonth(roomId, month);
@@ -133,6 +135,7 @@ public class BillController {
    * 否则前端汇总卡会只统计当前页，金额对不上。
    */
   @GetMapping
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','USER')")
   public ResponseEntity<?> list(@RequestParam(required = false) String month,
       @RequestParam(required = false) String status,
       @RequestParam(required = false) Long contractId,
@@ -166,6 +169,7 @@ public class BillController {
    * <p>作废账单不计入应收，与前端汇总卡口径一致。
    */
   @GetMapping("/summary")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','USER')")
   public Map<String, Object> summary(@RequestParam(required = false) String month,
       @RequestParam(required = false) String status,
       @RequestParam(required = false) Long contractId,
@@ -198,6 +202,7 @@ public class BillController {
   }
 
   @GetMapping("/export-csv")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public ResponseEntity<byte[]> exportCsv(@RequestParam(required = false) String month,
       @RequestParam(required = false) String status,
       @RequestParam(required = false) Long contractId,
@@ -297,6 +302,7 @@ public class BillController {
   }
 
   @GetMapping("/{id}")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','USER')")
   public ResponseEntity<?> get(@PathVariable Long id) {
     return billRepository.findById(id).map(bill -> {
       bill.setStatus(BillStatus.normalize(bill.getStatus()));
@@ -404,6 +410,7 @@ public class BillController {
 
   // 重新生成指定账单（未付款时）
   @PostMapping("/regenerate/{id}")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public ResponseEntity<?> regenerate(@PathVariable Long id) {
     try {
       Optional<Bill> billOpt = billRepository.findById(id);
@@ -426,6 +433,7 @@ public class BillController {
 
   // 按合同ID重新生成账单
   @PostMapping("/regenerate/contract/{contractId}")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public ResponseEntity<?> regenerateByContract(@PathVariable Long contractId) {
     try {
       billService.generateBillsForContract(contractId);
@@ -436,6 +444,7 @@ public class BillController {
   }
 
   @DeleteMapping("/{id}")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public ResponseEntity<?> delete(@PathVariable Long id) {
     Bill before = billRepository.findById(id).orElse(null);
     if (before == null) {
@@ -453,6 +462,7 @@ public class BillController {
    * 支持多次部分收款，状态由 PaymentService 依据累计已付金额更新。
    */
   @PostMapping("/{id}/payments")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public ResponseEntity<?> recordPayment(@PathVariable Long id, @RequestBody PaymentRequest req) {
     try {
       PaymentRecord saved = paymentService.recordPayment(id, req);
@@ -491,6 +501,7 @@ public class BillController {
   }
 
   @PutMapping("/{id}/void")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public ResponseEntity<?> voidBill(@PathVariable Long id, HttpServletRequest request) {
     Bill before = billRepository.findById(id).orElse(null);
     if (before == null) {
@@ -519,7 +530,7 @@ public class BillController {
   }
 
   @PostMapping("/{id}/send-sms")
-  @PreAuthorize("isAuthenticated()")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public ResponseEntity<?> sendBillSms(@PathVariable Long id) {
     Optional<Bill> billOpt = billRepository.findById(id);
     if (billOpt.isEmpty()) {
@@ -562,7 +573,7 @@ public class BillController {
   }
 
   @GetMapping("/{id}/send-sms")
-  @PreAuthorize("isAuthenticated()")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public ResponseEntity<?> sendBillSmsByGet(@PathVariable Long id) {
     return sendBillSms(id);
   }

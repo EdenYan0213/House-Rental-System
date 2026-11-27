@@ -38,6 +38,7 @@ public class TenantController {
    * 租户表数据量大，前端列表应优先使用分页模式。
    */
   @GetMapping
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','USER')")
   public Object list(@RequestParam(required = false) String q,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
@@ -65,16 +66,19 @@ public class TenantController {
   }
 
   @GetMapping("/{id}")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','USER')")
   public ResponseEntity<Tenant> get(@PathVariable Long id) {
     return tenantService.findById(id).map(ResponseEntity::ok).orElse(ResponseEntity.notFound().build());
   }
 
   @PostMapping
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','USER')")
   public Tenant create(@RequestBody Tenant tenant) {
     return tenantService.create(tenant);
   }
 
   @PutMapping("/{id}")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public ResponseEntity<?> update(@PathVariable Long id, @RequestBody Tenant tenant) {
     return tenantService.findById(id).map(existing -> {
       OperationSnapshot snapshot = operationSnapshotService.capture(
@@ -87,6 +91,7 @@ public class TenantController {
   }
 
   @DeleteMapping("/{id}")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN')")
   public ResponseEntity<?> delete(@PathVariable Long id, HttpServletRequest request) {
     Tenant before = tenantRepository.findById(id).orElse(null);
     if (before == null) {

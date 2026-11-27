@@ -45,6 +45,7 @@ public class MessageController {
   }
 
   @GetMapping
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','USER')")
   public Map<String, Object> list(
       @RequestParam(required = false) String type,
       @RequestParam(required = false) Boolean isRead,
@@ -70,11 +71,13 @@ public class MessageController {
   }
 
   @GetMapping("/unread-count")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','USER')")
   public long getUnreadCount() {
     return messageRepository.countByIsRead(false);
   }
 
   @PutMapping("/{id}/read")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','USER')")
   public ResponseEntity<?> markAsRead(@PathVariable Long id) {
     return messageRepository.findById(id).map(msg -> {
       msg.setIsRead(true);
@@ -85,6 +88,7 @@ public class MessageController {
   }
 
   @PutMapping("/read-all")
+  @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','USER')")
   public ResponseEntity<?> markAllAsRead() {
     messageRepository.findAll().stream()
         .filter(m -> !m.getIsRead())
