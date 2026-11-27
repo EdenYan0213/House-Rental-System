@@ -1,11 +1,11 @@
 <template>
   <div class="ai-chat">
     <!-- 对话区 -->
-    <div ref="historyRef" class="chat-history">
+    <div ref="historyRef" class="chat-history" :class="{ 'has-messages': hasUserMessage }">
       <!-- 欢迎态：还没有任何用户消息时，展示能力介绍（点击即发送） -->
       <div v-if="!hasUserMessage" class="welcome">
         <div class="welcome-logo">
-          <el-icon :size="28"><MagicStick /></el-icon>
+          <el-icon :size="26"><MagicStick /></el-icon>
         </div>
         <h2 class="welcome-title">{{ greeting }}</h2>
         <p class="welcome-desc">
@@ -21,13 +21,13 @@
             @click="send(cap.example)"
           >
             <span class="cap-icon">
-              <el-icon :size="17"><component :is="cap.icon" /></el-icon>
+              <el-icon :size="16"><component :is="cap.icon" /></el-icon>
             </span>
             <span class="cap-text">
               <span class="cap-label">{{ cap.label }}</span>
               <span class="cap-example">{{ cap.example }}</span>
             </span>
-            <el-icon class="cap-arrow" :size="14"><ArrowRight /></el-icon>
+            <el-icon class="cap-arrow" :size="13"><ArrowRight /></el-icon>
           </button>
         </div>
       </div>
@@ -36,7 +36,7 @@
       <template v-for="item in messages" :key="item.id">
         <div class="bubble-row" :class="item.role">
           <div v-if="item.role === 'assistant'" class="bubble-avatar">
-            <el-icon :size="15"><MagicStick /></el-icon>
+            <el-icon :size="14"><MagicStick /></el-icon>
           </div>
 
           <div class="bubble" :class="{ 'is-error': item.error }">
@@ -283,8 +283,14 @@ defineExpose({ reset, clearMessages })
   padding: var(--m-gutter);
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   min-height: 0;
+}
+
+/* 有消息时：内容贴底堆叠，空白留在上方（与豆包等聊天产品一致）
+   欢迎态时：交给 .welcome 的 margin:auto 居中，不能用 flex-end */
+.chat-history.has-messages {
+  justify-content: flex-end;
 }
 
 /* ---------- 欢迎态 ---------- */
@@ -293,71 +299,72 @@ defineExpose({ reset, clearMessages })
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: 8px 2px;
-  /* 内容不多时垂直居中，避免中间一大片空白 */
+  padding: 4px 2px 8px;
+  /* 欢迎态占满可用高度并垂直居中 */
   margin: auto 0;
 }
 
 .welcome-logo {
-  width: 60px;
-  height: 60px;
-  border-radius: 18px;
+  width: 54px;
+  height: 54px;
+  border-radius: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--text-inverse);
   background: linear-gradient(135deg, var(--accent-3), var(--accent-4));
-  margin-bottom: 16px;
+  margin-bottom: 14px;
   box-shadow: 0 6px 18px rgba(35, 84, 72, 0.22);
 }
 
 .welcome-title {
-  margin: 0 0 8px;
-  font-size: 19px;
+  margin: 0 0 7px;
+  font-size: 18px;
   font-weight: 700;
   color: var(--text-main);
   letter-spacing: 0.01em;
 }
 
 .welcome-desc {
-  margin: 0 0 20px;
-  font-size: 13px;
+  margin: 0 0 18px;
+  font-size: 12.5px;
   color: var(--text-muted);
-  line-height: 1.65;
-  max-width: 270px;
+  line-height: 1.6;
+  max-width: 265px;
 }
 
 .capability-list {
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 8px;
 }
 
 .capability {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 10px;
   width: 100%;
-  padding: 12px 13px;
+  padding: 10px 12px;
   border: 1px solid var(--border-color);
   border-radius: var(--m-radius);
   background: var(--bg-surface);
   text-align: left;
   font-family: inherit;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
   -webkit-tap-highlight-color: transparent;
 }
 
 .capability:active {
   background: var(--accent-1);
   border-color: var(--accent-2);
+  transform: scale(0.985);
 }
 
 .cap-icon {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border-radius: 9px;
   display: flex;
   align-items: center;
@@ -375,16 +382,16 @@ defineExpose({ reset, clearMessages })
 }
 
 .cap-label {
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-main);
   line-height: 1.3;
 }
 
 .cap-example {
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--text-muted);
-  margin-top: 3px;
+  margin-top: 2px;
   line-height: 1.4;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -394,7 +401,7 @@ defineExpose({ reset, clearMessages })
 .cap-arrow {
   color: var(--text-muted);
   flex: 0 0 auto;
-  opacity: 0.6;
+  opacity: 0.5;
 }
 
 /* ---------- 气泡 ---------- */
@@ -409,8 +416,8 @@ defineExpose({ reset, clearMessages })
 }
 
 .bubble-avatar {
-  width: 28px;
-  height: 28px;
+  width: 27px;
+  height: 27px;
   border-radius: 9px;
   display: flex;
   align-items: center;
@@ -418,15 +425,15 @@ defineExpose({ reset, clearMessages })
   color: var(--text-inverse);
   background: linear-gradient(135deg, var(--accent-3), var(--accent-4));
   flex: 0 0 auto;
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 .bubble {
   max-width: 78%;
-  padding: 10px 13px;
-  border-radius: 14px;
+  padding: 9px 12px;
+  border-radius: 13px;
   font-size: 13.5px;
-  line-height: 1.62;
+  line-height: 1.6;
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
   color: var(--text-main);

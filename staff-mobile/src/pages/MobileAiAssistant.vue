@@ -6,7 +6,6 @@
       </button>
       <div class="head-title">
         <span class="head-name">AI 助手</span>
-        <span class="head-sub">租赁管理指令</span>
       </div>
       <button type="button" class="head-btn head-btn--text" @click="onClear">清空</button>
     </header>
@@ -43,17 +42,27 @@ function onDone() {
 }
 
 /**
- * 键盘弹出时把整页顶上去：iOS/Android WebView 里 100dvh 不会跟着
- * 软键盘变化，输入框会被盖住。用 visualViewport 补偿这一截高度。
+ * 键盘弹出时把整页顶上去，同时把高度锁定到「真实可见高度」。
+ *
+ * 为什么不用 100vh/100dvh：
+ * - OPPO/小米等自带浏览器的 Chromium 内核较旧，不支持 100dvh，会回落到 100vh；
+ * - 而它们的 100vh 把底部工具栏也算了进去，比可见区高出 60~100px，
+ *   结果整页超出一屏——输入框被挤到屏幕外，页面还会跟着偏移。
+ *
+ * 这里直接用 visualViewport.height（拿不到则退回 innerHeight）写入
+ * --ai-viewport-h，CSS 用它做高度上限，任何内核都准确。
  */
-const keyboardOffset = ref(0)
+const MIN_HEIGHT = 320
 
 function syncViewport() {
   const vv = window.visualViewport
+  const visibleH = Math.round(vv ? vv.height : window.innerHeight)
+  if (visibleH > MIN_HEIGHT) {
+    document.documentElement.style.setProperty('--ai-viewport-h', `${visibleH}px`)
+  }
   if (!vv) return
   // 软键盘占掉的高度（桌面浏览器恒为 0）
   const overlap = Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
-  keyboardOffset.value = overlap
   document.documentElement.style.setProperty('--kb-offset', `${overlap}px`)
 }
 
@@ -61,12 +70,17 @@ onMounted(() => {
   syncViewport()
   window.visualViewport?.addEventListener('resize', syncViewport)
   window.visualViewport?.addEventListener('scroll', syncViewport)
+  window.addEventListener('orientationchange', syncViewport)
+  window.addEventListener('resize', syncViewport)
 })
 
 onBeforeUnmount(() => {
   window.visualViewport?.removeEventListener('resize', syncViewport)
   window.visualViewport?.removeEventListener('scroll', syncViewport)
+  window.removeEventListener('orientationchange', syncViewport)
+  window.removeEventListener('resize', syncViewport)
   document.documentElement.style.removeProperty('--kb-offset')
+  document.documentElement.style.removeProperty('--ai-viewport-h')
 })
 </script>
 
@@ -80,6 +94,9 @@ onBeforeUnmount(() => {
   background: var(--bg-main);
   /* 软键盘补偿：由 visualViewport 写入，键盘收起时归零 */
   padding-bottom: var(--kb-offset, 0px);
+  /* 真实可见高度兜底：旧内核的 100vh 会把工具栏算进去，导致整页溢出 */
+  max-height: var(--ai-viewport-h, 100%);
+  overflow: hidden;
 }
 
 /* 顶栏 */
@@ -89,7 +106,6 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 6px;
   padding: 8px var(--m-gutter);
-  padding-top: calc(8px + env(safe-area-inset-top, 0px));
   background: var(--bg-surface);
   border-bottom: 1px solid var(--border-color);
 }
@@ -134,11 +150,5 @@ onBeforeUnmount(() => {
   font-size: 15.5px;
   font-weight: 700;
   color: var(--text-main);
-}
-
-.head-sub {
-  font-size: 10.5px;
-  color: var(--text-muted);
-  margin-top: 1px;
 }
 </style>
