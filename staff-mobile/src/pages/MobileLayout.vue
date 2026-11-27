@@ -1,10 +1,10 @@
 <template>
-  <div class="mobile-shell">
+  <div class="mobile-shell" :class="{ 'is-fullscreen': isFullscreenRoute }">
     <div class="mobile-body">
       <router-view />
     </div>
 
-    <nav class="tabbar">
+    <nav v-if="!isFullscreenRoute" class="tabbar">
       <button
         v-for="item in navItems"
         :key="item.path"
@@ -25,41 +25,24 @@
       </button>
     </nav>
 
-    <!-- AI 助手浮窗：可拖动，位置记忆；点击（未拖动）才唤起抽屉 -->
+    <!-- AI 助手浮窗：可拖动，位置记忆；点击（未拖动）进入全屏对话页 -->
     <button
-      v-if="canUseAi"
+      v-if="canUseAi && !isFullscreenRoute"
       type="button"
       class="ai-fab"
-      :class="{ 'is-open': aiOpen, 'is-dragging': fabDragging, 'is-moved': !!fabPos }"
+      :class="{ 'is-dragging': fabDragging, 'is-moved': !!fabPos }"
       :style="fabStyle"
-      @pointerdown="onFabPointerDown"
-      @pointermove="onFabPointerMove"
-      @pointerup="onFabPointerUp"
-      @pointercancel="onFabPointerCancel"
+      @touchstart="onFabStart"
+      @touchmove="onFabMove"
+      @touchend="onFabEnd"
+      @touchcancel="onFabCancel"
+      @mousedown="onFabStart"
+      @mousemove="onFabMove"
+      @mouseup="onFabEnd"
+      @click="onFabClick"
     >
-      <el-icon :size="22">
-        <Close v-if="aiOpen" />
-        <MagicStick v-else />
-      </el-icon>
+      <el-icon :size="22"><MagicStick /></el-icon>
     </button>
-
-    <!-- AI 抽屉：从底部推出，占屏 88% -->
-    <transition name="ai-slide">
-      <div v-if="aiOpen" class="ai-sheet" @click.self="aiOpen = false">
-        <div class="ai-sheet-panel">
-          <header class="ai-sheet-head">
-            <span class="ai-sheet-title">AI 助手</span>
-            <div class="ai-sheet-ops">
-              <button type="button" class="ai-head-btn" @click="aiChatRef?.clearMessages()">清空</button>
-              <button type="button" class="ai-head-btn" @click="aiOpen = false">关闭</button>
-            </div>
-          </header>
-          <div class="ai-sheet-body">
-            <AiChat ref="aiChatRef" @done="onAiDone" />
-          </div>
-        </div>
-      </div>
-    </transition>
   </div>
 </template>
 
@@ -67,10 +50,9 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  HomeFilled, Edit, Tools, Wallet, Bell, User, MagicStick, Close
+  HomeFilled, Edit, Tools, Wallet, Bell, User, MagicStick
 } from '@element-plus/icons-vue'
 import { getUnreadCount, getUser } from '@/api'
-import AiChat from '@/components/AiChat.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -87,24 +69,26 @@ const navItems = [
 // 底部「消息」上的未读角标
 const unreadCount = ref(0)
 
-// AI 助手抽屉
-const aiOpen = ref(false)
-const aiChatRef = ref(null)
-
 /* ---------- AI 浮窗拖动 ----------
- * 用 Pointer Events 统一鼠标/触摸，避免维护两套监听。
- * 关键：按下后位移超过 DRAG_THRESHOLD 才判定为拖动，
- * 否则松手时当作点击打开抽屉——直接绑 @click 会导致
- * 想拖一下结果弹出了面板。
+ * 拖动与点击分开判定：touch/mouse 事件只负责拖动，真正的「打开/关闭」
+ * 一律放在 @click 里。
+ *
+ * 之前的写法用 pointerup 手动 toggle，在微信 X5 内核上会失败：
+ * 页面接管滚动后浏览器发 pointercancel（拿不到 pointerup），且
+ * touch-action: none 在 X5 上不可靠，轻点抖动超过 4px 还会被判成拖动。
+ * 现在阈值放宽到 10px，拖动时 preventDefault 抑制滚动，浏览器自然不会
+ * 补发 click；万一补发了，justDragged 也会把它挡掉。
  */
 const FAB_POS_KEY = 'mobileAiFabPos'
-const DRAG_THRESHOLD = 4
+const DRAG_THRESHOLD = 10
 const fabSize = 52
 const fabDragging = ref(false)
 // 相对视口左上角的位置；null 表示还没拖动过，用 CSS 默认位置
 const fabPos = ref(loadFabPos())
 
 const dragState = { active: false, moved: false, startX: 0, startY: 0, originX: 0, originY: 0 }
+// 刚拖动过：吞掉浏览器随后补发的 click，避免「拖完顺手打开面板」
+let justDragged = false
 
 function loadFabPos() {
   try {
@@ -142,47 +126,65 @@ const fabStyle = computed(() => {
   return { left: `${fabPos.value.x}px`, top: `${fabPos.value.y}px`, right: 'auto', bottom: 'auto' }
 })
 
-function onFabPointerDown(e) {
-  // 只处理主键/单指
-  if (e.pointerType === 'mouse' && e.button !== 0) return
-  const rect = e.currentTarget.getBoundingClientRect()
-  dragState.active = true
-  dragState.moved = false
-  dragState.startX = e.clientX
-  dragState.startY = e.clientY
-  dragState.originX = rect.left
-  dragState.originY = rect.top
-  // 捕获指针，手指滑出按钮范围也能继续收到 move
-  e.currentTarget.setPointerCapture?.(e.pointerId)
+/** 触摸与鼠标共用：touches 存在则取第一根手指。 */
+function pointOf(e) {
+  const t = e.touches?.[0] || e.changedTouches?.[0]
+  return t ? { x: t.clientX, y: t.clientY } : { x: e.clientX, y: e.clientY }
 }
 
-function onFabPointerMove(e) {
+function onFabStart(e) {
+  if (e.type === 'mousedown' && e.button !== 0) return
+  const rect = e.currentTarget.getBoundingClientRect()
+  const p = pointOf(e)
+  dragState.active = true
+  dragState.moved = false
+  dragState.startX = p.x
+  dragState.startY = p.y
+  dragState.originX = rect.left
+  dragState.originY = rect.top
+  justDragged = false
+}
+
+function onFabMove(e) {
   if (!dragState.active) return
-  const dx = e.clientX - dragState.startX
-  const dy = e.clientY - dragState.startY
+  const p = pointOf(e)
+  const dx = p.x - dragState.startX
+  const dy = p.y - dragState.startY
   if (!dragState.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return
-  dragState.moved = true
-  fabDragging.value = true
+  if (!dragState.moved) {
+    dragState.moved = true
+    fabDragging.value = true
+  }
+  // 拖动期间阻止页面滚动/下拉刷新（非 passive 监听才生效）
+  if (e.cancelable) e.preventDefault()
   fabPos.value = clampFab(dragState.originX + dx, dragState.originY + dy)
 }
 
-function onFabPointerUp(e) {
+function onFabEnd() {
   if (!dragState.active) return
   dragState.active = false
-  e.currentTarget.releasePointerCapture?.(e.pointerId)
-  if (dragState.moved) {
-    fabDragging.value = false
+  const moved = dragState.moved
+  dragState.moved = false
+  fabDragging.value = false
+  if (moved) {
+    justDragged = true
     if (fabPos.value) saveFabPos(fabPos.value)
-    return
   }
-  // 没移动 → 当作点击
-  aiOpen.value = !aiOpen.value
 }
 
-function onFabPointerCancel(e) {
+function onFabCancel() {
   dragState.active = false
+  dragState.moved = false
   fabDragging.value = false
-  e.currentTarget?.releasePointerCapture?.(e.pointerId)
+}
+
+/** 唯一的入口点。拖完紧跟的那次 click 要丢掉。 */
+function onFabClick() {
+  if (justDragged) {
+    justDragged = false
+    return
+  }
+  router.push('/mobile/ai-assistant')
 }
 
 /** 屏幕尺寸变化时（横竖屏切换）重新夹一次，别把浮窗留在可视区外。 */
@@ -195,12 +197,6 @@ const canUseAi = computed(() => {
   const role = getUser()?.role?.toUpperCase()
   return role === 'SUPER_ADMIN' || role === 'ADMIN'
 })
-
-/** AI 完成操作后，触发的页面可以监听这个事件刷新数据。 */
-function onAiDone() {
-  // 广播一个自定义事件，各页面按需监听
-  window.dispatchEvent(new CustomEvent('mobile:ai-done'))
-}
 
 onMounted(async () => {
   window.addEventListener('resize', onViewportResize)
@@ -217,6 +213,12 @@ onBeforeUnmount(() => {
 })
 
 const currentPath = computed(() => route.path)
+
+/**
+ * 全屏页（目前只有 AI 助手）：隐藏底部导航和浮窗。
+ * 聊天页需要整屏高度和自己的输入栏，留着 tabbar 会挤掉输入框。
+ */
+const isFullscreenRoute = computed(() => route.meta?.fullscreen === true)
 
 function isActive(item) {
   if (item.path === '/mobile/me' && currentPath.value.startsWith('/mobile/settings')) {
@@ -242,9 +244,32 @@ function go(path) {
   position: relative;
 }
 
+/* 全屏页占满一屏，内部自己滚动 */
+.mobile-shell.is-fullscreen {
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-shell.is-fullscreen .mobile-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  /* 全屏页（AI 聊天）：不要底部留白，让输入栏自己贴底 */
+  padding-bottom: 0;
+}
+
 .mobile-body {
   /* 给底部导航留出空间，避免最后一项被遮住 */
   padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+}
+
+.mobile-shell.is-fullscreen .mobile-body > * {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
 }
 
 /* ---------- 底部导航 ---------- */
@@ -334,7 +359,10 @@ function go(path) {
   background: linear-gradient(135deg, var(--accent-3), var(--accent-4));
   box-shadow: 0 4px 14px rgba(35, 84, 72, 0.35);
   cursor: grab;
-  z-index: 30;
+  /* 必须高于 Element Plus 的 el-loading-mask(2000) 与 el-message(2100+)。
+     否则页面在加载中时浮窗虽然看得见，点击事件却被遮罩吞掉——
+     表现为「点了没反应」。这里取 2200，低于 el-dialog(2300+) 避免盖住弹窗。 */
+  z-index: 2200;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
   -webkit-tap-highlight-color: transparent;
   /* 拖动时不要触发浏览器自身的滚动/下拉刷新/长按菜单 */
@@ -366,109 +394,12 @@ function go(path) {
   box-shadow: 0 8px 22px rgba(35, 84, 72, 0.4);
 }
 
-.ai-fab.is-open {
-  background: var(--bg-surface);
-  color: var(--text-main);
-  border: 1px solid var(--border-color);
-  box-shadow: var(--shadow-md);
-}
-
 /* 桌面预览时跟随 shell 右边界 */
 @media (min-width: 521px) {
   /* 只在仍使用默认位置时跟随 shell 右边界；拖动过则由内联样式决定 */
   .ai-fab:not(.is-dragging):not(.is-moved) {
     right: calc(50vw - 260px + 16px);
   }
-}
-
-/* ---------- AI 抽屉 ---------- */
-.ai-sheet {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.4);
-  max-width: 520px;
-  margin: 0 auto;
-}
-
-.ai-sheet-panel {
-  width: 100%;
-  height: 88vh;
-  display: flex;
-  flex-direction: column;
-  background: var(--bg-main);
-  border-radius: 16px 16px 0 0;
-  overflow: hidden;
-  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.18);
-}
-
-.ai-sheet-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px var(--m-gutter);
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--border-color);
-  flex: 0 0 auto;
-}
-
-.ai-sheet-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-main);
-}
-
-.ai-sheet-ops {
-  display: flex;
-  gap: 4px;
-}
-
-.ai-head-btn {
-  border: none;
-  background: transparent;
-  color: var(--accent-3);
-  font-size: 13px;
-  font-family: inherit;
-  padding: 6px 8px;
-  min-height: 34px;
-  cursor: pointer;
-}
-
-.ai-sheet-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-}
-
-/* 子组件必须能收缩：否则长文本/横向滚动的快捷指令会把面板撑出视口 */
-.ai-sheet-body > * {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-/* 滑入动画 */
-.ai-slide-enter-active,
-.ai-slide-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.ai-slide-enter-active .ai-sheet-panel,
-.ai-slide-leave-active .ai-sheet-panel {
-  transition: transform 0.24s cubic-bezier(0.32, 0.72, 0, 1);
-}
-
-.ai-slide-enter-from,
-.ai-slide-leave-to {
-  opacity: 0;
-}
-
-.ai-slide-enter-from .ai-sheet-panel,
-.ai-slide-leave-to .ai-sheet-panel {
-  transform: translateY(100%);
 }
 
 .tab-badge {
