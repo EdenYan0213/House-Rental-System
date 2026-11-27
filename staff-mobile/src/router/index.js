@@ -23,7 +23,7 @@ const routes = [
       { path: 'buildings/:id/rooms', component: () => import('@/pages/MobileBuildingRooms.vue'), meta: { title: '房间' } },
       { path: 'tenants', component: () => import('@/pages/MobileTenantLookup.vue'), meta: { title: '租户查询' } },
       { path: 'scan', component: () => import('@/pages/MobileScan.vue'), meta: { title: '扫码' } },
-      { path: 'ai-assistant', component: () => import('@/pages/MobileAiAssistant.vue'), meta: { title: 'AI 助手' } },
+      { path: 'ai-assistant', component: () => import('@/pages/MobileAiAssistant.vue'), meta: { title: 'AI 助手', fullscreen: true } },
       { path: 'me', component: () => import('@/pages/MobileMe.vue'), meta: { title: '我的' } },
       { path: 'settings', component: () => import('@/pages/MobileSettings.vue'), meta: { title: '设置' } }
     ]
