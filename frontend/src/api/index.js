@@ -253,6 +253,22 @@ export const saveMeterReadings = (data) => api.post('/meter-readings', data)
 /** 按「上期读数 + 增量」批量生成抄表。roomIds + recordDate + 增量，见 MeterReadingGenerateService */
 export const generateMeterReadingsByDelta = (data) => api.post('/meter-readings/generate-by-delta', data, { timeout: 60000 })
 export const deleteMeterReading = (id) => api.delete(`/meter-readings/${id}`)
+
+/**
+ * 拍照识别抄表图片，返回草稿（不写库）。
+ * 结果需用户确认后再调用 saveMeterReadings 入库。
+ * 视觉模型耗时较长，超时放宽到 60s。
+ */
+export const recognizeMeterImage = (file, roomId) => {
+  const form = new FormData()
+  form.append('file', file)
+  const params = roomId ? { roomId } : {}
+  return api.post('/meter-readings/ocr', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    params,
+    timeout: 60000
+  })
+}
 export const downloadMeterReadingImportTemplate = () => api.get('/meter-readings/import-template', { responseType: 'blob', timeout: 60000 })
 export const parseMeterReadingImportFile = (file) => {
   const formData = new FormData()

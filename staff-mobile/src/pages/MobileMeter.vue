@@ -13,6 +13,27 @@
       <div class="banner-hint">日期：{{ form.recordDate }}</div>
     </section>
 
+    <!-- 拍照识别：现场拍表盘，自动填入下方读数 -->
+    <div class="ocr-entry">
+      <input
+        ref="fileInput"
+        type="file"
+        accept="image/*"
+        capture="environment"
+        style="display: none"
+        @change="onPickImage"
+      />
+      <el-button
+        class="ocr-btn"
+        :loading="recognizing"
+        @click="fileInput?.click()"
+      >
+        <el-icon v-if="!recognizing"><Camera /></el-icon>
+        {{ recognizing ? '识别中…' : '拍照识别读数' }}
+      </el-button>
+      <p v-if="ocrHint" class="ocr-hint">{{ ocrHint }}</p>
+    </div>
+
     <!-- 读数表单 -->
     <div class="m-card">
       <div class="field">
@@ -66,8 +87,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft } from '@element-plus/icons-vue'
-import { getMobileRoomSummary, saveMeterReadings, getLastMeterReadings } from '@/api'
+import { ArrowLeft, Camera } from '@element-plus/icons-vue'
+import { getMobileRoomSummary, saveMeterReadings, getLastMeterReadings, recognizeMeterImage, getErrorMessage } from '@/api'
 import { enqueueOfflineMeterReading } from '@/utils/mobileOffline'
 
 const route = useRoute()
@@ -110,6 +131,77 @@ function goBack() {
     return
   }
   router.push('/mobile/home')
+}
+
+// —— 拍照识别 ——
+const fileInput = ref(null)
+const recognizing = ref(false)
+const ocrHint = ref('')
+
+/**
+ * 现场拍表盘 → 识别 → 只回填「本房间」的读数。
+ *
+ * <p>单房间模式只认与当前房间匹配的那一行；匹配不到就提示，
+ * 绝不把别的房间读数填进来。填入后仍需用户核对再提交。
+ */
+async function onPickImage(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+
+  ocrHint.value = ''
+  recognizing.value = true
+  try {
+    const { data } = await recognizeMeterImage(file, roomId.value)
+    const rows = data?.rows || []
+    if (rows.length === 0) {
+      ocrHint.value = '未识别出读数，请重拍或手工录入'
+      return
+    }
+
+    // 优先取与当前房间匹配的行
+    const own = rows.find(r => r.roomId === roomId.value)
+    const target = own || (rows.length === 1 ? rows[0] : null)
+
+    if (!target) {
+      ocrHint.value = `识别到 ${rows.length} 行，但都无法确定属于本房间，请手工录入`
+      return
+    }
+    if (target.roomId != null && target.roomId !== roomId.value) {
+      ocrHint.value = `识别到的房间（${target.roomLabel || target.roomNumber}）与当前房间不一致，已忽略`
+      return
+    }
+
+    let filled = []
+    if (target.waterReading != null) {
+      form.value.waterReading = target.waterReading
+      filled.push('水表')
+    }
+    if (target.electricReading != null) {
+      form.value.electricReading = target.electricReading
+      filled.push('电表')
+    }
+    if (target.recordDate) {
+      form.value.recordDate = target.recordDate
+    }
+
+    if (filled.length === 0) {
+      ocrHint.value = '识别到房间但读数为空，请重拍或手工录入'
+      return
+    }
+
+    const lowConfidence = target.confidence != null && target.confidence < 0.85
+    ocrHint.value = lowConfidence
+      ? `已填入${filled.join('/')}读数，但识别置信度较低，请仔细核对`
+      : `已填入${filled.join('/')}读数，请核对后提交`
+    if (data.sample) {
+      ocrHint.value += '（当前为示例数据，未配置视觉模型）'
+    }
+  } catch (error) {
+    ocrHint.value = getErrorMessage(error, '识别失败，请手工录入')
+  } finally {
+    recognizing.value = false
+  }
 }
 
 async function submit() {
@@ -278,5 +370,23 @@ onMounted(async () => {
   width: 100%;
   min-height: var(--m-tap);
   border-radius: 10px;
+}
+
+/* 拍照识别入口 */
+.ocr-entry {
+  margin: 10px 12px 0;
+}
+
+.ocr-btn {
+  width: 100%;
+  min-height: var(--m-tap);
+  border-radius: 10px;
+}
+
+.ocr-hint {
+  margin: 8px 2px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted, #6c7a96);
 }
 </style>

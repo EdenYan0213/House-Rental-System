@@ -12,6 +12,23 @@
         </p>
       </header>
 
+      <!-- 整页拍照识别：一拍多行，确认后批量录入 -->
+      <div class="ocr-entry">
+        <input
+          ref="ocrInput"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          style="display: none"
+          @change="onPickPage"
+        />
+        <el-button class="ocr-btn" :loading="ocrBusy" @click="ocrInput?.click()">
+          <el-icon v-if="!ocrBusy"><Camera /></el-icon>
+          {{ ocrBusy ? '识别中…' : '拍整页抄表本' }}
+        </el-button>
+        <p v-if="ocrHint" class="ocr-tip">{{ ocrHint }}</p>
+      </div>
+
       <!-- 筛选：搜索 + 楼栋 -->
       <div class="filter-row">
         <el-input
@@ -79,6 +96,66 @@
         <p class="empty-title">今日抄表已完成</p>
         <p class="empty-desc">没有待抄的房间，下拉可刷新。</p>
       </div>
+      <!-- 识别结果确认弹层 -->
+      <el-drawer
+        v-model="ocrDrawer"
+        title="确认识别结果"
+        direction="btt"
+        size="80%"
+        :close-on-click-modal="false"
+      >
+        <p class="ocr-summary">
+          共 {{ ocrRows.length }} 行，已匹配
+          <strong class="ok">{{ ocrMatchedCount }}</strong>，需处理
+          <strong class="warn">{{ ocrRows.length - ocrMatchedCount }}</strong>
+        </p>
+        <p v-if="ocrSample" class="ocr-tip">当前为示例数据（未配置视觉模型）</p>
+
+        <div v-for="(row, idx) in ocrRows" :key="idx" class="ocr-row">
+          <div class="ocr-row-head">
+            <span class="ocr-room">
+              {{ row.roomId ? (row.buildingName ? row.buildingName + ' / ' : '') + row.roomLabel : '未匹配' }}
+            </span>
+            <el-tag
+              size="small"
+              :type="row.roomId ? 'success' : 'danger'"
+            >{{ row.roomId ? '可导入' : '需选择房间' }}</el-tag>
+          </div>
+
+          <el-select
+            v-if="!row.roomId"
+            v-model="row.roomId"
+            filterable
+            placeholder="选择房间"
+            size="small"
+            style="width: 100%; margin-bottom: 8px"
+          >
+            <el-option v-for="r in roomOptions" :key="r.id" :label="r.label" :value="r.id" />
+          </el-select>
+
+          <div class="ocr-fields">
+            <div class="ocr-field">
+              <label>水表</label>
+              <el-input-number v-model="row.waterReading" :min="0" :step="0.1" size="small" controls-position="right" />
+            </div>
+            <div class="ocr-field">
+              <label>电表</label>
+              <el-input-number v-model="row.electricReading" :min="0" :step="0.1" size="small" controls-position="right" />
+            </div>
+          </div>
+
+          <p v-if="row.confidence != null && row.confidence < 0.85" class="ocr-low">
+            识别置信度较低（{{ Math.round(row.confidence * 100) }}%），请核对
+          </p>
+        </div>
+
+        <template #footer>
+          <el-button @click="ocrDrawer = false">取消</el-button>
+          <el-button type="primary" :loading="ocrSaving" :disabled="ocrValidRows.length === 0" @click="saveOcrRows">
+            导入 {{ ocrValidRows.length }} 条
+          </el-button>
+        </template>
+      </el-drawer>
     </div>
   </PullRefresh>
 </template>
@@ -88,8 +165,8 @@ import PullRefresh from '../components/PullRefresh.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Search, CircleCheck } from '@element-plus/icons-vue'
-import { getBuildings, getContracts, getMeterReadings } from '@/api'
+import { Search, CircleCheck, Camera } from '@element-plus/icons-vue'
+import { getBuildings, getContracts, getMeterReadings, getRooms, recognizeMeterImage, saveMeterReadings, getErrorMessage } from '@/api'
 import { getOfflineMeterQueue, syncOfflineMeterReadings } from '@/utils/mobileOffline'
 import { unwrapList } from '@/utils/mobileApi'
 
@@ -190,6 +267,88 @@ async function load() {
     loading.value = false
   }
 }
+
+
+// —— 整页拍照识别 ——
+const ocrInput = ref(null)
+const ocrBusy = ref(false)
+const ocrSaving = ref(false)
+const ocrDrawer = ref(false)
+const ocrRows = ref([])
+const ocrHint = ref('')
+const ocrSample = ref(false)
+const roomOptions = ref([])
+
+const ocrMatchedCount = computed(() => ocrRows.value.filter(r => r.roomId != null).length)
+const ocrValidRows = computed(() => ocrRows.value.filter(
+  r => r.roomId != null && r.waterReading != null && r.electricReading != null
+))
+
+async function loadRoomOptions() {
+  if (roomOptions.value.length > 0) return
+  try {
+    const { data } = await getRooms()
+    const list = Array.isArray(data) ? data : (data.content || [])
+    roomOptions.value = list.map(r => ({
+      id: r.id,
+      label: `${r.buildingName || ''}${r.roomNumber || ''}`.trim() || String(r.id)
+    }))
+  } catch {
+    roomOptions.value = []
+  }
+}
+
+async function onPickPage(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+
+  ocrHint.value = ''
+  ocrBusy.value = true
+  try {
+    await loadRoomOptions()
+    const { data } = await recognizeMeterImage(file)
+    const rows = (data?.rows || []).map(r => ({
+      ...r,
+      recordDate: r.recordDate || new Date().toISOString().slice(0, 10)
+    }))
+    if (rows.length === 0) {
+      ocrHint.value = '未识别出任何记录，请重拍或改用逐个录入'
+      return
+    }
+    ocrRows.value = rows
+    ocrSample.value = Boolean(data.sample)
+    ocrDrawer.value = true
+  } catch (error) {
+    ocrHint.value = getErrorMessage(error, '识别失败，请重试')
+  } finally {
+    ocrBusy.value = false
+  }
+}
+
+async function saveOcrRows() {
+  const rows = ocrValidRows.value
+  if (rows.length === 0) return
+  ocrSaving.value = true
+  try {
+    await saveMeterReadings(rows.map(r => ({
+      roomId: r.roomId,
+      recordDate: r.recordDate,
+      waterReading: r.waterReading,
+      electricReading: r.electricReading
+    })))
+    ElMessage.success(`已导入 ${rows.length} 条`)
+    ocrDrawer.value = false
+    ocrRows.value = []
+    ocrHint.value = ''
+    await refresh?.()
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '导入失败'))
+  } finally {
+    ocrSaving.value = false
+  }
+}
+
 
 onMounted(load)
 </script>
@@ -351,5 +510,74 @@ onMounted(load)
   margin: 0;
   font-size: 12px;
   color: var(--text-muted);
+}
+
+/* 整页拍照识别 */
+.ocr-entry {
+  margin: 8px 12px 0;
+}
+
+.ocr-btn {
+  width: 100%;
+  min-height: var(--m-tap);
+  border-radius: 10px;
+}
+
+.ocr-tip {
+  margin: 8px 2px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-muted, #6c7a96);
+}
+
+.ocr-summary {
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+
+.ocr-summary .ok {
+  color: var(--success-color, #2ea043);
+}
+
+.ocr-summary .warn {
+  color: var(--danger-color, #e5484d);
+}
+
+.ocr-row {
+  border: 1px solid var(--border-color, #e4edff);
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+.ocr-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.ocr-room {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.ocr-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.ocr-field label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-muted, #6c7a96);
+  margin-bottom: 4px;
+}
+
+.ocr-low {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--danger-color, #e5484d);
 }
 </style>
