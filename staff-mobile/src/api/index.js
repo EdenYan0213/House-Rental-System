@@ -390,6 +390,11 @@ export const canAddBuilding = () => hasRole('ADMIN') || hasRole('SUPER_ADMIN')
 export const canEditBuilding = () => hasRole('ADMIN') || hasRole('SUPER_ADMIN')
 export const canDeleteBuilding = () => hasRole('ADMIN') || hasRole('SUPER_ADMIN')
 
+// 房间写操作与后端 RoomController 的 @PreAuthorize 对齐（ADMIN/SUPER_ADMIN）
+export const canAddRoom = () => hasRole('ADMIN') || hasRole('SUPER_ADMIN')
+export const canEditRoom = () => hasRole('ADMIN') || hasRole('SUPER_ADMIN')
+export const canDeleteRoom = () => hasRole('ADMIN') || hasRole('SUPER_ADMIN')
+
 export const canAddContract = () => hasRole('ADMIN') || hasRole('SUPER_ADMIN')
 export const canEditContract = () => hasRole('ADMIN') || hasRole('SUPER_ADMIN')
 export const canDeleteContract = () => hasRole('SUPER_ADMIN')
