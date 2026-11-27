@@ -154,4 +154,144 @@ class MeterOcrServiceTest {
     properties.setModel("glm-4v");
     assertTrue(properties.isConfigured());
   }
+
+  @Test
+  @DisplayName("候选房间标签带楼栋名，否则 4 个「101」无法区分")
+  void candidatesIncludeBuildingName() {
+    // 只给房号，不给楼栋 → 触发 AMBIGUOUS（两个楼的 101）
+    properties.setSampleDataWhenUnconfigured(true);
+    Map<String, Object> result = service.recognize(image(), null);
+
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("rows");
+    // 示例数据自带楼栋，所以应全部 MATCHED；这里验证标签本身含楼栋
+    for (Map<String, Object> row : rows) {
+      if ("MATCHED".equals(row.get("matchStatus"))) {
+        String label = (String) row.get("roomLabel");
+        assertTrue(label.contains("/"), "标签应形如「A栋 / 101」: " + label);
+      }
+    }
+  }
+
+  @Test
+  @DisplayName("每行都带 needsInput 与 missingFields 字段，供前端决定是否弹补全")
+  void everyRowHasInputFlags() {
+    Map<String, Object> result = service.recognize(image(), null);
+
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("rows");
+    for (Map<String, Object> row : rows) {
+      assertTrue(row.containsKey("needsInput"), "缺 needsInput: " + row);
+      assertTrue(row.containsKey("missingFields"), "缺 missingFields: " + row);
+      assertNotNull(row.get("missingFields"));
+    }
+  }
+
+  @Test
+  @DisplayName("完整的行 needsInput=false 且 missingFields 为空")
+  void completeRowNeedsNoInput() {
+    Map<String, Object> result = service.recognize(image(), null);
+
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("rows");
+    long completeCount = rows.stream()
+        .filter(r -> r.get("roomId") != null)
+        .filter(r -> r.get("waterReading") != null && r.get("electricReading") != null)
+        .filter(r -> r.get("recordDate") != null)
+        .count();
+
+    for (Map<String, Object> row : rows) {
+      boolean complete = row.get("roomId") != null
+          && row.get("waterReading") != null
+          && row.get("electricReading") != null
+          && row.get("recordDate") != null;
+      if (complete) {
+        assertEquals(Boolean.FALSE, row.get("needsInput"), "完整行不应要求输入: " + row);
+        assertTrue(((List<?>) row.get("missingFields")).isEmpty());
+      }
+    }
+    assertTrue(completeCount > 0, "示例数据应至少有一行完整");
+  }
+
+  @Test
+  @DisplayName("读数为空时必须标记 needsInput，并指出缺哪个字段")
+  void missingReadingsFlaggedForInput() {
+    // 用反射直接验证 buildResult：构造一行"有房间但缺读数"的识别结果
+    try {
+      java.lang.reflect.Method m = MeterOcrService.class.getDeclaredMethod(
+          "buildResult", List.class, Long.class, boolean.class);
+      m.setAccessible(true);
+
+      Map<String, Object> row = new java.util.LinkedHashMap<>();
+      row.put("buildingName", null);
+      row.put("roomNumber", "101");
+      row.put("recordDate", null);
+      row.put("waterReading", null);
+      row.put("electricReading", 340.0);
+      row.put("confidence", 0.8);
+
+      @SuppressWarnings("unchecked")
+      Map<String, Object> result = (Map<String, Object>) m.invoke(
+          service, List.of(row), null, false);
+
+      @SuppressWarnings("unchecked")
+      List<Map<String, Object>> rows = (List<Map<String, Object>>) result.get("rows");
+      Map<String, Object> first = rows.get(0);
+
+      // 101 在两栋楼都有 → AMBIGUOUS，且房间本身算缺失
+      assertEquals("AMBIGUOUS", first.get("matchStatus"));
+      assertEquals(Boolean.TRUE, first.get("needsInput"));
+
+      @SuppressWarnings("unchecked")
+      List<String> missing = (List<String>) first.get("missingFields");
+      assertTrue(missing.contains("room"), "应提示房间待选: " + missing);
+      assertTrue(missing.contains("waterReading"), "应提示水表缺失: " + missing);
+      assertTrue(missing.contains("recordDate"), "应提示日期缺失: " + missing);
+      assertFalse(missing.contains("electricReading"), "电表有值不应算缺失: " + missing);
+
+      // 候选必须带楼栋名，否则用户无法在 2 个 101 之间选择
+      @SuppressWarnings("unchecked")
+      List<Map<String, Object>> candidates = (List<Map<String, Object>>) first.get("candidates");
+      assertFalse(candidates.isEmpty());
+      for (Map<String, Object> c : candidates) {
+        assertNotNull(c.get("buildingName"), "候选必须带楼栋名: " + c);
+        assertTrue(((String) c.get("roomLabel")).contains("/"), "标签应含楼栋: " + c);
+      }
+    } catch (ReflectiveOperationException e) {
+      fail("反射调用失败: " + e.getMessage());
+    }
+  }
+
+  @Test
+  @DisplayName("全库都不存在的房号：返回全部房间候选供手选")
+  void notFoundReturnsAllRoomsAsCandidates() {
+    try {
+      java.lang.reflect.Method m = MeterOcrService.class.getDeclaredMethod(
+          "buildResult", List.class, Long.class, boolean.class);
+      m.setAccessible(true);
+
+      Map<String, Object> row = new java.util.LinkedHashMap<>();
+      row.put("buildingName", null);
+      row.put("roomNumber", "999");
+      row.put("recordDate", "2026-11-27");
+      row.put("waterReading", 100.0);
+      row.put("electricReading", 200.0);
+      row.put("confidence", 0.9);
+
+      @SuppressWarnings("unchecked")
+      Map<String, Object> result = (Map<String, Object>) m.invoke(
+          service, List.of(row), null, false);
+
+      @SuppressWarnings("unchecked")
+      Map<String, Object> first = ((List<Map<String, Object>>) result.get("rows")).get(0);
+
+      assertEquals("NOT_FOUND", first.get("matchStatus"));
+      assertEquals(Boolean.TRUE, first.get("needsInput"));
+      @SuppressWarnings("unchecked")
+      List<Map<String, Object>> candidates = (List<Map<String, Object>>) first.get("candidates");
+      assertEquals(3, candidates.size(), "应返回全部 3 个房间供手选");
+    } catch (ReflectiveOperationException e) {
+      fail("反射调用失败: " + e.getMessage());
+    }
+  }
 }

@@ -110,6 +110,9 @@
           <strong class="warn">{{ ocrRows.length - ocrMatchedCount }}</strong>
         </p>
         <p v-if="ocrSample" class="ocr-tip">当前为示例数据（未配置视觉模型）</p>
+        <p v-if="ocrNeedsInputCount > 0" class="ocr-low" style="margin-bottom: 10px">
+          有 {{ ocrNeedsInputCount }} 行信息不完整（房间或读数缺失），请补全后再导入
+        </p>
 
         <div v-for="(row, idx) in ocrRows" :key="idx" class="ocr-row">
           <div class="ocr-row-head">
@@ -166,7 +169,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Search, CircleCheck, Camera } from '@element-plus/icons-vue'
-import { getBuildings, getContracts, getMeterReadings, getRooms, recognizeMeterImage, saveMeterReadings, getErrorMessage } from '@/api'
+import { getBuildings, getContracts, getMeterReadings, getRoomOptions, recognizeMeterImage, saveMeterReadings, getErrorMessage } from '@/api'
 import { getOfflineMeterQueue, syncOfflineMeterReadings } from '@/utils/mobileOffline'
 import { unwrapList } from '@/utils/mobileApi'
 
@@ -280,18 +283,26 @@ const ocrSample = ref(false)
 const roomOptions = ref([])
 
 const ocrMatchedCount = computed(() => ocrRows.value.filter(r => r.roomId != null).length)
-const ocrValidRows = computed(() => ocrRows.value.filter(
-  r => r.roomId != null && r.waterReading != null && r.electricReading != null
-))
+const ocrValidRows = computed(() => ocrRows.value.filter(rowComplete))
+
+/** 一行是否可导入：房间 + 两个读数齐全（日期缺失时用今天兜底，已在识别时补） */
+function rowComplete(r) {
+  return r.roomId != null && r.waterReading != null && r.electricReading != null
+}
+
+/** 仍需补信息的行数 */
+const ocrNeedsInputCount = computed(() => ocrRows.value.filter(r => !rowComplete(r)).length)
 
 async function loadRoomOptions() {
   if (roomOptions.value.length > 0) return
   try {
-    const { data } = await getRooms()
-    const list = Array.isArray(data) ? data : (data.content || [])
-    roomOptions.value = list.map(r => ({
+    // 带楼栋名，避免 4 个「101」无法区分
+    const { data } = await getRoomOptions()
+    roomOptions.value = (Array.isArray(data) ? data : []).map(r => ({
       id: r.id,
-      label: `${r.buildingName || ''}${r.roomNumber || ''}`.trim() || String(r.id)
+      label: r.label || String(r.id),
+      roomNumber: r.roomNumber,
+      buildingName: r.buildingName
     }))
   } catch {
     roomOptions.value = []

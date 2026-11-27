@@ -259,6 +259,9 @@ export const deleteMeterReading = (id) => api.delete(`/meter-readings/${id}`)
  * 结果需用户确认后再调用 saveMeterReadings 入库。
  * 视觉模型耗时较长，超时放宽到 60s。
  */
+/** 房间选项（含楼栋名），用于弹选择补全房间。 */
+export const getRoomOptions = (params) => api.get('/rooms/options', { params })
+
 export const recognizeMeterImage = (file, roomId) => {
   const form = new FormData()
   form.append('file', file)

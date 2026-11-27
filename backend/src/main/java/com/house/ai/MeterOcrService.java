@@ -279,25 +279,50 @@ public class MeterOcrService {
 
       if (exact != null) {
         item.put("roomId", exact.getId());
-        item.put("roomLabel", buildRoomLabel(exact));
-        item.put("buildingName", buildingName);
+        item.put("roomLabel", buildRoomLabel(exact, buildingNameById.get(exact.getBuildingId())));
+        item.put("roomNumber", exact.getRoomNumber());
+        item.put("buildingId", exact.getBuildingId());
+        item.put("buildingName", buildingNameById.get(exact.getBuildingId()));
         item.put("matchStatus", "MATCHED");
+        // 读数缺失同样需要用户补，不能当作「识别成功」
+        item.put("missingFields", missingValueFields(item));
+        item.put("needsInput", !((List<?>) item.get("missingFields")).isEmpty());
         matched++;
       } else if (candidates.size() == 1) {
         Room room = candidates.get(0);
         item.put("roomId", room.getId());
-        item.put("roomLabel", buildRoomLabel(room));
+        item.put("roomLabel", buildRoomLabel(room, buildingNameById.get(room.getBuildingId())));
+        item.put("roomNumber", room.getRoomNumber());
+        item.put("buildingId", room.getBuildingId());
+        item.put("buildingName", buildingNameById.get(room.getBuildingId()));
         item.put("matchStatus", "MATCHED");
+        item.put("missingFields", missingValueFields(item));
+        item.put("needsInput", !((List<?>) item.get("missingFields")).isEmpty());
         matched++;
       } else if (candidates.size() > 1) {
         // 多栋楼同名房号：必须让用户选，不能替用户猜
         item.put("roomId", null);
         item.put("matchStatus", "AMBIGUOUS");
-        item.put("candidates", candidates.stream().map(this::toCandidate).toList());
+        item.put("candidates", candidates.stream().map(c -> toCandidate(c, buildingNameById)).toList());
+        // 房间未定，读数的缺失一并提示
+        List<String> missing = new ArrayList<>();
+        missing.add("room");
+        missing.addAll(missingValueFields(item));
+        item.put("missingFields", missing);
+        item.put("needsInput", true);
         unmatched++;
       } else {
         item.put("roomId", null);
         item.put("matchStatus", "NOT_FOUND");
+        // 全库都没有这个房号：给出全部房间让用户自己选
+        item.put("candidates", allRooms.stream()
+            .map(c -> toCandidate(c, buildingNameById))
+            .toList());
+        List<String> missing = new ArrayList<>();
+        missing.add("room");
+        missing.addAll(missingValueFields(item));
+        item.put("missingFields", missing);
+        item.put("needsInput", true);
         unmatched++;
       }
       enriched.add(item);
@@ -313,15 +338,47 @@ public class MeterOcrService {
     return result;
   }
 
-  private Map<String, Object> toCandidate(Room room) {
+  /**
+   * 该行缺失的数值字段。
+   *
+   * <p>返回给前端的字段名与确认表格的列一一对应，便于高亮需要补的输入框：
+   * {@code waterReading} / {@code electricReading} / {@code recordDate}。
+   */
+  private List<String> missingValueFields(Map<String, Object> item) {
+    List<String> missing = new ArrayList<>();
+    if (item.get("waterReading") == null) {
+      missing.add("waterReading");
+    }
+    if (item.get("electricReading") == null) {
+      missing.add("electricReading");
+    }
+    if (item.get("recordDate") == null) {
+      missing.add("recordDate");
+    }
+    return missing;
+  }
+
+  private Map<String, Object> toCandidate(Room room, Map<Long, String> buildingNameById) {
     Map<String, Object> m = new LinkedHashMap<>();
     m.put("roomId", room.getId());
-    m.put("roomLabel", buildRoomLabel(room));
+    m.put("roomNumber", room.getRoomNumber());
+    m.put("buildingId", room.getBuildingId());
+    String buildingName = room.getBuildingId() == null ? null : buildingNameById.get(room.getBuildingId());
+    m.put("buildingName", buildingName);
+    m.put("roomLabel", buildRoomLabel(room, buildingName));
     return m;
   }
 
-  private String buildRoomLabel(Room room) {
-    return room.getRoomNumber() == null ? "-" : room.getRoomNumber();
+  /**
+   * 房间显示名：楼栋 + 房号。
+   *
+   * <p>必须带楼栋：真实数据里 101 在每栋楼都有，只显示房号用户无法区分。
+   */
+  private String buildRoomLabel(Room room, String buildingName) {
+    String number = room.getRoomNumber() == null ? "-" : room.getRoomNumber();
+    return buildingName == null || buildingName.isBlank()
+        ? number
+        : buildingName + " / " + number;
   }
 
   /** 房间号归一化：去空白、去"房间"字样、转大写，用于宽松匹配。 */

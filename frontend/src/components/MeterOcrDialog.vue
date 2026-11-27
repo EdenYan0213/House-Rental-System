@@ -56,12 +56,27 @@
         待确认 <strong class="warn">{{ result.unmatchedCount }}</strong>
       </div>
 
-      <el-table :data="editableRows" size="small" max-height="420" style="width: 100%">
+      <el-alert
+        v-if="rowsNeedingInput > 0"
+        type="warning"
+        show-icon
+        :closable="false"
+        style="margin-bottom: 10px"
+        :title="`有 ${rowsNeedingInput} 行信息不完整，已在表格中高亮，请补全后再导入`"
+      />
+
+      <el-table
+        :data="editableRows"
+        size="small"
+        max-height="420"
+        style="width: 100%"
+        :row-class-name="rowClassName"
+      >
         <el-table-column label="行" width="50">
           <template #default="{ $index }">{{ $index + 1 }}</template>
         </el-table-column>
 
-        <el-table-column label="房间" min-width="200">
+        <el-table-column label="房间 ⚠ 缺失" min-width="200">
           <template #default="{ row }">
             <!-- 已匹配：直接展示 -->
             <span v-if="row.matchStatus === 'MATCHED'" class="room-ok">
@@ -205,7 +220,7 @@ import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Loading, UploadFilled } from '@element-plus/icons-vue'
 import {
-  getRooms,
+  getRoomOptions,
   getErrorMessage,
   recognizeMeterImage,
   saveMeterReadings
@@ -234,11 +249,13 @@ watch(() => props.modelValue, async visible => {
 
 async function loadRooms() {
   try {
-    const { data } = await getRooms()
-    const list = Array.isArray(data) ? data : (data.content || [])
-    allRooms.value = list.map(r => ({
+    // /rooms/options 返回带楼栋名的 label，避免 4 个「101」无法区分
+    const { data } = await getRoomOptions()
+    allRooms.value = (Array.isArray(data) ? data : []).map(r => ({
       id: r.id,
-      label: `${r.buildingName || ''}${r.roomNumber || ''} ${r.roomNumber || ''}`.trim()
+      label: r.label,
+      roomNumber: r.roomNumber,
+      buildingName: r.buildingName
     }))
   } catch (error) {
     // 下拉只是辅助，失败不阻塞识别
@@ -266,6 +283,22 @@ async function doRecognize() {
   }
 }
 
+/** 仍需用户补信息的行数（房间未定 / 读数缺失） */
+const rowsNeedingInput = computed(() =>
+  editableRows.value.filter(r => !rowComplete(r)).length
+)
+
+/** 单行是否信息完整：房间、日期、两个读数齐全 */
+function rowComplete(r) {
+  return r.roomId != null && r.recordDate && r.waterReading != null && r.electricReading != null
+}
+
+/** 该行是否缺某个字段，用于高亮输入框 */
+function lacks(row, field) {
+  if (row.roomId == null) return true
+  return row[field] == null || row[field] === ''
+}
+
 /** 只有房间、日期、两个读数都齐全的行才能导入 */
 const validRows = computed(() =>
   editableRows.value.filter(r =>
@@ -275,6 +308,11 @@ const validRows = computed(() =>
     && r.electricReading != null
   )
 )
+
+/** 不完整的行加底色，提醒用户补全 */
+function rowClassName({ row }) {
+  return rowComplete(row) ? '' : 'ocr-row-incomplete'
+}
 
 function confidenceType(value) {
   if (value == null) return 'info'
@@ -363,5 +401,14 @@ async function doSave() {
 
 .room-ok {
   color: var(--text-main, #18243d);
+}
+
+/* 信息不完整的行：淡黄底，提示需补全 */
+:deep(.ocr-row-incomplete) {
+  background: #fff8e6;
+}
+
+:deep(.ocr-row-incomplete:hover > td) {
+  background: #fff3d4 !important;
 }
 </style>

@@ -173,27 +173,37 @@ async function onPickImage(event) {
     }
 
     let filled = []
+    const missing = []
     if (target.waterReading != null) {
       form.value.waterReading = target.waterReading
       filled.push('水表')
+    } else {
+      missing.push('水表')
     }
     if (target.electricReading != null) {
       form.value.electricReading = target.electricReading
       filled.push('电表')
+    } else {
+      missing.push('电表')
     }
     if (target.recordDate) {
       form.value.recordDate = target.recordDate
     }
 
     if (filled.length === 0) {
-      ocrHint.value = '识别到房间但读数为空，请重拍或手工录入'
+      ocrHint.value = `识别到房间但${missing.join('、')}读数为空，请手填或重拍`
       return
     }
 
     const lowConfidence = target.confidence != null && target.confidence < 0.85
-    ocrHint.value = lowConfidence
-      ? `已填入${filled.join('/')}读数，但识别置信度较低，请仔细核对`
-      : `已填入${filled.join('/')}读数，请核对后提交`
+    if (lowConfidence) {
+      ocrHint.value = `已填入${filled.join('/')}读数，但识别置信度较低，请仔细核对`
+    } else if (missing.length > 0) {
+      // 部分识别成功：明确告诉用户还差什么，避免误以为都填好了
+      ocrHint.value = `已填入${filled.join('/')}读数，${missing.join('、')}未识别到，请手工填写`
+    } else {
+      ocrHint.value = `已填入${filled.join('/')}读数，请核对后提交`
+    }
     if (data.sample) {
       ocrHint.value += '（当前为示例数据，未配置视觉模型）'
     }
